@@ -3,7 +3,7 @@ LearnWebGPU - Code
 
 This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
 
-Branch `step005`: This corresponds to the code at the end of the page [Hello WebGPU](learnwgpu.com/getting-started/hello-webgpu.html).
+Branch `step010`: This corresponds to the code at the end of the page [The Adapter](learnwgpu.com/getting-started/the-adapter.html).
 
 Building
 --------
