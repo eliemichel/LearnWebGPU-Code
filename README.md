@@ -8,7 +8,14 @@ Each step of the book is stored in a different branch. You can look at them incr
 Available step branches
 -----------------------
 
- - [`step000`](./tree/step000)
+ - [`step000`](../../tree/step000)
+ - [`step001`](../../tree/step001)
+ - [`step005`](../../tree/step005)
+ - [`step010`](../../tree/step010)
+ - [`step015`](../../tree/step015)
+ - [`step018`](../../tree/step018)
+ - [`step020`](../../tree/step020)
+ - [`step025`](../../tree/step025)
 
 Building
 --------
