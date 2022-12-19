@@ -3,7 +3,7 @@ LearnWebGPU - Code
 
 This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
 
-Branch `step018`: This corresponds to the code at the end of the page [The Command Queue](learnwgpu.com/getting-started/the-command-queue.html).
+Branch `step020`: This corresponds to the code at the end of the page [?](learnwgpu.com/getting-started/?.html).
 
 Building
 --------

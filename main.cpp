@@ -33,7 +33,6 @@
 #include <wgpu.h> // wgpuTextureViewDrop
 
 #include <iostream>
-#include <vector>
 #include <cassert>
 
 #define UNUSED(x) (void)x;
@@ -72,126 +71,78 @@ int main (int, char**) {
 	deviceDesc.nextInChain = nullptr;
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
+
+	// We require to have at least 1 bind group available
+	WGPURequiredLimits requiredLimits = {};
+	requiredLimits.nextInChain = nullptr;
+	requiredLimits.limits.maxBindGroups = 1;
 	deviceDesc.requiredLimits = nullptr;
+
 	deviceDesc.defaultQueue.nextInChain = nullptr;
 	deviceDesc.defaultQueue.label = "The default queue";
 	WGPUDevice device = requestDevice(adapter, &deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 
-	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
-		std::cout << "Uncaptured device error: type " << type;
-		if (message) std::cout << " (" << message << ")";
-		std::cout << std::endl;
-	};
-	wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
-
-	std::cout << "Allocating GPU memory..." << std::endl;
-	
-	// Create a first buffer, which we use to upload data to the GPU
-	WGPUBufferDescriptor bufferDesc = {};
-	bufferDesc.nextInChain = nullptr;
-	bufferDesc.label = "Input buffer: Written from the CPU to the GPU";
-	bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
-	bufferDesc.size = 16;
-	bufferDesc.mappedAtCreation = false;
-	WGPUBuffer buffer1 = wgpuDeviceCreateBuffer(device, &bufferDesc);
-
-	// Create a second buffer, with a `MapRead` usage flag so that we can map it later
-	bufferDesc.nextInChain = nullptr;
-	bufferDesc.label = "Output buffer: Read back from the GPU by the CPU";
-	bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
-	bufferDesc.size = 16;
-	bufferDesc.mappedAtCreation = false;
-	WGPUBuffer buffer2 = wgpuDeviceCreateBuffer(device, &bufferDesc);
-
-	std::cout << "Configuring command queue..." << std::endl;
-
 	// Get the command queue, through which we send commands to the GPU
 	WGPUQueue queue = wgpuDeviceGetQueue(device);
 
-	// Add a callback for debugging when commands in the queue have been executed
-#if 0 // not implemented yet by the wgpu-native backend
-	auto onQueueWorkDone = [](WGPUQueueWorkDoneStatus status, void* /* pUserData */) {
-		std::cout << "Queued work finished with status: " << status << std::endl;
-	};
-	wgpuQueueOnSubmittedWorkDone(queue, onQueueWorkDone, nullptr /* pUserData */);
-#endif
-
-	std::cout << "Uploading data to the GPU..." << std::endl;
-
-	// Create some CPU-side data buffer (of size 16 bytes)
-	std::vector<unsigned char> numbers(16);
-	for (unsigned char i = 0; i < 16; ++i) numbers[i] = i;
-
-	// Copy this from `numbers` (RAM) to `buffer1` (VRAM)
-	wgpuQueueWriteBuffer(queue, buffer1, 0, numbers.data(), numbers.size());
-
-	std::cout << "Sending buffer copy operation..." << std::endl;
-
-	// The only way to create a command buffer (which is needed to to anything
-	// else than uploading buffer or texture data) is to use a command encoder.
-	WGPUCommandEncoderDescriptor encoderDesc = {};
-	encoderDesc.nextInChain = nullptr;
-	encoderDesc.label = "Command encoder";
-	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
-
-	// We add a command to the encoder:
-	//   "Copy the current state of buffer 1 to buffer 2"
-	wgpuCommandEncoderCopyBufferToBuffer(encoder, buffer1, 0, buffer2, 0, 16);
-
-	// Finalize the encoding operation, synthesizing the command buffer
-	WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-	cmdBufferDescriptor.nextInChain = nullptr;
-	cmdBufferDescriptor.label = "Command buffer";
-	WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
-	
-	// Submit the encoded command buffer
-	wgpuQueueSubmit(queue, 1, &command);
-
-	std::cout << "Start downloading result data from the GPU..." << std::endl;
-
-	// The context shared between this main function and the callback.
-	struct Context {
-		WGPUBuffer buffer;
-	};
-	auto onBuffer2Mapped = [](WGPUBufferMapAsyncStatus status, void* pUserData) {
-		Context* context = reinterpret_cast<Context*>(pUserData);
-		std::cout << "Buffer 2 mapped with status " << status << std::endl;
-		if (status != WGPUBufferMapAsyncStatus_Success) return;
-
-		// Get a pointer to wherever the driver mapped the GPU memory to the RAM
-		unsigned char* bufferData = (unsigned char*)wgpuBufferGetMappedRange(context->buffer, 0, 16);
-
-		// Do stuff with bufferData
-		std::cout << "bufferData = [";
-		for (unsigned char i = 0; i < 16; ++i) {
-			if (i > 0) std::cout << ", ";
-			std::cout << (int)bufferData[i];
-		}
-		std::cout << "]" << std::endl;
-
-		// Then do not forget to unmap the memory
-		wgpuBufferUnmap(context->buffer);
-	};
-
-	Context context = { buffer2 };
-	wgpuBufferMapAsync(buffer2, WGPUMapMode_Read, 0, 16, onBuffer2Mapped, (void*)&context);
+	// NEW
+	std::cout << "Creating swapchain device..." << std::endl;
+	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+	WGPUSwapChainDescriptor swapChainDesc = {};
+	swapChainDesc.usage = WGPUTextureUsage_RenderAttachment;
+	swapChainDesc.format = swapChainFormat;
+	swapChainDesc.width = 640;
+	swapChainDesc.height = 480;
+	swapChainDesc.presentMode = WGPUPresentMode_Fifo;
+	WGPUSwapChain swapChain = wgpuDeviceCreateSwapChain(device, surface, &swapChainDesc);
+	std::cout << "Swapchain: " << swapChain << std::endl;
 
 	while (!glfwWindowShouldClose(window)) {
-		// Do nothing, this checks for ongoing asynchronous operations and call their callbacks if needed
-		// NB: Our wgpu-native backend provides a more explicit but non-standard wgpuDevicePoll(device) to do this.
-		wgpuQueueSubmit(queue, 0, nullptr);
-
-		// (This is the same idea, for the GLFW library callbacks)
 		glfwPollEvents();
+
+		// NEW
+		WGPUTextureView nextTexture = wgpuSwapChainGetCurrentTextureView(swapChain);
+		if (!nextTexture) {
+			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
+			return 1;
+		}
+		std::cout << "nextTexture: " << nextTexture << std::endl;
+
+		WGPUCommandEncoderDescriptor commandEncoderDesc = {};
+		commandEncoderDesc.nextInChain = nullptr;
+		commandEncoderDesc.label = "Command Encoder";
+		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &commandEncoderDesc);
+		
+		// NEW
+		WGPURenderPassDescriptor renderPassDesc = {};
+		renderPassDesc.nextInChain = nullptr;
+		renderPassDesc.colorAttachmentCount = 1;
+		WGPURenderPassColorAttachment renderPassColorAttachment = {};
+		renderPassColorAttachment.view = nextTexture;
+		renderPassColorAttachment.resolveTarget = 0;
+		renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
+		renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
+		renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
+		renderPassDesc.colorAttachments = &renderPassColorAttachment;
+		renderPassDesc.depthStencilAttachment = nullptr;
+		renderPassDesc.timestampWriteCount = 0;
+		WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+		wgpuRenderPassEncoderEnd(renderPass);
+		wgpuTextureViewDrop(nextTexture);
+
+		WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+		cmdBufferDescriptor.nextInChain = nullptr;
+		cmdBufferDescriptor.label = "Command buffer";
+		WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+		wgpuQueueSubmit(queue, 1, &command);
+
+		// NEW
+		wgpuSwapChainPresent(swapChain);
 	}
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
-
-	// Free GPU memory
-	wgpuBufferDestroy(buffer1);
-	wgpuBufferDestroy(buffer2);
 
 	return 0;
 }
