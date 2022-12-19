@@ -12,9 +12,10 @@ add_subdirectory(webgpu)
 
 add_executable(App
 	main.cpp
-	# We directly add the glfw3webgpu source files to our project
 	glfw3webgpu.h
 	glfw3webgpu.c
+	webgpu-utils.h
+	webgpu-utils.cpp
 )
 
 target_link_libraries(App PRIVATE glfw webgpu)
