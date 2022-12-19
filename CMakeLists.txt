@@ -14,8 +14,7 @@ add_executable(App
 	main.cpp
 	glfw3webgpu.h
 	glfw3webgpu.c
-	webgpu-utils.h
-	webgpu-utils.cpp
+	webgpu.hpp
 )
 
 target_link_libraries(App PRIVATE glfw webgpu)

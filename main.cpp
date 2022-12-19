@@ -25,11 +25,12 @@
  */
 
 #include "glfw3webgpu.h"
-#include "webgpu-utils.h"
+
+#define WEBGPU_CPP_IMPLEMENTATION
+#include "webgpu.hpp"
 
 #include <GLFW/glfw3.h>
 
-#include <webgpu.h>
 #include <wgpu.h> // wgpuTextureViewDrop
 
 #include <iostream>
@@ -37,10 +38,10 @@
 
 #define UNUSED(x) (void)x;
 
+using namespace wgpu;
+
 int main (int, char**) {
-	WGPUInstanceDescriptor desc = {};
-	desc.nextInChain = nullptr;
-	WGPUInstance instance = wgpuCreateInstance(&desc);
+	Instance instance = createInstance(InstanceDescriptor{});
 	if (!instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return 1;
@@ -59,64 +60,51 @@ int main (int, char**) {
 	}
 
 	std::cout << "Requesting adapter..." << std::endl;
-	WGPUSurface surface = glfwGetWGPUSurface(instance, window);
-	WGPURequestAdapterOptions adapterOpts = {};
-	adapterOpts.nextInChain = nullptr;
+	Surface surface = glfwGetWGPUSurface(instance, window);
+	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = surface;
-	WGPUAdapter adapter = requestAdapter(instance, &adapterOpts);
+	Adapter adapter = instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
-    WGPUDeviceDescriptor deviceDesc = {};
-	deviceDesc.nextInChain = nullptr;
+	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
-	deviceDesc.requiredFeaturesCount = 0;
-
-	// We require to have at least 1 bind group available
-	WGPURequiredLimits requiredLimits = {};
-	requiredLimits.nextInChain = nullptr;
+	RequiredLimits requiredLimits{};
 	requiredLimits.limits.maxBindGroups = 1;
-	deviceDesc.requiredLimits = nullptr;
-
-	deviceDesc.defaultQueue.nextInChain = nullptr;
+	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
-	WGPUDevice device = requestDevice(adapter, &deviceDesc);
+	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 
 	// Get the command queue, through which we send commands to the GPU
-	WGPUQueue queue = wgpuDeviceGetQueue(device);
+	Queue queue = device.getQueue();
 
-	// NEW
 	std::cout << "Creating swapchain device..." << std::endl;
-	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
-	WGPUSwapChainDescriptor swapChainDesc = {};
-	swapChainDesc.usage = WGPUTextureUsage_RenderAttachment;
+	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
+	SwapChainDescriptor swapChainDesc = {};
+	swapChainDesc.usage = TextureUsage::RenderAttachment;
 	swapChainDesc.format = swapChainFormat;
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
 	swapChainDesc.presentMode = WGPUPresentMode_Fifo;
-	WGPUSwapChain swapChain = wgpuDeviceCreateSwapChain(device, surface, &swapChainDesc);
+	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
 	std::cout << "Swapchain: " << swapChain << std::endl;
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
-		// NEW
-		WGPUTextureView nextTexture = wgpuSwapChainGetCurrentTextureView(swapChain);
+		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
 			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 			return 1;
 		}
 		std::cout << "nextTexture: " << nextTexture << std::endl;
 
-		WGPUCommandEncoderDescriptor commandEncoderDesc = {};
-		commandEncoderDesc.nextInChain = nullptr;
+		CommandEncoderDescriptor commandEncoderDesc{};
 		commandEncoderDesc.label = "Command Encoder";
-		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &commandEncoderDesc);
+		CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
 		
-		// NEW
-		WGPURenderPassDescriptor renderPassDesc = {};
-		renderPassDesc.nextInChain = nullptr;
+		RenderPassDescriptor renderPassDesc{};
 		renderPassDesc.colorAttachmentCount = 1;
 		WGPURenderPassColorAttachment renderPassColorAttachment = {};
 		renderPassColorAttachment.view = nextTexture;
@@ -127,18 +115,16 @@ int main (int, char**) {
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
 		renderPassDesc.depthStencilAttachment = nullptr;
 		renderPassDesc.timestampWriteCount = 0;
-		WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 		wgpuRenderPassEncoderEnd(renderPass);
 		wgpuTextureViewDrop(nextTexture);
 
-		WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
-		cmdBufferDescriptor.nextInChain = nullptr;
+		CommandBufferDescriptor cmdBufferDescriptor {};
 		cmdBufferDescriptor.label = "Command buffer";
-		WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
-		wgpuQueueSubmit(queue, 1, &command);
+		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+		queue.submit(command);
 
-		// NEW
-		wgpuSwapChainPresent(swapChain);
+		swapChain.present();
 	}
 
 	glfwDestroyWindow(window);
