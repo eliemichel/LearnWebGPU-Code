@@ -1,23 +1,21 @@
-cmake_minimum_required(VERSION 3.0...3.25)
+cmake_minimum_required(VERSION 3.1...3.25)
 project(
 	LearnWebGPU
 	VERSION 0.1.0
 	LANGUAGES CXX C
 )
 
-# Include the file that defines target_treat_all_warnings_as_errors
-# (I do this because I reuse this function across many projects and
-# want to keep this main file easy to read).
 include(utils.cmake)
 
-# Create the App executable target with one source file
+# Include glfw directory, to define the 'glfw' target
+add_subdirectory(glfw)
+
 add_executable(App
 	main.cpp
 )
 
-# Use C++17
-set_target_properties(App PROPERTIES CXX_STANDARD 17)
+# Add the 'glfw' target as a dependency of our App
+target_link_libraries(App PRIVATE glfw)
 
-# Turn all warnings on and treat them as errors so that are not
-# tempted to ignore them (See utils.cmake for details).
+set_target_properties(App PROPERTIES CXX_STANDARD 17)
 target_treat_all_warnings_as_errors(App)
