@@ -1,14 +1,9 @@
 LearnWebGPU - Code
 ==================
 
-This repository contains the reference code base accompanying the [Learn WebGPU](https://eliemichel.github.io/LearnWebGPU) web book.
+This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
 
-Each step of the book is stored in a different branch. You can look at them incrementally, or compare them using GitHub's branch comparator.
-
-Available step branches
------------------------
-
- - [`step000`](./tree/step000)
+Branch `step000`: This corresponds to the code at the end of the page [Project setup](learnwgpu.com/getting-started/project-setup.html).
 
 Building
 --------
