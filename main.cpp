@@ -30,12 +30,15 @@
 #include <GLFW/glfw3.h>
 
 #include <webgpu.h>
-#include <wgpu.h> // wgpuTextureViewDrop
+
+// This header contains non-standard extensions of webgpu.h provided by the
+// wgpu-native implementation. This implementation requires us to use the
+// non-standard procedure wgpuTextureViewDrop (otherwise we try to remain
+// standard-only).
+#include <wgpu.h>
 
 #include <iostream>
 #include <cassert>
-
-#define UNUSED(x) (void)x;
 
 int main (int, char**) {
 	WGPUInstanceDescriptor desc = {};
@@ -71,38 +74,47 @@ int main (int, char**) {
 	deviceDesc.nextInChain = nullptr;
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
-
-	// We require to have at least 1 bind group available
-	WGPURequiredLimits requiredLimits = {};
-	requiredLimits.nextInChain = nullptr;
-	requiredLimits.limits.maxBindGroups = 1;
 	deviceDesc.requiredLimits = nullptr;
-
 	deviceDesc.defaultQueue.nextInChain = nullptr;
 	deviceDesc.defaultQueue.label = "The default queue";
 	WGPUDevice device = requestDevice(adapter, &deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 
-	// Get the command queue, through which we send commands to the GPU
 	WGPUQueue queue = wgpuDeviceGetQueue(device);
 
-	// NEW
 	std::cout << "Creating swapchain device..." << std::endl;
-	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+
+	// We describe the Swap Chain that is used to present rendered textures on
+	// screen. Note that it is specific to a given window size so don't resize.
 	WGPUSwapChainDescriptor swapChainDesc = {};
-	swapChainDesc.usage = WGPUTextureUsage_RenderAttachment;
-	swapChainDesc.format = swapChainFormat;
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
+
+	// Like buffers, textures are allocated for a specific usage. In our case,
+	// we will use them as the target of a Render Pass so it needs to be created
+	// with the `RenderAttachment` usage flag.
+	swapChainDesc.usage = WGPUTextureUsage_RenderAttachment;
+
+	// The swap chain textures use the color format suggested by the target surface.
+	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+	swapChainDesc.format = swapChainFormat;
+	
+	// FIFO stands for "first in, first out", meaning that the presented
+	// texture is always the oldest one, like a regular queue.
 	swapChainDesc.presentMode = WGPUPresentMode_Fifo;
+
+	// Finally create the Swap Chain
 	WGPUSwapChain swapChain = wgpuDeviceCreateSwapChain(device, surface, &swapChainDesc);
+
 	std::cout << "Swapchain: " << swapChain << std::endl;
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
-		// NEW
+		// Get the texture where to draw the next frame
 		WGPUTextureView nextTexture = wgpuSwapChainGetCurrentTextureView(swapChain);
+		// Getting the texture may fail, in particular if the window has been resized
+		// and thus the target surface changed.
 		if (!nextTexture) {
 			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 			return 1;
@@ -114,21 +126,31 @@ int main (int, char**) {
 		commandEncoderDesc.label = "Command Encoder";
 		WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &commandEncoderDesc);
 		
-		// NEW
+		// Describe a render pass, which targets the texture view
 		WGPURenderPassDescriptor renderPassDesc = {};
-		renderPassDesc.nextInChain = nullptr;
-		renderPassDesc.colorAttachmentCount = 1;
+		
 		WGPURenderPassColorAttachment renderPassColorAttachment = {};
+		// The attachment is tighed to the view returned by the swap chain, so that
+		// the render pass draws directly on screen.
 		renderPassColorAttachment.view = nextTexture;
-		renderPassColorAttachment.resolveTarget = 0;
+		// Not relevant here because we do not use multi-sampling
+		renderPassColorAttachment.resolveTarget = nullptr;
 		renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
 		renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
 		renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
+		renderPassDesc.colorAttachmentCount = 1;
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
+
+		renderPassDesc.nextInChain = nullptr;
 		renderPassDesc.depthStencilAttachment = nullptr;
 		renderPassDesc.timestampWriteCount = 0;
+
+		// Create a render pass. We end it immediately because we use its built-in
+		// mechanism for clearing the screen when it begins (see descriptor).
 		WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
 		wgpuRenderPassEncoderEnd(renderPass);
+
+		// Non-standard but required by wgpu-native
 		wgpuTextureViewDrop(nextTexture);
 
 		WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
@@ -137,7 +159,7 @@ int main (int, char**) {
 		WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
 		wgpuQueueSubmit(queue, 1, &command);
 
-		// NEW
+		// We can tell the swap chain to present the next texture.
 		wgpuSwapChainPresent(swapChain);
 	}
 
