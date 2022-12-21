@@ -141,9 +141,14 @@ int main (int, char**) {
 		renderPassDesc.colorAttachmentCount = 1;
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-		renderPassDesc.nextInChain = nullptr;
+		// No depth buffer for now
 		renderPassDesc.depthStencilAttachment = nullptr;
+
+		// We do not use timers for now neither
 		renderPassDesc.timestampWriteCount = 0;
+		renderPassDesc.timestampWrites = nullptr;
+
+		renderPassDesc.nextInChain = nullptr;
 
 		// Create a render pass. We end it immediately because we use its built-in
 		// mechanism for clearing the screen when it begins (see descriptor).
