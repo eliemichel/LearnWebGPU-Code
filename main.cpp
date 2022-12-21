@@ -53,6 +53,7 @@ int main (int, char**) {
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
 	if (!window) {
 		std::cerr << "Could not open window!" << std::endl;
@@ -69,24 +70,22 @@ int main (int, char**) {
 	std::cout << "Requesting device..." << std::endl;
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
-	RequiredLimits requiredLimits{};
-	requiredLimits.limits.maxBindGroups = 1;
-	deviceDesc.requiredLimits = &requiredLimits;
+	deviceDesc.requiredFeaturesCount = 0;
+	deviceDesc.requiredLimits = nullptr;
 	deviceDesc.defaultQueue.label = "The default queue";
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 
-	// Get the command queue, through which we send commands to the GPU
 	Queue queue = device.getQueue();
 
 	std::cout << "Creating swapchain device..." << std::endl;
 	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
 	SwapChainDescriptor swapChainDesc = {};
-	swapChainDesc.usage = TextureUsage::RenderAttachment;
-	swapChainDesc.format = swapChainFormat;
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
-	swapChainDesc.presentMode = WGPUPresentMode_Fifo;
+	swapChainDesc.usage = TextureUsage::RenderAttachment;
+	swapChainDesc.format = swapChainFormat;
+	swapChainDesc.presentMode = PresentMode::Fifo;
 	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
 	std::cout << "Swapchain: " << swapChain << std::endl;
 
@@ -98,28 +97,33 @@ int main (int, char**) {
 			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 			return 1;
 		}
-		std::cout << "nextTexture: " << nextTexture << std::endl;
 
 		CommandEncoderDescriptor commandEncoderDesc{};
 		commandEncoderDesc.label = "Command Encoder";
 		CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
 		
 		RenderPassDescriptor renderPassDesc{};
-		renderPassDesc.colorAttachmentCount = 1;
+
 		WGPURenderPassColorAttachment renderPassColorAttachment = {};
 		renderPassColorAttachment.view = nextTexture;
-		renderPassColorAttachment.resolveTarget = 0;
-		renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
-		renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
-		renderPassColorAttachment.clearValue = WGPUColor{ 0.9, 0.1, 0.2, 1.0 };
+		renderPassColorAttachment.resolveTarget = nullptr;
+		renderPassColorAttachment.loadOp = LoadOp::Clear;
+		renderPassColorAttachment.storeOp = StoreOp::Store;
+		renderPassColorAttachment.clearValue = Color{ 0.9, 0.1, 0.2, 1.0 };
+		renderPassDesc.colorAttachmentCount = 1;
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
+
 		renderPassDesc.depthStencilAttachment = nullptr;
 		renderPassDesc.timestampWriteCount = 0;
+		renderPassDesc.timestampWrites = nullptr;
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
-		wgpuRenderPassEncoderEnd(renderPass);
+		renderPass.end();
+		
+		// This procedure is not handled by the wrapper because not standard,
+		// but as you can see there is no conversion needed whatsoever.
 		wgpuTextureViewDrop(nextTexture);
 
-		CommandBufferDescriptor cmdBufferDescriptor {};
+		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 		queue.submit(command);
