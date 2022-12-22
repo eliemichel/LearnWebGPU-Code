@@ -76,9 +76,24 @@ int main (int, char**) {
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 
+	auto myCallback = [](ErrorType type, char const* message) {
+		std::cout << "Device error: type " << type;
+		if (message) std::cout << " (message: " << message << ")";
+		std::cout << std::endl;
+	};
+	struct Context {
+		decltype(myCallback) theCallback;
+	};
+	Context ctx = { myCallback };
+	static auto cCallback = [](WGPUErrorType type, char const* message, void* userdata) -> void {
+		Context& ctx = *reinterpret_cast<Context*>(userdata);
+		ctx.theCallback(static_cast<ErrorType>(type), message);
+	};
+	wgpuDeviceSetUncapturedErrorCallback(device, cCallback, reinterpret_cast<void*>(&ctx));
+
 	Queue queue = device.getQueue();
 
-	std::cout << "Creating swapchain device..." << std::endl;
+	std::cout << "Creating swapchain..." << std::endl;
 	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
 	SwapChainDescriptor swapChainDesc = {};
 	swapChainDesc.width = 640;
@@ -88,6 +103,85 @@ int main (int, char**) {
 	swapChainDesc.presentMode = PresentMode::Fifo;
 	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
 	std::cout << "Swapchain: " << swapChain << std::endl;
+
+	std::cout << "Creating render pipeline..." << std::endl;
+	const char* shaderSource = R"(
+@vertex
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
+	if (in_vertex_index == 0u) {
+		return vec4<f32>(-0.5, -0.5, 0.0, 1.0);
+	} else if (in_vertex_index == 1u) {
+		return vec4<f32>(0.5, -0.5, 0.0, 1.0);
+	} else {
+		return vec4<f32>(0.0, 0.5, 0.0, 1.0);
+	}
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(0.0, 0.4, 1.0, 1.0);
+}
+)";
+
+	ShaderModuleDescriptor shaderDesc{};
+	ShaderModuleWGSLDescriptor shaderCodeDesc{};
+	shaderCodeDesc.chain.next = nullptr;
+	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
+	shaderCodeDesc.code = shaderSource;
+	shaderDesc.nextInChain = reinterpret_cast<ChainedStruct*>(&shaderCodeDesc);
+	shaderDesc.hintCount = 0;
+	shaderDesc.hints = nullptr;
+	ShaderModule shaderModule = device.createShaderModule(shaderDesc);
+
+	PipelineLayoutDescriptor layoutDesc{};
+	layoutDesc.bindGroupLayoutCount = 0;
+	layoutDesc.bindGroupLayouts = nullptr;
+	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
+
+	RenderPipelineDescriptor pipelineDesc{};
+	pipelineDesc.layout = layout;
+
+	pipelineDesc.vertex.module = shaderModule;
+	pipelineDesc.vertex.entryPoint = "vs_main";
+	pipelineDesc.vertex.constantCount = 0;
+	pipelineDesc.vertex.constants = nullptr;
+	pipelineDesc.vertex.bufferCount = 0;
+	pipelineDesc.vertex.buffers = nullptr;
+
+	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
+	pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
+	pipelineDesc.primitive.frontFace = FrontFace::CCW;
+	pipelineDesc.primitive.cullMode = CullMode::None; // usually we set it to Front to alleviate rendering, but for beginners it can be very frustrating to see nothing on screen for hours only to discover that the triangle was just facing in the wrong direction.
+
+	BlendState blendState{};
+	blendState.color.srcFactor = BlendFactor::One;
+	blendState.color.dstFactor = BlendFactor::Zero;
+	blendState.color.operation = BlendOperation::Add;
+	blendState.alpha.srcFactor = BlendFactor::SrcAlpha;
+	blendState.alpha.dstFactor = BlendFactor::OneMinusSrcAlpha;
+	blendState.alpha.operation = BlendOperation::Add;
+	ColorTargetState colorTarget{};
+	colorTarget.format = swapChainFormat;
+	colorTarget.blend = &blendState;
+	colorTarget.writeMask = ColorWriteMask::All;
+
+	FragmentState fragmentState{};
+	fragmentState.module = shaderModule;
+	fragmentState.entryPoint = "fs_main";
+	fragmentState.constantCount = 0;
+	fragmentState.constants = nullptr;
+	fragmentState.targetCount = 1;
+	fragmentState.targets = &colorTarget;
+	pipelineDesc.fragment = &fragmentState;
+
+	pipelineDesc.depthStencil = nullptr;
+
+	pipelineDesc.multisample.count = 1;
+	pipelineDesc.multisample.mask = ~0u; // meaning "all bits on"
+	pipelineDesc.multisample.alphaToCoverageEnabled = false;
+
+	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
+	std::cout << "Render pipeline: " << pipeline << std::endl;
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -117,10 +211,12 @@ int main (int, char**) {
 		renderPassDesc.timestampWriteCount = 0;
 		renderPassDesc.timestampWrites = nullptr;
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+
+		renderPass.setPipeline(pipeline);
+		renderPass.draw(3, 1, 0, 0);
+
 		renderPass.end();
 		
-		// This procedure is not handled by the wrapper because not standard,
-		// but as you can see there is no conversion needed whatsoever.
 		wgpuTextureViewDrop(nextTexture);
 
 		CommandBufferDescriptor cmdBufferDescriptor{};

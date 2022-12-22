@@ -3,7 +3,7 @@ LearnWebGPU - Code
 
 This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
 
-Branch `step020`: This corresponds to the code at the end of the page [?](learnwgpu.com/getting-started/?.html).
+Branch `step020`: This corresponds to the code at the end of the page [Hello Triangle](https://eliemichel.github.io/LearnWebGPU/basic-3d-rendering/hello-triangle.html).
 
 Building
 --------
