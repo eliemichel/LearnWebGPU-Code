@@ -36,8 +36,6 @@
 #include <iostream>
 #include <cassert>
 
-#define UNUSED(x) (void)x;
-
 using namespace wgpu;
 
 int main (int, char**) {
@@ -108,6 +106,8 @@ int main (int, char**) {
 
 	std::cout << "Creating shader module..." << std::endl;
 	const char* shaderSource = R"(
+@group(0) @binding(0) var<uniform> uTime: f32;
+
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
 	var p = vec2<f32>(0.0, 0.0);
@@ -118,6 +118,8 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) ve
 	} else {
 		p = vec2<f32>(0.0, 0.5);
 	}
+	// We move the object depending on the time
+	p += 0.3 * vec2<f32>(cos(uTime), sin(uTime));
 	return vec4<f32>(p, 0.0, 1.0);
 }
 
@@ -127,20 +129,15 @@ fn fs_main() -> @location(0) vec4<f32> {
 }
 )";
 
-	ShaderModuleDescriptor shaderDesc{};
-	shaderDesc.hintCount = 0;
-	shaderDesc.hints = nullptr;
-
-	// Use the extension mechanism to load a WGSL shader source code
 	ShaderModuleWGSLDescriptor shaderCodeDesc{};
-	// Set the chained struct's header
 	shaderCodeDesc.chain.next = nullptr;
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
-	// Connect the chain
-	shaderDesc.nextInChain = &shaderCodeDesc.chain;
-
-	// Setup the actual payload of the shader code descriptor
 	shaderCodeDesc.code = shaderSource;
+
+	ShaderModuleDescriptor shaderDesc{};
+	shaderDesc.nextInChain = &shaderCodeDesc.chain;
+	shaderDesc.hintCount = 0;
+	shaderDesc.hints = nullptr;
 
 	ShaderModule shaderModule = device.createShaderModule(shaderDesc);
 	std::cout << "Shader module: " << shaderModule << std::endl;
@@ -148,33 +145,18 @@ fn fs_main() -> @location(0) vec4<f32> {
 	std::cout << "Creating render pipeline..." << std::endl;
 	RenderPipelineDescriptor pipelineDesc{};
 
-	// Vertex fetch
-	// (We don't use any input buffer so far)
 	pipelineDesc.vertex.bufferCount = 0;
 	pipelineDesc.vertex.buffers = nullptr;
-
-	// Vertex shader
 	pipelineDesc.vertex.module = shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
 	pipelineDesc.vertex.constantCount = 0;
 	pipelineDesc.vertex.constants = nullptr;
 
-	// Primitive assembly and rasterization
-	// Each sequence of 3 vertices is considered as a triangle
 	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
-	// We'll see later how to specify the order in which vertices should be
-	// connected. When not specified, vertices are considered sequentially.
 	pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
-	// The face orientation is defined by assuming that when looking
-	// from the front of the face, its corner vertices are enumerated
-	// in the counter-clockwise (CCW) order.
 	pipelineDesc.primitive.frontFace = FrontFace::CCW;
-	// But the face orientation does not matter much because we do not
-	// cull (i.e. "hide") the faces pointing away from us (which is often
-	// used for optimization).
 	pipelineDesc.primitive.cullMode = CullMode::None;
 
-	// Fragment shader
 	FragmentState fragmentState{};
 	pipelineDesc.fragment = &fragmentState;
 	fragmentState.module = shaderModule;
@@ -182,13 +164,10 @@ fn fs_main() -> @location(0) vec4<f32> {
 	fragmentState.constantCount = 0;
 	fragmentState.constants = nullptr;
 
-	// Configure blend state
 	BlendState blendState{};
-	// Usual alpha blending for the color:
 	blendState.color.srcFactor = BlendFactor::SrcAlpha;
 	blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
 	blendState.color.operation = BlendOperation::Add;
-	// We leave the target alpha untouched:
 	blendState.alpha.srcFactor = BlendFactor::Zero;
 	blendState.alpha.dstFactor = BlendFactor::One;
 	blendState.alpha.operation = BlendOperation::Add;
@@ -196,37 +175,86 @@ fn fs_main() -> @location(0) vec4<f32> {
 	ColorTargetState colorTarget{};
 	colorTarget.format = swapChainFormat;
 	colorTarget.blend = &blendState;
-	colorTarget.writeMask = ColorWriteMask::All; // We could write to only some of the color channels.
+	colorTarget.writeMask = ColorWriteMask::All;
 
-	// We have only one target because our render pass has only one output color
-	// attachment.
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
 	
-	// Depth and stencil tests are not used here
 	pipelineDesc.depthStencil = nullptr;
 
-	// Multi-sampling
-	// Samples per pixel
 	pipelineDesc.multisample.count = 1;
-	// Default value for the mask, meaning "all bits on"
 	pipelineDesc.multisample.mask = ~0u;
-	// Default value as well (irrelevant for count = 1 anyways)
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-	// Pipeline layout
-	// (Our example does not use any resource)
+	// Create bind group layout
+	BindGroupLayoutEntry bindGroupLayoutEntry;
+	bindGroupLayoutEntry.binding = 0;
+
+	bindGroupLayoutEntry.buffer.nextInChain = nullptr;
+	bindGroupLayoutEntry.buffer.type = BufferBindingType::Uniform;
+	bindGroupLayoutEntry.buffer.hasDynamicOffset = false;
+	bindGroupLayoutEntry.buffer.minBindingSize = 4; // 1 f32 = 4 bytes
+
+	bindGroupLayoutEntry.sampler.nextInChain = nullptr;
+	bindGroupLayoutEntry.sampler.type = SamplerBindingType::Undefined;
+
+	bindGroupLayoutEntry.storageTexture.nextInChain = nullptr;
+	bindGroupLayoutEntry.storageTexture.access = StorageTextureAccess::Undefined;
+	bindGroupLayoutEntry.storageTexture.format = TextureFormat::Undefined;
+	bindGroupLayoutEntry.storageTexture.viewDimension = TextureViewDimension::Undefined;
+
+	bindGroupLayoutEntry.texture.nextInChain = nullptr;
+	bindGroupLayoutEntry.texture.multisampled = false;
+	bindGroupLayoutEntry.texture.sampleType = TextureSampleType::Undefined;
+	bindGroupLayoutEntry.texture.viewDimension = TextureViewDimension::Undefined;
+
+	bindGroupLayoutEntry.visibility = ShaderStage::Vertex;
+
+	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
+	bindGroupLayoutDesc.entryCount = 1;
+	bindGroupLayoutDesc.entries = &bindGroupLayoutEntry;
+	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
+
 	PipelineLayoutDescriptor layoutDesc{};
-	layoutDesc.bindGroupLayoutCount = 0;
-	layoutDesc.bindGroupLayouts = nullptr;
+	layoutDesc.bindGroupLayoutCount = 1;
+	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
 	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
+	// Create buffer
+	BufferDescriptor bufferDesc{};
+	bufferDesc.size = 4;
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	bufferDesc.mappedAtCreation = false;
+	Buffer buffer = device.createBuffer(bufferDesc);
+
+	float currentTime = 1.0f;
+	queue.writeBuffer(buffer, 0, &currentTime, 4);
+
+	// Create bind group
+	BindGroupEntry bindGroupEntry{};
+	bindGroupEntry.binding = 0;
+	bindGroupEntry.buffer = buffer;
+	bindGroupEntry.offset = 0;
+	bindGroupEntry.sampler = nullptr;
+	bindGroupEntry.size = 4;
+	bindGroupEntry.textureView = nullptr;
+
+	BindGroupDescriptor bindGroupDesc{};
+	bindGroupDesc.layout = bindGroupLayout;
+	bindGroupDesc.entryCount = bindGroupLayoutDesc.entryCount;
+	bindGroupDesc.entries = &bindGroupEntry;
+	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
+
+		// Update uniform buffer
+		float t = static_cast<float>(glfwGetTime());
+		queue.writeBuffer(buffer, 0, &t, 4);
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -254,10 +282,9 @@ fn fs_main() -> @location(0) vec4<f32> {
 		renderPassDesc.timestampWrites = nullptr;
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
-		// In its overall outline, drawing a triangle is as simple as this:
-		// Select which render pipeline to use
 		renderPass.setPipeline(pipeline);
-		// Draw 1 instance of a 3-vertices shape
+		// Set binding group
+		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
 		renderPass.draw(3, 1, 0, 0);
 
 		renderPass.end();
