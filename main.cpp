@@ -26,10 +26,10 @@
 
 #include "glfw3webgpu.h"
 
-#define WEBGPU_CPP_IMPLEMENTATION
-#include "webgpu.hpp"
-
 #include <GLFW/glfw3.h>
+
+#define WEBGPU_CPP_IMPLEMENTATION
+#include <webgpu.hpp>
 
 #include <wgpu.h> // wgpuTextureViewDrop
 
@@ -66,10 +66,13 @@ int main (int, char**) {
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
+	RequiredLimits requiredLimits = Default;
+	requiredLimits.limits.maxBindGroups = 1;
+
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
-	deviceDesc.requiredLimits = nullptr;
+	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
@@ -118,8 +121,10 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) ve
 	} else {
 		p = vec2<f32>(0.0, 0.5);
 	}
+
 	// We move the object depending on the time
 	p += 0.3 * vec2<f32>(cos(uTime), sin(uTime));
+
 	return vec4<f32>(p, 0.0, 1.0);
 }
 
@@ -187,30 +192,14 @@ fn fs_main() -> @location(0) vec4<f32> {
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
 	// Create bind group layout
-	BindGroupLayoutEntry bindGroupLayoutEntry;
+	BindGroupLayoutEntry bindGroupLayoutEntry = Default;
 	bindGroupLayoutEntry.binding = 0;
-
-	bindGroupLayoutEntry.buffer.nextInChain = nullptr;
+	bindGroupLayoutEntry.visibility = ShaderStage::Vertex;
 	bindGroupLayoutEntry.buffer.type = BufferBindingType::Uniform;
-	bindGroupLayoutEntry.buffer.hasDynamicOffset = false;
 	bindGroupLayoutEntry.buffer.minBindingSize = 4; // 1 f32 = 4 bytes
 
-	bindGroupLayoutEntry.sampler.nextInChain = nullptr;
-	bindGroupLayoutEntry.sampler.type = SamplerBindingType::Undefined;
-
-	bindGroupLayoutEntry.storageTexture.nextInChain = nullptr;
-	bindGroupLayoutEntry.storageTexture.access = StorageTextureAccess::Undefined;
-	bindGroupLayoutEntry.storageTexture.format = TextureFormat::Undefined;
-	bindGroupLayoutEntry.storageTexture.viewDimension = TextureViewDimension::Undefined;
-
-	bindGroupLayoutEntry.texture.nextInChain = nullptr;
-	bindGroupLayoutEntry.texture.multisampled = false;
-	bindGroupLayoutEntry.texture.sampleType = TextureSampleType::Undefined;
-	bindGroupLayoutEntry.texture.viewDimension = TextureViewDimension::Undefined;
-
-	bindGroupLayoutEntry.visibility = ShaderStage::Vertex;
-
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
+	bindGroupLayoutEntry.binding = 0;
 	bindGroupLayoutDesc.entryCount = 1;
 	bindGroupLayoutDesc.entries = &bindGroupLayoutEntry;
 	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
