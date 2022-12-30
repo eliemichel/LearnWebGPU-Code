@@ -68,6 +68,8 @@ int main (int, char**) {
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxBindGroups = 1;
+	requiredLimits.limits.maxVertexAttributes = 1;
+	requiredLimits.limits.maxVertexBuffers = 1;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -112,19 +114,8 @@ int main (int, char**) {
 @group(0) @binding(0) var<uniform> uTime: f32;
 
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	var p = vec2<f32>(0.0, 0.0);
-	if (in_vertex_index == 0u) {
-		p = vec2<f32>(-0.5, -0.5);
-	} else if (in_vertex_index == 1u) {
-		p = vec2<f32>(0.5, -0.5);
-	} else {
-		p = vec2<f32>(0.0, 0.5);
-	}
-
-	// We move the object depending on the time
-	p += 0.3 * vec2<f32>(cos(uTime), sin(uTime));
-
+fn vs_main(@location(0) in_position: vec2<f32>) -> @builtin(position) vec4<f32> {
+	var p = in_position + 0.3 * vec2<f32>(cos(uTime), sin(uTime));
 	return vec4<f32>(p, 0.0, 1.0);
 }
 
@@ -150,8 +141,20 @@ fn fs_main() -> @location(0) vec4<f32> {
 	std::cout << "Creating render pipeline..." << std::endl;
 	RenderPipelineDescriptor pipelineDesc{};
 
-	pipelineDesc.vertex.bufferCount = 0;
-	pipelineDesc.vertex.buffers = nullptr;
+	std::vector<VertexAttribute> vertexAttribs(1);
+	vertexAttribs[0].shaderLocation = 0;
+	vertexAttribs[0].format = VertexFormat::Float32x2;
+	vertexAttribs[0].offset = 0;
+
+	VertexBufferLayout vertexBufferLayout;
+	vertexBufferLayout.arrayStride = 2 * sizeof(float);
+	vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
+	vertexBufferLayout.attributes = vertexAttribs.data();
+	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
+
+	pipelineDesc.vertex.bufferCount = 1;
+	pipelineDesc.vertex.buffers = &vertexBufferLayout;
+
 	pipelineDesc.vertex.module = shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
 	pipelineDesc.vertex.constantCount = 0;
@@ -213,20 +216,39 @@ fn fs_main() -> @location(0) vec4<f32> {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	// Create buffer
+	// Create uniform buffer
 	BufferDescriptor bufferDesc{};
-	bufferDesc.size = 4;
+	bufferDesc.size = sizeof(float);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
-	Buffer buffer = device.createBuffer(bufferDesc);
+	Buffer uniformBuffer = device.createBuffer(bufferDesc);
 
 	float currentTime = 1.0f;
-	queue.writeBuffer(buffer, 0, &currentTime, 4);
+	queue.writeBuffer(uniformBuffer, 0, &currentTime, bufferDesc.size);
+
+	// Create vertex buffer
+	std::vector<float> vertexData = {
+		-0.5, -0.5,
+		+0.5, -0.5,
+		+0.0, +0.5,
+
+		-0.55f, -0.5,
+		-0.05f, +0.5,
+		-0.55f, +0.5
+	};
+	int vertexCount = static_cast<int>(vertexData.size());
+
+	bufferDesc.size = vertexCount * 2 * sizeof(float);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
+	bufferDesc.mappedAtCreation = false;
+	Buffer vertexBuffer = device.createBuffer(bufferDesc);
+
+	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
 	// Create bind group
 	BindGroupEntry bindGroupEntry{};
 	bindGroupEntry.binding = 0;
-	bindGroupEntry.buffer = buffer;
+	bindGroupEntry.buffer = uniformBuffer;
 	bindGroupEntry.offset = 0;
 	bindGroupEntry.sampler = nullptr;
 	bindGroupEntry.size = 4;
@@ -243,7 +265,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 		// Update uniform buffer
 		float t = static_cast<float>(glfwGetTime());
-		queue.writeBuffer(buffer, 0, &t, 4);
+		queue.writeBuffer(uniformBuffer, 0, &t, 4);
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -272,9 +294,10 @@ fn fs_main() -> @location(0) vec4<f32> {
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
 		renderPass.setPipeline(pipeline);
-		// Set binding group
+		// Set vertex buffer
+		renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexCount * 2 * sizeof(float));
 		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
-		renderPass.draw(3, 1, 0, 0);
+		renderPass.draw(vertexCount, 1, 0, 0);
 
 		renderPass.end();
 		
