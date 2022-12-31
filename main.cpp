@@ -66,16 +66,26 @@ int main (int, char**) {
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
+	// Don't forget to = Default
 	RequiredLimits requiredLimits = Default;
+	// We use at most 1 bind group for now
 	requiredLimits.limits.maxBindGroups = 1;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
+	// We specify required limits here
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
+
+	// Display supported limits
+	SupportedLimits supportedLimits;
+	adapter.getLimits(&supportedLimits);
+	std::cout << "adapter.maxBindGroups: " << supportedLimits.limits.maxBindGroups << std::endl;
+	device.getLimits(&supportedLimits);
+	std::cout << "device.maxBindGroups: " << supportedLimits.limits.maxBindGroups << std::endl;
 
 	// Add an error callback for more debug info
 	// (TODO: fix the callback in the webgpu.hpp wrapper)
@@ -191,19 +201,40 @@ fn fs_main() -> @location(0) vec4<f32> {
 	pipelineDesc.multisample.mask = ~0u;
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-	// Create bind group layout
-	BindGroupLayoutEntry bindGroupLayoutEntry = Default;
-	bindGroupLayoutEntry.binding = 0;
-	bindGroupLayoutEntry.visibility = ShaderStage::Vertex;
-	bindGroupLayoutEntry.buffer.type = BufferBindingType::Uniform;
-	bindGroupLayoutEntry.buffer.minBindingSize = 4; // 1 f32 = 4 bytes
+	// Create uniform buffer
+	BufferDescriptor bufferDesc{};
 
+	// The buffer will only contain 1 float with the value of uTime
+	bufferDesc.size = sizeof(float);
+
+	// Make sure to flag the buffer as BufferUsage::Uniform
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+
+	bufferDesc.mappedAtCreation = false;
+	Buffer uniformBuffer = device.createBuffer(bufferDesc);
+
+	// Upload the initial value of the uniform
+	float currentTime = 1.0f;
+	queue.writeBuffer(uniformBuffer, 0, &currentTime, 4);
+
+	// Create binding layout
+	BindGroupLayoutEntry bindingLayout = Default;
+	// The binding index as used in the @binding attribute in the shader
+	bindingLayout.binding = 0;
+	// The stage that needs to access this resource
+	bindingLayout.visibility = ShaderStage::Vertex;
+	// The binding is for a uniform buffer
+	bindingLayout.buffer.type = BufferBindingType::Uniform;
+	// The uniform buffer has the length of 1 float
+	bindingLayout.buffer.minBindingSize = sizeof(float);
+
+	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
-	bindGroupLayoutEntry.binding = 0;
 	bindGroupLayoutDesc.entryCount = 1;
-	bindGroupLayoutDesc.entries = &bindGroupLayoutEntry;
+	bindGroupLayoutDesc.entries = &bindingLayout;
 	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
 
+	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 1;
 	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
@@ -213,29 +244,24 @@ fn fs_main() -> @location(0) vec4<f32> {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	// Create buffer
-	BufferDescriptor bufferDesc{};
-	bufferDesc.size = 4;
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
-	bufferDesc.mappedAtCreation = false;
-	Buffer buffer = device.createBuffer(bufferDesc);
+	// Create a binding
+	BindGroupEntry binding{};
+	// The index of the binding (the entries in bindGroupDesc can be in any order)
+	binding.binding = 0;
+	// The buffer it is actually bound to
+	binding.buffer = uniformBuffer;
+	// We can specify an offset within the buffer, so that a single buffer can hold
+	// multiple uniform blocks.
+	binding.offset = 0;
+	// And we specify again the size of the buffer.
+	binding.size = sizeof(float);
 
-	float currentTime = 1.0f;
-	queue.writeBuffer(buffer, 0, &currentTime, 4);
-
-	// Create bind group
-	BindGroupEntry bindGroupEntry{};
-	bindGroupEntry.binding = 0;
-	bindGroupEntry.buffer = buffer;
-	bindGroupEntry.offset = 0;
-	bindGroupEntry.sampler = nullptr;
-	bindGroupEntry.size = 4;
-	bindGroupEntry.textureView = nullptr;
-
+	// A bind group contains one or multiple bindings
 	BindGroupDescriptor bindGroupDesc{};
 	bindGroupDesc.layout = bindGroupLayout;
+	// There must be as many bindings as declared in the layout!
 	bindGroupDesc.entryCount = bindGroupLayoutDesc.entryCount;
-	bindGroupDesc.entries = &bindGroupEntry;
+	bindGroupDesc.entries = &binding;
 	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
 
 	while (!glfwWindowShouldClose(window)) {
@@ -243,7 +269,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 		// Update uniform buffer
 		float t = static_cast<float>(glfwGetTime());
-		queue.writeBuffer(buffer, 0, &t, 4);
+		queue.writeBuffer(uniformBuffer, 0, &t, 4);
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
