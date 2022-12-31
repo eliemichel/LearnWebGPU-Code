@@ -35,8 +35,18 @@
 
 #include <iostream>
 #include <cassert>
+#include <array>
 
 using namespace wgpu;
+
+/**
+ * A structure holding the value of our uniforms
+ */
+struct MyUniforms {
+	std::array<float, 4> color;
+	float time;
+	//float _pad[3];
+};
 
 int main (int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -70,6 +80,7 @@ int main (int, char**) {
 	RequiredLimits requiredLimits = Default;
 	// We use at most 1 bind group for now
 	requiredLimits.limits.maxBindGroups = 1;
+	requiredLimits.limits.minUniformBufferOffsetAlignment = 64;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -84,8 +95,10 @@ int main (int, char**) {
 	SupportedLimits supportedLimits;
 	adapter.getLimits(&supportedLimits);
 	std::cout << "adapter.maxBindGroups: " << supportedLimits.limits.maxBindGroups << std::endl;
+	std::cout << "adapter.minUniformBufferOffsetAlignment: " << supportedLimits.limits.minUniformBufferOffsetAlignment << std::endl;
 	device.getLimits(&supportedLimits);
 	std::cout << "device.maxBindGroups: " << supportedLimits.limits.maxBindGroups << std::endl;
+	std::cout << "device.minUniformBufferOffsetAlignment: " << supportedLimits.limits.minUniformBufferOffsetAlignment << std::endl;
 
 	// Add an error callback for more debug info
 	// (TODO: fix the callback in the webgpu.hpp wrapper)
@@ -119,7 +132,16 @@ int main (int, char**) {
 
 	std::cout << "Creating shader module..." << std::endl;
 	const char* shaderSource = R"(
-@group(0) @binding(0) var<uniform> uTime: f32;
+/**
+ * A structure holding the value of our uniforms
+ */
+struct MyUniforms {
+    color: vec4<f32>,
+	time: f32,
+};
+
+// Instead of the simple uTime variable, our uniform variable is a struct
+@group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
@@ -133,14 +155,14 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) ve
 	}
 
 	// We move the object depending on the time
-	p += 0.3 * vec2<f32>(cos(uTime), sin(uTime));
+	p += 0.3 * vec2<f32>(cos(uMyUniforms.time), sin(uMyUniforms.time));
 
 	return vec4<f32>(p, 0.0, 1.0);
 }
 
 @fragment
 fn fs_main() -> @location(0) vec4<f32> {
-    return vec4<f32>(0.0, 0.4, 1.0, 1.0);
+    return uMyUniforms.color;
 }
 )";
 
@@ -205,7 +227,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 	BufferDescriptor bufferDesc{};
 
 	// The buffer will only contain 1 float with the value of uTime
-	bufferDesc.size = sizeof(float);
+	bufferDesc.size = sizeof(MyUniforms);
 
 	// Make sure to flag the buffer as BufferUsage::Uniform
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
@@ -214,19 +236,21 @@ fn fs_main() -> @location(0) vec4<f32> {
 	Buffer uniformBuffer = device.createBuffer(bufferDesc);
 
 	// Upload the initial value of the uniform
-	float currentTime = 1.0f;
-	queue.writeBuffer(uniformBuffer, 0, &currentTime, 4);
+	MyUniforms uniforms;
+	uniforms.time = 1.0f;
+	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
-	// Create binding layout
+	// Create binding layouts
 	BindGroupLayoutEntry bindingLayout = Default;
 	// The binding index as used in the @binding attribute in the shader
 	bindingLayout.binding = 0;
 	// The stage that needs to access this resource
-	bindingLayout.visibility = ShaderStage::Vertex;
-	// The binding is for a uniform buffer
+	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
+	// The bindin is for a uniform buffer
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	// The uniform buffer has the length of 1 float
-	bindingLayout.buffer.minBindingSize = sizeof(float);
+	// The uniform buffer has the length of MyUniforms
+	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -244,8 +268,9 @@ fn fs_main() -> @location(0) vec4<f32> {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	// Create a binding
-	BindGroupEntry binding{};
+	// Create bindings
+	BindGroupEntry binding;
+
 	// The index of the binding (the entries in bindGroupDesc can be in any order)
 	binding.binding = 0;
 	// The buffer it is actually bound to
@@ -254,7 +279,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 	// multiple uniform blocks.
 	binding.offset = 0;
 	// And we specify again the size of the buffer.
-	binding.size = sizeof(float);
+	binding.size = sizeof(MyUniforms);
 
 	// A bind group contains one or multiple bindings
 	BindGroupDescriptor bindGroupDesc{};
@@ -268,8 +293,8 @@ fn fs_main() -> @location(0) vec4<f32> {
 		glfwPollEvents();
 
 		// Update uniform buffer
-		float t = static_cast<float>(glfwGetTime());
-		queue.writeBuffer(uniformBuffer, 0, &t, 4);
+		uniforms.time = static_cast<float>(glfwGetTime());
+		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -295,22 +320,35 @@ fn fs_main() -> @location(0) vec4<f32> {
 		renderPassDesc.depthStencilAttachment = nullptr;
 		renderPassDesc.timestampWriteCount = 0;
 		renderPassDesc.timestampWrites = nullptr;
+
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
 		renderPass.setPipeline(pipeline);
+
 		// Set binding group
 		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
+
+		// First value of the uniforms
+		uniforms.color = { 0.0f, 0.4f, 1.0f, 1.0f };
+		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, color), &uniforms.color, sizeof(MyUniforms::color));
+
+		renderPass.draw(3, 1, 0, 0);
+
+		// Second value of the uniforms
+		uniforms.time -= 1.0f;
+		uniforms.color = { 1.0f, 0.5f, 0.0f, 1.0f };
+		queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+
 		renderPass.draw(3, 1, 0, 0);
 
 		renderPass.end();
-		
-		wgpuTextureViewDrop(nextTexture);
 
 		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 		queue.submit(command);
 
+		wgpuTextureViewDrop(nextTexture);
 		swapChain.present();
 	}
 
