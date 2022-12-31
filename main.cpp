@@ -45,8 +45,10 @@ using namespace wgpu;
 struct MyUniforms {
 	std::array<float, 4> color;
 	float time;
-	//float _pad[3];
+	float _pad[3];
 };
+// Have the compiler check byte alignment
+static_assert(sizeof(MyUniforms) % 16 == 0);
 
 int main (int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -80,7 +82,9 @@ int main (int, char**) {
 	RequiredLimits requiredLimits = Default;
 	// We use at most 1 bind group for now
 	requiredLimits.limits.maxBindGroups = 1;
-	requiredLimits.limits.minUniformBufferOffsetAlignment = 64;
+	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+	requiredLimits.limits.maxDynamicUniformBuffersPerPipelineLayout = 1;
+	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -99,6 +103,7 @@ int main (int, char**) {
 	device.getLimits(&supportedLimits);
 	std::cout << "device.maxBindGroups: " << supportedLimits.limits.maxBindGroups << std::endl;
 	std::cout << "device.minUniformBufferOffsetAlignment: " << supportedLimits.limits.minUniformBufferOffsetAlignment << std::endl;
+	Limits deviceLimits = supportedLimits.limits;
 
 	// Add an error callback for more debug info
 	// (TODO: fix the callback in the webgpu.hpp wrapper)
@@ -226,8 +231,12 @@ fn fs_main() -> @location(0) vec4<f32> {
 	// Create uniform buffer
 	BufferDescriptor bufferDesc{};
 
-	// The buffer will only contain 1 float with the value of uTime
-	bufferDesc.size = sizeof(MyUniforms);
+	uint32_t uniformStride = std::max(
+		(uint32_t)sizeof(MyUniforms),
+		(uint32_t)deviceLimits.minStorageBufferOffsetAlignment
+	);
+	// The buffer will contain 2 values for the uniforms
+	bufferDesc.size = 2 * uniformStride;
 
 	// Make sure to flag the buffer as BufferUsage::Uniform
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
@@ -237,9 +246,16 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 	// Upload the initial value of the uniform
 	MyUniforms uniforms;
+
+	// Upload first value
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+
+	// Upload second value
+	uniforms.time = 1.0f;
+	uniforms.color = { 0.0f, 1.0f, 0.4f, 0.7f };
+	queue.writeBuffer(uniformBuffer, uniformStride, &uniforms, sizeof(MyUniforms));
 
 	// Create binding layouts
 	BindGroupLayoutEntry bindingLayout = Default;
@@ -251,6 +267,8 @@ fn fs_main() -> @location(0) vec4<f32> {
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
 	// The uniform buffer has the length of MyUniforms
 	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+	// Make this binding dynamic so we can offset it between draw calls
+	bindingLayout.buffer.hasDynamicOffset = true;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -277,8 +295,9 @@ fn fs_main() -> @location(0) vec4<f32> {
 	binding.buffer = uniformBuffer;
 	// We can specify an offset within the buffer, so that a single buffer can hold
 	// multiple uniform blocks.
+	// NB: The dynamic offset is added to this value when setBindGroup() is called
 	binding.offset = 0;
-	// And we specify again the size of the buffer.
+	// And we specify the size of 1 uniform struct.
 	binding.size = sizeof(MyUniforms);
 
 	// A bind group contains one or multiple bindings
@@ -292,9 +311,13 @@ fn fs_main() -> @location(0) vec4<f32> {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
-		// Update uniform buffer
+		// Update the time uniform
 		uniforms.time = static_cast<float>(glfwGetTime());
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
+
+		// Update the color uniform
+		uniforms.color = { 1.0f, 0.5f, 0.0f, 1.0f };
+		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, color), &uniforms.color, sizeof(MyUniforms::color));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -325,20 +348,16 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 		renderPass.setPipeline(pipeline);
 
+		uint32_t dynamicOffset = 0;
+
 		// Set binding group
-		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
-
-		// First value of the uniforms
-		uniforms.color = { 0.0f, 0.4f, 1.0f, 1.0f };
-		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, color), &uniforms.color, sizeof(MyUniforms::color));
-
+		dynamicOffset = 0 * uniformStride;
+		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
 		renderPass.draw(3, 1, 0, 0);
 
-		// Second value of the uniforms
-		uniforms.time -= 1.0f;
-		uniforms.color = { 1.0f, 0.5f, 0.0f, 1.0f };
-		queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
-
+		// Set binding group with a different uniform offset
+		dynamicOffset = 1 * uniformStride;
+		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
 		renderPass.draw(3, 1, 0, 0);
 
 		renderPass.end();
