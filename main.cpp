@@ -44,8 +44,9 @@ using namespace wgpu;
  */
 struct MyUniforms {
 	std::array<float, 4> color;
+	std::array<float, 2> resolution;
 	float time;
-	float _pad[3];
+	float _pad[1];
 };
 // Have the compiler check byte alignment
 static_assert(sizeof(MyUniforms) % 16 == 0);
@@ -83,8 +84,11 @@ int main (int, char**) {
 	// We use at most 1 bind group for now
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-	requiredLimits.limits.maxDynamicUniformBuffersPerPipelineLayout = 1;
+	requiredLimits.limits.maxDynamicUniformBuffersPerPipelineLayout = 0;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
+
+	requiredLimits.limits.maxVertexAttributes = 2;
+	requiredLimits.limits.maxVertexBuffers = 1;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -142,32 +146,34 @@ int main (int, char**) {
  */
 struct MyUniforms {
     color: vec4<f32>,
+	resolution: vec2<f32>,
 	time: f32,
 };
 
-// Instead of the simple uTime variable, our uniform variable is a struct
+struct VertexInput {
+	@location(0) position: vec2<f32>,
+	@location(1) color: vec3<f32>,
+};
+
+struct VertexOutput {
+	@builtin(position) position: vec4<f32>,
+	@location(0) color: vec3<f32>,
+};
+
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	var p = vec2<f32>(0.0, 0.0);
-	if (in_vertex_index == 0u) {
-		p = vec2<f32>(-0.5, -0.5);
-	} else if (in_vertex_index == 1u) {
-		p = vec2<f32>(0.5, -0.5);
-	} else {
-		p = vec2<f32>(0.0, 0.5);
-	}
-
-	// We move the object depending on the time
-	p += 0.3 * vec2<f32>(cos(uMyUniforms.time), sin(uMyUniforms.time));
-
-	return vec4<f32>(p, 0.0, 1.0);
+fn vs_main(in: VertexInput) -> VertexOutput {
+	var out: VertexOutput;
+	var p = in.position * vec2<f32>(1.0, uMyUniforms.resolution.x / uMyUniforms.resolution.y);
+	out.position = vec4<f32>(p, 0.0, 1.0);
+	out.color = in.color;
+	return out;
 }
 
 @fragment
-fn fs_main() -> @location(0) vec4<f32> {
-    return uMyUniforms.color;
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+	return vec4<f32>(in.color, 1.0);
 }
 )";
 
@@ -187,8 +193,27 @@ fn fs_main() -> @location(0) vec4<f32> {
 	std::cout << "Creating render pipeline..." << std::endl;
 	RenderPipelineDescriptor pipelineDesc{};
 
-	pipelineDesc.vertex.bufferCount = 0;
-	pipelineDesc.vertex.buffers = nullptr;
+	std::vector<VertexAttribute> vertexAttribs(2);
+
+	// Position attribute
+	vertexAttribs[0].shaderLocation = 0;
+	vertexAttribs[0].format = VertexFormat::Float32x2;
+	vertexAttribs[0].offset = 0;
+
+	// Color attribute
+	vertexAttribs[1].shaderLocation = 1;
+	vertexAttribs[1].format = VertexFormat::Float32x3;
+	vertexAttribs[1].offset = 2 * sizeof(float);
+
+	VertexBufferLayout vertexBufferLayout;
+	vertexBufferLayout.arrayStride = 5 * sizeof(float);
+	vertexBufferLayout.attributeCount = static_cast<uint32_t>(vertexAttribs.size());
+	vertexBufferLayout.attributes = vertexAttribs.data();
+	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
+
+	pipelineDesc.vertex.bufferCount = 1;
+	pipelineDesc.vertex.buffers = &vertexBufferLayout;
+
 	pipelineDesc.vertex.module = shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
 	pipelineDesc.vertex.constantCount = 0;
@@ -230,32 +255,52 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 	// Create uniform buffer
 	BufferDescriptor bufferDesc{};
-
-	uint32_t uniformStride = std::max(
-		(uint32_t)sizeof(MyUniforms),
-		(uint32_t)deviceLimits.minStorageBufferOffsetAlignment
-	);
-	// The buffer will contain 2 values for the uniforms
-	bufferDesc.size = 2 * uniformStride;
-
-	// Make sure to flag the buffer as BufferUsage::Uniform
+	bufferDesc.size = sizeof(MyUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
-
 	bufferDesc.mappedAtCreation = false;
 	Buffer uniformBuffer = device.createBuffer(bufferDesc);
 
-	// Upload the initial value of the uniform
 	MyUniforms uniforms;
-
-	// Upload first value
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+	uniforms.resolution = { 640.0f, 480.0f };
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
-	// Upload second value
-	uniforms.time = 1.0f;
-	uniforms.color = { 0.0f, 1.0f, 0.4f, 0.7f };
-	queue.writeBuffer(uniformBuffer, uniformStride, &uniforms, sizeof(MyUniforms));
+	// Define geometry
+	// The de-duplicated list of point positions
+	std::vector<float> pointData = {
+		// x, y, r, g, b
+		-0.5, -0.5, 1.0, 0.0, 0.0,
+		+0.5, -0.5, 0.0, 1.0, 0.0,
+		+0.5, +0.5, 0.0, 0.0, 1.0,
+		-0.5, +0.5, 1.0, 1.0, 0.0
+	};
+
+	// This is a list of indices referencing positions in the pointData
+	std::vector<uint16_t> indexData = {
+		0, 1, 2, // Triangle #0
+		0, 2, 3  // Triangle #1
+	};
+
+	int indexCount = static_cast<int>(indexData.size());
+
+	// Create vertex buffer
+	bufferDesc.size = pointData.size() * sizeof(float);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
+	bufferDesc.mappedAtCreation = false;
+	Buffer vertexBuffer = device.createBuffer(bufferDesc);
+
+	// Upload geometry data to the buffer
+	queue.writeBuffer(vertexBuffer, 0, pointData.data(), bufferDesc.size);
+
+	// Create index buffer
+	bufferDesc.size = indexData.size() * sizeof(uint16_t);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
+	bufferDesc.mappedAtCreation = false;
+	Buffer indexBuffer = device.createBuffer(bufferDesc);
+
+	// Upload geometry data to the buffer
+	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
 	// Create binding layouts
 	BindGroupLayoutEntry bindingLayout = Default;
@@ -268,7 +313,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 	// The uniform buffer has the length of MyUniforms
 	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 	// Make this binding dynamic so we can offset it between draw calls
-	bindingLayout.buffer.hasDynamicOffset = true;
+	bindingLayout.buffer.hasDynamicOffset = false;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -336,7 +381,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 		renderPassColorAttachment.resolveTarget = nullptr;
 		renderPassColorAttachment.loadOp = LoadOp::Clear;
 		renderPassColorAttachment.storeOp = StoreOp::Store;
-		renderPassColorAttachment.clearValue = Color{ 0.9, 0.1, 0.2, 1.0 };
+		renderPassColorAttachment.clearValue = Color{ 0.025, 0.025, 0.025, 1.0 };
 		renderPassDesc.colorAttachmentCount = 1;
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
@@ -348,17 +393,13 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 		renderPass.setPipeline(pipeline);
 
-		uint32_t dynamicOffset = 0;
+		// Set vertex buffer while encoding the render pass
+		renderPass.setVertexBuffer(0, vertexBuffer, 0, pointData.size() * sizeof(float));
+		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
 
 		// Set binding group
-		dynamicOffset = 0 * uniformStride;
-		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
-		renderPass.draw(3, 1, 0, 0);
-
-		// Set binding group with a different uniform offset
-		dynamicOffset = 1 * uniformStride;
-		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
-		renderPass.draw(3, 1, 0, 0);
+		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
+		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 		renderPass.end();
 
