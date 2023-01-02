@@ -3,7 +3,7 @@
  *   https://github.com/eliemichel/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022 Elie Michel
+ * Copyright (c) 2022-2023 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,17 +26,14 @@
 
 #include "glfw3webgpu.h"
 
-#define WEBGPU_CPP_IMPLEMENTATION
-#include "webgpu.hpp"
-
 #include <GLFW/glfw3.h>
 
+#define WEBGPU_CPP_IMPLEMENTATION
+#include <webgpu.hpp>
 #include <wgpu.h> // wgpuTextureViewDrop
 
 #include <iostream>
 #include <cassert>
-
-#define UNUSED(x) (void)x;
 
 using namespace wgpu;
 
@@ -68,13 +65,32 @@ int main (int, char**) {
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
+	// Don't forget to = Default
+	RequiredLimits requiredLimits = Default;
+	// We use at most 1 vertex attribute for now
+	requiredLimits.limits.maxVertexAttributes = 1;
+	// We should also tell that we use 1 vertex buffers
+	requiredLimits.limits.maxVertexBuffers = 1;
+
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
-	deviceDesc.requiredLimits = nullptr;
+	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
+
+	SupportedLimits supportedLimits;
+
+	adapter.getLimits(&supportedLimits);
+	std::cout << "adapter.maxVertexAttributes: " << supportedLimits.limits.maxVertexAttributes << std::endl;
+
+	device.getLimits(&supportedLimits);
+	std::cout << "device.maxVertexAttributes: " << supportedLimits.limits.maxVertexAttributes << std::endl;
+
+	// Personally I get:
+	//   adapter.maxVertexAttributes: 16
+	//   device.maxVertexAttributes: 8
 
 	// Add an error callback for more debug info
 	// (TODO: fix the callback in the webgpu.hpp wrapper)
@@ -108,17 +124,15 @@ int main (int, char**) {
 
 	std::cout << "Creating shader module..." << std::endl;
 	const char* shaderSource = R"(
+// The `@location(0)` attribute means that this input variable is described
+// by the vertex buffer layout at index 0 in the `pipelineDesc.vertex.buffers`
+// array.
+// The type `vec2<f32>` must comply with what we will declare in the layout.
+// The argument name `in_vertex_position` is up to you, it is only internal to
+// the shader code!
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	var p = vec2<f32>(0.0, 0.0);
-	if (in_vertex_index == 0u) {
-		p = vec2<f32>(-0.5, -0.5);
-	} else if (in_vertex_index == 1u) {
-		p = vec2<f32>(0.5, -0.5);
-	} else {
-		p = vec2<f32>(0.0, 0.5);
-	}
-	return vec4<f32>(p, 0.0, 1.0);
+fn vs_main(@location(0) in_vertex_position: vec2<f32>) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(in_vertex_position, 0.0, 1.0);
 }
 
 @fragment
@@ -127,21 +141,14 @@ fn fs_main() -> @location(0) vec4<f32> {
 }
 )";
 
+	ShaderModuleWGSLDescriptor shaderCodeDesc{};
+	shaderCodeDesc.chain.next = nullptr;
+	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
+	shaderCodeDesc.code = shaderSource;
 	ShaderModuleDescriptor shaderDesc{};
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
-
-	// Use the extension mechanism to load a WGSL shader source code
-	ShaderModuleWGSLDescriptor shaderCodeDesc{};
-	// Set the chained struct's header
-	shaderCodeDesc.chain.next = nullptr;
-	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
-	// Connect the chain
 	shaderDesc.nextInChain = &shaderCodeDesc.chain;
-
-	// Setup the actual payload of the shader code descriptor
-	shaderCodeDesc.code = shaderSource;
-
 	ShaderModule shaderModule = device.createShaderModule(shaderDesc);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
@@ -149,32 +156,36 @@ fn fs_main() -> @location(0) vec4<f32> {
 	RenderPipelineDescriptor pipelineDesc{};
 
 	// Vertex fetch
-	// (We don't use any input buffer so far)
-	pipelineDesc.vertex.bufferCount = 0;
-	pipelineDesc.vertex.buffers = nullptr;
+	VertexAttribute vertexAttrib;
+	// == Per attribute ==
+	// Corresponds to @location(...)
+	vertexAttrib.shaderLocation = 0;
+	// Means vec2<f32> in the shader
+	vertexAttrib.format = VertexFormat::Float32x2;
+	// Index of the first element
+	vertexAttrib.offset = 0;
 
-	// Vertex shader
+	VertexBufferLayout vertexBufferLayout;
+	// [...] Build vertex buffer layout
+	vertexBufferLayout.attributeCount = 1;
+	vertexBufferLayout.attributes = &vertexAttrib;
+	// == Common to attributes from the same buffer ==
+	vertexBufferLayout.arrayStride = 2 * sizeof(float);
+	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
+
+	pipelineDesc.vertex.bufferCount = 1;
+	pipelineDesc.vertex.buffers = &vertexBufferLayout;
+
 	pipelineDesc.vertex.module = shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
 	pipelineDesc.vertex.constantCount = 0;
 	pipelineDesc.vertex.constants = nullptr;
 
-	// Primitive assembly and rasterization
-	// Each sequence of 3 vertices is considered as a triangle
 	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
-	// We'll see later how to specify the order in which vertices should be
-	// connected. When not specified, vertices are considered sequentially.
 	pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
-	// The face orientation is defined by assuming that when looking
-	// from the front of the face, its corner vertices are enumerated
-	// in the counter-clockwise (CCW) order.
 	pipelineDesc.primitive.frontFace = FrontFace::CCW;
-	// But the face orientation does not matter much because we do not
-	// cull (i.e. "hide") the faces pointing away from us (which is often
-	// used for optimization).
 	pipelineDesc.primitive.cullMode = CullMode::None;
 
-	// Fragment shader
 	FragmentState fragmentState{};
 	pipelineDesc.fragment = &fragmentState;
 	fragmentState.module = shaderModule;
@@ -182,13 +193,10 @@ fn fs_main() -> @location(0) vec4<f32> {
 	fragmentState.constantCount = 0;
 	fragmentState.constants = nullptr;
 
-	// Configure blend state
 	BlendState blendState{};
-	// Usual alpha blending for the color:
 	blendState.color.srcFactor = BlendFactor::SrcAlpha;
 	blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
 	blendState.color.operation = BlendOperation::Add;
-	// We leave the target alpha untouched:
 	blendState.alpha.srcFactor = BlendFactor::Zero;
 	blendState.alpha.dstFactor = BlendFactor::One;
 	blendState.alpha.operation = BlendOperation::Add;
@@ -196,26 +204,17 @@ fn fs_main() -> @location(0) vec4<f32> {
 	ColorTargetState colorTarget{};
 	colorTarget.format = swapChainFormat;
 	colorTarget.blend = &blendState;
-	colorTarget.writeMask = ColorWriteMask::All; // We could write to only some of the color channels.
+	colorTarget.writeMask = ColorWriteMask::All;
 
-	// We have only one target because our render pass has only one output color
-	// attachment.
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
 	
-	// Depth and stencil tests are not used here
 	pipelineDesc.depthStencil = nullptr;
 
-	// Multi-sampling
-	// Samples per pixel
 	pipelineDesc.multisample.count = 1;
-	// Default value for the mask, meaning "all bits on"
 	pipelineDesc.multisample.mask = ~0u;
-	// Default value as well (irrelevant for count = 1 anyways)
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-	// Pipeline layout
-	// (Our example does not use any resource)
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 0;
 	layoutDesc.bindGroupLayouts = nullptr;
@@ -224,6 +223,32 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
+
+	// Vertex buffer
+	// There are 2 floats per vertex, one for x and one for y.
+	// But in the end this is just a bunch of floats to the eyes of the GPU,
+	// the *layout* will tell how to interpret this.
+	std::vector<float> vertexData = {
+		-0.5, -0.5,
+		+0.5, -0.5,
+		+0.0, +0.5,
+
+		-0.55f, -0.5,
+		-0.05f, +0.5,
+		-0.55f, +0.5
+	};
+	int vertexCount = static_cast<int>(vertexData.size() / 2);
+
+	// Create vertex buffer
+	BufferDescriptor bufferDesc;
+	bufferDesc.size = vertexData.size() * sizeof(float);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
+	bufferDesc.mappedAtCreation = false;
+	Buffer vertexBuffer = device.createBuffer(bufferDesc);
+
+	// Upload geometry data to the buffer
+	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -254,11 +279,13 @@ fn fs_main() -> @location(0) vec4<f32> {
 		renderPassDesc.timestampWrites = nullptr;
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
-		// In its overall outline, drawing a triangle is as simple as this:
-		// Select which render pipeline to use
 		renderPass.setPipeline(pipeline);
-		// Draw 1 instance of a 3-vertices shape
-		renderPass.draw(3, 1, 0, 0);
+
+		// Set vertex buffer while encoding the render pass
+		renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexData.size() * sizeof(float));
+
+		// We use the `vertexCount` variable instead of hard-coding the vertex count
+		renderPass.draw(vertexCount, 1, 0, 0);
 
 		renderPass.end();
 		
