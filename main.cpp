@@ -109,34 +109,22 @@ int main (int, char**) {
 
 	std::cout << "Creating shader module..." << std::endl;
 	const char* shaderSource = R"(
-/**
- * A structure with fields labeled with vertex attribute locations can be used
- * as input to the entry point of a shader.
- */
 struct VertexInput {
 	@location(0) position: vec2<f32>,
 	@location(1) color: vec3<f32>,
 };
 
-/**
- * A structure with fields labeled with builtins and locations can also be used
- * as *output* of the vertex shader, which is also the input of the fragment
- * shader.
- */
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
-	// The location here does not refer to a vertex attribute, it just means
-	// that this field must be handled by the rasterizer.
-	// (It can also refer to another field of another struct that would be used
-	// as input to the fragment shader.)
 	@location(0) color: vec3<f32>,
 };
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	out.position = vec4<f32>(in.position, 0.0, 1.0);
-	out.color = in.color; // forward to the fragment shader
+	let ratio = 640.0 / 480.0;
+	out.position = vec4<f32>(in.position.x, in.position.y * ratio, 0.0, 1.0);
+	out.color = in.color;
 	return out;
 }
 
@@ -161,7 +149,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	RenderPipelineDescriptor pipelineDesc{};
 
 	// Vertex fetch
-	// We now have 2 attributes
 	std::vector<VertexAttribute> vertexAttribs(2);
 
 	// Position attribute
@@ -171,13 +158,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	// Color attribute
 	vertexAttribs[1].shaderLocation = 1;
-	vertexAttribs[1].format = VertexFormat::Float32x3; // different type!
-	vertexAttribs[1].offset = 2 * sizeof(float); // non null offset!
+	vertexAttribs[1].format = VertexFormat::Float32x3;
+	vertexAttribs[1].offset = 2 * sizeof(float);
 
 	VertexBufferLayout vertexBufferLayout;
 	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
 	vertexBufferLayout.attributes = vertexAttribs.data();
-	// The new stride
 	vertexBufferLayout.arrayStride = 5 * sizeof(float);
 	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
 
@@ -233,24 +219,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
 	// Vertex buffer
-	// There are 2 floats per vertex, one for x and one for y.
-	// But in the end this is just a bunch of floats to the eyes of the GPU,
-	// the *layout* will tell how to interpret this.
+	// The de-duplicated list of point positions
 	std::vector<float> vertexData = {
-		// x0,  y0,  r0,  g0,  b0
-		-0.5, -0.5, 1.0, 0.0, 0.0,
-
-		// x1,  y1,  r1,  g1,  b1
-		+0.5, -0.5, 0.0, 1.0, 0.0,
-
-		// ...
-		+0.0,   +0.5, 0.0, 0.0, 1.0,
-		-0.55f, -0.5, 1.0, 1.0, 0.0,
-		-0.05f, +0.5, 1.0, 0.0, 1.0,
-		-0.55f, +0.5, 0.0, 1.0, 1.0
+		// x,   y,     r,   g,   b
+		-0.5, -0.5,   1.0, 0.0, 0.0,
+		+0.5, -0.5,   0.0, 1.0, 0.0,
+		+0.5, +0.5,   0.0, 0.0, 1.0,
+		-0.5, +0.5,   1.0, 1.0, 0.0
 	};
-	// We now divide the vector size by 5 fields.
-	int vertexCount = static_cast<int>(vertexData.size() / 5);
 
 	// Create vertex buffer
 	BufferDescriptor bufferDesc;
@@ -258,9 +234,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
 	bufferDesc.mappedAtCreation = false;
 	Buffer vertexBuffer = device.createBuffer(bufferDesc);
-
-	// Upload geometry data to the buffer
 	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+
+	// Index Buffer
+	// This is a list of indices referencing positions in the pointData
+	std::vector<uint16_t> indexData = {
+		0, 1, 2, // Triangle #0
+		0, 2, 3  // Triangle #1
+	};
+
+	int indexCount = static_cast<int>(indexData.size());
+
+	// Create index buffer
+	bufferDesc.size = indexData.size() * sizeof(float);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
+	bufferDesc.mappedAtCreation = false;
+	Buffer indexBuffer = device.createBuffer(bufferDesc);
+	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -293,11 +283,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 		renderPass.setPipeline(pipeline);
 
-		// Set vertex buffer while encoding the render pass
+		// Set both vertex and index buffers
 		renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexData.size() * sizeof(float));
+		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
 
-		// We use the `vertexCount` variable instead of hard-coding the vertex count
-		renderPass.draw(vertexCount, 1, 0, 0);
+		// Replace `draw()` with `drawIndexed()` and `vertexCount` with `indexCount`
+		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 		renderPass.end();
 		
