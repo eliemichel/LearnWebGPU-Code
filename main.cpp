@@ -220,7 +220,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	// Vertex buffer
 	// The de-duplicated list of point positions
-	std::vector<float> vertexData = {
+	std::vector<float> pointData = {
 		// x,   y,     r,   g,   b
 		-0.5, -0.5,   1.0, 0.0, 0.0,
 		+0.5, -0.5,   0.0, 1.0, 0.0,
@@ -230,11 +230,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	// Create vertex buffer
 	BufferDescriptor bufferDesc;
-	bufferDesc.size = vertexData.size() * sizeof(float);
+	bufferDesc.size = pointData.size() * sizeof(float);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
 	bufferDesc.mappedAtCreation = false;
 	Buffer vertexBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+	queue.writeBuffer(vertexBuffer, 0, pointData.data(), bufferDesc.size);
 
 	// Index Buffer
 	// This is a list of indices referencing positions in the pointData
@@ -246,6 +246,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	int indexCount = static_cast<int>(indexData.size());
 
 	// Create index buffer
+	// (we reuse the bufferDesc initialized for the vertexBuffer)
 	bufferDesc.size = indexData.size() * sizeof(float);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
 	bufferDesc.mappedAtCreation = false;
@@ -284,10 +285,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 		renderPass.setPipeline(pipeline);
 
 		// Set both vertex and index buffers
-		renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexData.size() * sizeof(float));
+		renderPass.setVertexBuffer(0, vertexBuffer, 0, pointData.size() * sizeof(float));
+		// The second argument must correspond to the choice of uint16_t or uint32_t
+		// we've done when creating the index buffer.
 		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
 
 		// Replace `draw()` with `drawIndexed()` and `vertexCount` with `indexCount`
+		// The extra argument is an offset within the index buffer.
 		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 		renderPass.end();
