@@ -34,8 +34,15 @@
 
 #include <iostream>
 #include <cassert>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 using namespace wgpu;
+namespace fs = std::filesystem;
+
+bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData);
 
 int main (int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -123,14 +130,15 @@ struct VertexOutput {
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 	let ratio = 640.0 / 480.0;
-	out.position = vec4<f32>(in.position.x, in.position.y * ratio, 0.0, 1.0);
+	let offset = vec2<f32>(0.6875, 0.463);
+	out.position = vec4<f32>(in.position.x - offset.x, (in.position.y - offset.y) * ratio, 0.0, 1.0);
 	out.color = in.color;
 	return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-	return vec4<f32>(in.color, 1.0);
+	return vec4<f32>(pow(in.color, vec3<f32>(2.2)), 1.0);
 }
 )";
 
@@ -218,15 +226,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	// Vertex buffer
-	// The de-duplicated list of point positions
-	std::vector<float> pointData = {
-		// x,   y,     r,   g,   b
-		-0.5, -0.5,   1.0, 0.0, 0.0,
-		+0.5, -0.5,   0.0, 1.0, 0.0,
-		+0.5, +0.5,   0.0, 0.0, 1.0,
-		-0.5, +0.5,   1.0, 1.0, 0.0
-	};
+	#define DATA_DIR "../data"
+
+	std::vector<float> pointData;
+	std::vector<uint16_t> indexData;
+
+	bool success = loadGeometry(DATA_DIR "/webgpu.txt", pointData, indexData);
+	if (!success) {
+		std::cerr << "Could not load geometry!" << std::endl;
+		return 1;
+	}
 
 	// Create vertex buffer
 	BufferDescriptor bufferDesc;
@@ -236,14 +245,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	Buffer vertexBuffer = device.createBuffer(bufferDesc);
 	queue.writeBuffer(vertexBuffer, 0, pointData.data(), bufferDesc.size);
 
-	// Index Buffer
-	// This is a list of indices referencing positions in the pointData
-	std::vector<uint16_t> indexData = {
-		0, 1, 2, // Triangle #0
-		0, 2, 3  // Triangle #1
-	};
-
+	// Index Buffer alignment
 	int indexCount = static_cast<int>(indexData.size());
+	indexData.resize((size_t)ceil(indexData.size() / (float)4) * 4);
 
 	// Create index buffer
 	// (we reuse the bufferDesc initialized for the vertexBuffer)
@@ -310,4 +314,54 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	glfwTerminate();
 
 	return 0;
+}
+
+bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData) {
+	std::ifstream file(path);
+	if (!file.is_open()) {
+		return false;
+	}
+
+	pointData.clear();
+	indexData.clear();
+
+	enum class Section {
+		None,
+		Points,
+		Indices,
+	};
+	Section currentSection = Section::None;
+
+	float value;
+	uint16_t index;
+	std::string line;
+	while (!file.eof()) {
+		getline(file, line);
+		if (line == "[points]") {
+			currentSection = Section::Points;
+		}
+		else if (line == "[indices]") {
+			currentSection = Section::Indices;
+		}
+		else if (line[0] == '#' || line.empty()) {
+			// Do nothing, this is a comment
+		}
+		else if (currentSection == Section::Points) {
+			std::istringstream iss(line);
+			// Get x, y, r, g, b
+			for (int i = 0; i < 5; ++i) {
+				iss >> value;
+				pointData.push_back(value);
+			}
+		}
+		else if (currentSection == Section::Indices) {
+			std::istringstream iss(line);
+			// Get corners #0 #1 and #2
+			for (int i = 0; i < 3; ++i) {
+				iss >> index;
+				indexData.push_back(index);
+			}
+		}
+	}
+	return true;
 }
