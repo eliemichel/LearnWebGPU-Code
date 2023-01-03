@@ -24,13 +24,11 @@
  * SOFTWARE.
  */
 
-#include "glfw3webgpu.h"
-
-#define WEBGPU_CPP_IMPLEMENTATION
-#include "webgpu.hpp"
-
+#include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
 
+#define WEBGPU_CPP_IMPLEMENTATION
+#include <webgpu.hpp>
 #include <wgpu.h> // wgpuTextureViewDrop
 
 #include <iostream>
