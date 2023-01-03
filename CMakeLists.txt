@@ -9,14 +9,13 @@ include(utils.cmake)
 
 add_subdirectory(glfw)
 add_subdirectory(webgpu)
+add_subdirectory(glfw3webgpu)
 
 add_executable(App
 	main.cpp
-	glfw3webgpu.h
-	glfw3webgpu.c
 )
 
-target_link_libraries(App PRIVATE glfw webgpu)
+target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
 
 set_target_properties(App PROPERTIES CXX_STANDARD 17)
 target_treat_all_warnings_as_errors(App)

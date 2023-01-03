@@ -24,8 +24,7 @@
  * SOFTWARE.
  */
 
-#include "glfw3webgpu.h"
-
+#include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
 
 #define WEBGPU_CPP_IMPLEMENTATION
