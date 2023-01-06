@@ -41,6 +41,7 @@
 using namespace wgpu;
 namespace fs = std::filesystem;
 
+ShaderModule loadShaderModule(const fs::path& path, Device device);
 bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData);
 
 int main (int, char**) {
@@ -114,42 +115,7 @@ int main (int, char**) {
 	std::cout << "Swapchain: " << swapChain << std::endl;
 
 	std::cout << "Creating shader module..." << std::endl;
-	const char* shaderSource = R"(
-struct VertexInput {
-	@location(0) position: vec2<f32>,
-	@location(1) color: vec3<f32>,
-};
-
-struct VertexOutput {
-	@builtin(position) position: vec4<f32>,
-	@location(0) color: vec3<f32>,
-};
-
-@vertex
-fn vs_main(in: VertexInput) -> VertexOutput {
-	var out: VertexOutput;
-	let ratio = 640.0 / 480.0;
-	let offset = vec2<f32>(0.6875, 0.463);
-	out.position = vec4<f32>(in.position.x - offset.x, (in.position.y - offset.y) * ratio, 0.0, 1.0);
-	out.color = in.color;
-	return out;
-}
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-	return vec4<f32>(pow(in.color, vec3<f32>(2.2)), 1.0);
-}
-)";
-
-	ShaderModuleWGSLDescriptor shaderCodeDesc{};
-	shaderCodeDesc.chain.next = nullptr;
-	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
-	shaderCodeDesc.code = shaderSource;
-	ShaderModuleDescriptor shaderDesc{};
-	shaderDesc.hintCount = 0;
-	shaderDesc.hints = nullptr;
-	shaderDesc.nextInChain = &shaderCodeDesc.chain;
-	ShaderModule shaderModule = device.createShaderModule(shaderDesc);
+	ShaderModule shaderModule = loadShaderModule(RESOURCE_DIR "/shader.wsl", device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
 	std::cout << "Creating render pipeline..." << std::endl;
@@ -225,12 +191,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	#define DATA_DIR "../data"
-
 	std::vector<float> pointData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometry(DATA_DIR "/webgpu.txt", pointData, indexData);
+	bool success = loadGeometry(RESOURCE_DIR "/webgpu.txt", pointData, indexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -246,7 +210,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	// Index Buffer alignment
 	int indexCount = static_cast<int>(indexData.size());
-	indexData.resize((size_t)ceil(indexData.size() / (float)4) * 4);
+	//indexData.resize((size_t)ceil(indexData.size() / (float)4) * 4);
 
 	// Create index buffer
 	// (we reuse the bufferDesc initialized for the vertexBuffer)
@@ -313,6 +277,28 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	glfwTerminate();
 
 	return 0;
+}
+
+ShaderModule loadShaderModule(const fs::path& path, Device device) {
+	std::ifstream file(path);
+	if (!file.is_open()) {
+		return nullptr;
+	}
+	file.seekg(0, std::ios::end);
+	size_t size = file.tellg();
+	std::string shaderSource(size, ' ');
+	file.seekg(0);
+	file.read(shaderSource.data(), size);
+
+	ShaderModuleWGSLDescriptor shaderCodeDesc{};
+	shaderCodeDesc.chain.next = nullptr;
+	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
+	shaderCodeDesc.code = shaderSource.c_str();
+	ShaderModuleDescriptor shaderDesc{};
+	shaderDesc.hintCount = 0;
+	shaderDesc.hints = nullptr;
+	shaderDesc.nextInChain = &shaderCodeDesc.chain;
+	return device.createShaderModule(shaderDesc);
 }
 
 bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData) {

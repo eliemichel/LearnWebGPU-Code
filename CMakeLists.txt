@@ -7,6 +7,10 @@ project(
 
 include(utils.cmake)
 
+# We add an option to enable different settings when developping the app than
+# when distributing it.
+option(DEV_MODE "Set up development helper settings" ON)
+
 add_subdirectory(glfw)
 add_subdirectory(webgpu)
 add_subdirectory(glfw3webgpu)
@@ -14,6 +18,21 @@ add_subdirectory(glfw3webgpu)
 add_executable(App
 	main.cpp
 )
+
+if(DEV_MODE)
+	# In dev mode, we load resources from the source tree, so that when we
+	# dynamically edit resources (like shaders), these are correctly
+	# versionned.
+	target_compile_definitions(App PRIVATE
+		RESOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources"
+	)
+else()
+	# In release mode, we just load resources relatively to wherever the
+	# executable is launched from, so that the binary is portable
+	target_compile_definitions(App PRIVATE
+		RESOURCE_DIR="./resources"
+	)
+endif()
 
 target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
 
