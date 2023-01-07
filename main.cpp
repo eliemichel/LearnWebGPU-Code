@@ -37,9 +37,26 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <array>
 
 using namespace wgpu;
 namespace fs = std::filesystem;
+
+/**
+ * The same structure as in the shader, replicated in C++
+ */
+struct MyUniforms {
+	// offset = 0 * sizeof(vec4<f32>) -> OK
+	std::array<float, 4> color;
+
+	// offset = 16 = 4 * sizeof(f32) -> OK
+	float time;
+
+	// Add padding to make sure the struct is host-shareable
+	float _pad[3];
+};
+// Have the compiler check byte alignment
+static_assert(sizeof(MyUniforms) % 16 == 0);
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
 bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData);
@@ -193,9 +210,9 @@ int main (int, char**) {
 	// The binding index as used in the @binding attribute in the shader
 	bindingLayout.binding = 0;
 	// The stage that needs to access this resource
-	bindingLayout.visibility = ShaderStage::Vertex;
+	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	bindingLayout.buffer.minBindingSize = sizeof(float);
+	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -241,14 +258,17 @@ int main (int, char**) {
 
 	// Create uniform buffer
 	// The buffer will only contain 1 float with the value of uTime
-	bufferDesc.size = sizeof(float);
+	bufferDesc.size = sizeof(MyUniforms);
 	// Make sure to flag the buffer as BufferUsage::Uniform
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
 	Buffer uniformBuffer = device.createBuffer(bufferDesc);
 
-	float currentTime = 1.0f;
-	queue.writeBuffer(uniformBuffer, 0, &currentTime, sizeof(float));
+	// Upload the initial value of the uniforms
+	MyUniforms uniforms;
+	uniforms.time = 1.0f;
+	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
 	// Create a binding
 	BindGroupEntry binding{};
@@ -260,7 +280,7 @@ int main (int, char**) {
 	// multiple uniform blocks.
 	binding.offset = 0;
 	// And we specify again the size of the buffer.
-	binding.size = sizeof(float);
+	binding.size = sizeof(MyUniforms);
 
 	// A bind group contains one or multiple bindings
 	BindGroupDescriptor bindGroupDesc{};
@@ -274,8 +294,9 @@ int main (int, char**) {
 		glfwPollEvents();
 
 		// Update uniform buffer
-		float t = static_cast<float>(glfwGetTime()); // glfwGetTime returns a double
-		queue.writeBuffer(uniformBuffer, 0, &t, sizeof(float));
+		uniforms.time = static_cast<float>(glfwGetTime()); // glfwGetTime returns a double
+		// Only update the 1-st float of the buffer
+		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
