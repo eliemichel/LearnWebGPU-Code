@@ -46,16 +46,10 @@ namespace fs = std::filesystem;
  * The same structure as in the shader, replicated in C++
  */
 struct MyUniforms {
-	// offset = 0 * sizeof(vec4<f32>) -> OK
 	std::array<float, 4> color;
-
-	// offset = 16 = 4 * sizeof(f32) -> OK
 	float time;
-
-	// Add padding to make sure the struct is host-shareable
 	float _pad[3];
 };
-// Have the compiler check byte alignment
 static_assert(sizeof(MyUniforms) % 16 == 0);
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
@@ -92,12 +86,11 @@ int main (int, char**) {
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 2;
 	requiredLimits.limits.maxVertexBuffers = 1;
-	// We use at most 1 bind group for now
 	requiredLimits.limits.maxBindGroups = 1;
-	// We use at most 1 uniform buffer per stage
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-	// Uniform structs have a size of maximum 16 float
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
+	// Extra limit requirement
+	requiredLimits.limits.maxDynamicUniformBuffersPerPipelineLayout = 1;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -106,6 +99,10 @@ int main (int, char**) {
 	deviceDesc.defaultQueue.label = "The default queue";
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
+	// Get device limits
+	SupportedLimits supportedLimits;
+	device.getLimits(&supportedLimits);
+	Limits deviceLimits = supportedLimits.limits;
 
 	// Add an error callback for more debug info
 	// (TODO: fix the callback in the webgpu.hpp wrapper)
@@ -205,14 +202,14 @@ int main (int, char**) {
 	pipelineDesc.multisample.mask = ~0u;
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-	// Create binding layout (don't forget to = Default)
+	// Create binding layout
 	BindGroupLayoutEntry bindingLayout = Default;
-	// The binding index as used in the @binding attribute in the shader
 	bindingLayout.binding = 0;
-	// The stage that needs to access this resource
 	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
 	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+	// Make this binding dynamic so we can offset it between draw calls
+	bindingLayout.buffer.hasDynamicOffset = true;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -257,35 +254,41 @@ int main (int, char**) {
 	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
 	// Create uniform buffer
-	// The buffer will only contain 1 float with the value of uTime
-	bufferDesc.size = sizeof(MyUniforms);
-	// Make sure to flag the buffer as BufferUsage::Uniform
+	// Subtility
+	uint32_t uniformStride = std::max(
+		(uint32_t)sizeof(MyUniforms),
+		(uint32_t)deviceLimits.minStorageBufferOffsetAlignment
+	);
+	// The buffer will contain 2 values for the uniforms plus the space in between
+	// (NB: stride = sizeof(MyUniforms) + spacing)
+	bufferDesc.size = uniformStride + sizeof(MyUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
 	Buffer uniformBuffer = device.createBuffer(bufferDesc);
 
 	// Upload the initial value of the uniforms
 	MyUniforms uniforms;
+
+	// Upload first value
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
+	// Upload second value
+	uniforms.time = -1.0f;
+	uniforms.color = { 1.0f, 1.0f, 1.0f, 0.7f };
+	queue.writeBuffer(uniformBuffer, uniformStride, &uniforms, sizeof(MyUniforms));
+	//                               ^^^^^^^^^^^^^ beware of the non-null offset!
+
 	// Create a binding
 	BindGroupEntry binding{};
-	// The index of the binding (the entries in bindGroupDesc can be in any order)
 	binding.binding = 0;
-	// The buffer it is actually bound to
 	binding.buffer = uniformBuffer;
-	// We can specify an offset within the buffer, so that a single buffer can hold
-	// multiple uniform blocks.
 	binding.offset = 0;
-	// And we specify again the size of the buffer.
 	binding.size = sizeof(MyUniforms);
 
-	// A bind group contains one or multiple bindings
 	BindGroupDescriptor bindGroupDesc{};
 	bindGroupDesc.layout = bindGroupLayout;
-	// There must be as many bindings as declared in the layout!
 	bindGroupDesc.entryCount = bindGroupLayoutDesc.entryCount;
 	bindGroupDesc.entries = &binding;
 	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
@@ -294,8 +297,7 @@ int main (int, char**) {
 		glfwPollEvents();
 
 		// Update uniform buffer
-		uniforms.time = static_cast<float>(glfwGetTime()); // glfwGetTime returns a double
-		// Only update the 1-st float of the buffer
+		uniforms.time = static_cast<float>(glfwGetTime());
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
@@ -329,9 +331,16 @@ int main (int, char**) {
 		renderPass.setVertexBuffer(0, vertexBuffer, 0, pointData.size() * sizeof(float));
 		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
 
-		// Set binding group
-		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
+		uint32_t dynamicOffset = 0;
 
+		// Set binding group
+		dynamicOffset = 0 * uniformStride;
+		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
+		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
+
+		// Set binding group with a different uniform offset
+		dynamicOffset = 1 * uniformStride;
+		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
 		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 		renderPass.end();
