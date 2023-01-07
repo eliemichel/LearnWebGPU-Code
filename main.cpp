@@ -89,8 +89,6 @@ int main (int, char**) {
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
-	// Extra limit requirement
-	requiredLimits.limits.maxDynamicUniformBuffersPerPipelineLayout = 1;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -99,10 +97,6 @@ int main (int, char**) {
 	deviceDesc.defaultQueue.label = "The default queue";
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
-	// Get device limits
-	SupportedLimits supportedLimits;
-	device.getLimits(&supportedLimits);
-	Limits deviceLimits = supportedLimits.limits;
 
 	// Add an error callback for more debug info
 	// (TODO: fix the callback in the webgpu.hpp wrapper)
@@ -208,8 +202,6 @@ int main (int, char**) {
 	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
 	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
-	// Make this binding dynamic so we can offset it between draw calls
-	bindingLayout.buffer.hasDynamicOffset = true;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -254,31 +246,16 @@ int main (int, char**) {
 	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
 	// Create uniform buffer
-	// Subtility
-	uint32_t uniformStride = std::max(
-		(uint32_t)sizeof(MyUniforms),
-		(uint32_t)deviceLimits.minStorageBufferOffsetAlignment
-	);
-	// The buffer will contain 2 values for the uniforms plus the space in between
-	// (NB: stride = sizeof(MyUniforms) + spacing)
-	bufferDesc.size = uniformStride + sizeof(MyUniforms);
+	bufferDesc.size = sizeof(MyUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
 	Buffer uniformBuffer = device.createBuffer(bufferDesc);
 
 	// Upload the initial value of the uniforms
 	MyUniforms uniforms;
-
-	// Upload first value
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
-
-	// Upload second value
-	uniforms.time = -1.0f;
-	uniforms.color = { 1.0f, 1.0f, 1.0f, 0.7f };
-	queue.writeBuffer(uniformBuffer, uniformStride, &uniforms, sizeof(MyUniforms));
-	//                               ^^^^^^^^^^^^^ beware of the non-null offset!
 
 	// Create a binding
 	BindGroupEntry binding{};
@@ -330,17 +307,8 @@ int main (int, char**) {
 
 		renderPass.setVertexBuffer(0, vertexBuffer, 0, pointData.size() * sizeof(float));
 		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
+		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
 
-		uint32_t dynamicOffset = 0;
-
-		// Set binding group
-		dynamicOffset = 0 * uniformStride;
-		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
-		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
-
-		// Set binding group with a different uniform offset
-		dynamicOffset = 1 * uniformStride;
-		renderPass.setBindGroup(0, bindGroup, 1, &dynamicOffset);
 		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 		renderPass.end();
