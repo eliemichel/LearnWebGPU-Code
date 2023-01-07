@@ -31,9 +31,6 @@
 #include <webgpu.hpp>
 #include <wgpu.h> // wgpuTextureViewDrop
 
-// An optional library that makes displaying enum values much easier
-#include "magic_enum.hpp"
-
 #include <iostream>
 #include <cassert>
 #include <filesystem>
@@ -78,6 +75,12 @@ int main (int, char**) {
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 2;
 	requiredLimits.limits.maxVertexBuffers = 1;
+	// We use at most 1 bind group for now
+	requiredLimits.limits.maxBindGroups = 1;
+	// We use at most 1 uniform buffer per stage
+	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+	// Uniform structs have a size of maximum 16 float
+	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -116,8 +119,6 @@ int main (int, char**) {
 	swapChainDesc.presentMode = PresentMode::Fifo;
 	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
 	std::cout << "Swapchain: " << swapChain << std::endl;
-	// If the format contains "Srgb", we will have a gamma issue
-	std::cout << "Swapchain format: " << magic_enum::enum_name<WGPUTextureFormat>(swapChainFormat) << std::endl;
 
 	std::cout << "Creating shader module..." << std::endl;
 	ShaderModule shaderModule = loadShaderModule(RESOURCE_DIR "/shader.wsl", device);
@@ -187,9 +188,25 @@ int main (int, char**) {
 	pipelineDesc.multisample.mask = ~0u;
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
+	// Create binding layout (don't forget to = Default)
+	BindGroupLayoutEntry bindingLayout = Default;
+	// The binding index as used in the @binding attribute in the shader
+	bindingLayout.binding = 0;
+	// The stage that needs to access this resource
+	bindingLayout.visibility = ShaderStage::Vertex;
+	bindingLayout.buffer.type = BufferBindingType::Uniform;
+	bindingLayout.buffer.minBindingSize = sizeof(float);
+
+	// Create a bind group layout
+	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
+	bindGroupLayoutDesc.entryCount = 1;
+	bindGroupLayoutDesc.entries = &bindingLayout;
+	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
+
+	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
-	layoutDesc.bindGroupLayoutCount = 0;
-	layoutDesc.bindGroupLayouts = nullptr;
+	layoutDesc.bindGroupLayoutCount = 1;
+	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
 	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
@@ -213,20 +230,52 @@ int main (int, char**) {
 	Buffer vertexBuffer = device.createBuffer(bufferDesc);
 	queue.writeBuffer(vertexBuffer, 0, pointData.data(), bufferDesc.size);
 
-	// Index Buffer alignment
 	int indexCount = static_cast<int>(indexData.size());
-	//indexData.resize((size_t)ceil(indexData.size() / (float)4) * 4);
-
+	
 	// Create index buffer
-	// (we reuse the bufferDesc initialized for the vertexBuffer)
 	bufferDesc.size = indexData.size() * sizeof(float);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
 	bufferDesc.mappedAtCreation = false;
 	Buffer indexBuffer = device.createBuffer(bufferDesc);
 	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
+	// Create uniform buffer
+	// The buffer will only contain 1 float with the value of uTime
+	bufferDesc.size = sizeof(float);
+	// Make sure to flag the buffer as BufferUsage::Uniform
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	bufferDesc.mappedAtCreation = false;
+	Buffer uniformBuffer = device.createBuffer(bufferDesc);
+
+	float currentTime = 1.0f;
+	queue.writeBuffer(uniformBuffer, 0, &currentTime, sizeof(float));
+
+	// Create a binding
+	BindGroupEntry binding{};
+	// The index of the binding (the entries in bindGroupDesc can be in any order)
+	binding.binding = 0;
+	// The buffer it is actually bound to
+	binding.buffer = uniformBuffer;
+	// We can specify an offset within the buffer, so that a single buffer can hold
+	// multiple uniform blocks.
+	binding.offset = 0;
+	// And we specify again the size of the buffer.
+	binding.size = sizeof(float);
+
+	// A bind group contains one or multiple bindings
+	BindGroupDescriptor bindGroupDesc{};
+	bindGroupDesc.layout = bindGroupLayout;
+	// There must be as many bindings as declared in the layout!
+	bindGroupDesc.entryCount = bindGroupLayoutDesc.entryCount;
+	bindGroupDesc.entries = &binding;
+	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
+
+		// Update uniform buffer
+		float t = static_cast<float>(glfwGetTime()); // glfwGetTime returns a double
+		queue.writeBuffer(uniformBuffer, 0, &t, sizeof(float));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -256,14 +305,12 @@ int main (int, char**) {
 
 		renderPass.setPipeline(pipeline);
 
-		// Set both vertex and index buffers
 		renderPass.setVertexBuffer(0, vertexBuffer, 0, pointData.size() * sizeof(float));
-		// The second argument must correspond to the choice of uint16_t or uint32_t
-		// we've done when creating the index buffer.
 		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
 
-		// Replace `draw()` with `drawIndexed()` and `vertexCount` with `indexCount`
-		// The extra argument is an offset within the index buffer.
+		// Set binding group
+		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
+
 		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 		renderPass.end();
