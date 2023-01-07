@@ -22,6 +22,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// We apply a gamma-correction to the color
-	vec3<f32> corrected_color = pow(in.color, vec3<f32>(2.2));
+	let corrected_color = pow(in.color, vec3<f32>(2.2));
 	return vec4<f32>(corrected_color, 1.0);
 }
