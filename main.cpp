@@ -31,6 +31,9 @@
 #include <webgpu.hpp>
 #include <wgpu.h> // wgpuTextureViewDrop
 
+// An optional library that makes displaying enum values much easier
+#include "magic_enum.hpp"
+
 #include <iostream>
 #include <cassert>
 #include <filesystem>
@@ -113,6 +116,8 @@ int main (int, char**) {
 	swapChainDesc.presentMode = PresentMode::Fifo;
 	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
 	std::cout << "Swapchain: " << swapChain << std::endl;
+	// If the format contains "Srgb", we will have a gamma issue
+	std::cout << "Swapchain format: " << magic_enum::enum_name<WGPUTextureFormat>(swapChainFormat) << std::endl;
 
 	std::cout << "Creating shader module..." << std::endl;
 	ShaderModule shaderModule = loadShaderModule(RESOURCE_DIR "/shader.wsl", device);
