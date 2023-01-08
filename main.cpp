@@ -190,7 +190,19 @@ int main (int, char**) {
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
 	
-	pipelineDesc.depthStencil = nullptr;
+	DepthStencilState depthStencilState;
+	depthStencilState.setDefault();
+	depthStencilState.depthBias = 0;
+	depthStencilState.depthBiasClamp = 0.0f;
+	depthStencilState.depthBiasSlopeScale = 1.0f;
+	depthStencilState.depthCompare = CompareFunction::Less;
+	depthStencilState.depthWriteEnabled = true;
+	depthStencilState.format = TextureFormat::Depth24Plus;
+	depthStencilState.stencilBack.compare = CompareFunction::Never;
+	depthStencilState.stencilFront.compare = CompareFunction::Never;
+	depthStencilState.stencilReadMask = 0;
+	depthStencilState.stencilWriteMask = 0;
+	pipelineDesc.depthStencil = &depthStencilState;
 
 	pipelineDesc.multisample.count = 1;
 	pipelineDesc.multisample.mask = ~0u;
@@ -270,6 +282,28 @@ int main (int, char**) {
 	bindGroupDesc.entries = &binding;
 	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
 
+	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
+	TextureDescriptor depthTextureDesc;
+	depthTextureDesc.dimension = TextureDimension::_2D;
+	depthTextureDesc.format = depthTextureFormat;
+	depthTextureDesc.mipLevelCount = 1;
+	depthTextureDesc.sampleCount = 1;
+	depthTextureDesc.size = {640, 480, 1};
+	depthTextureDesc.usage = TextureUsage::RenderAttachment;
+	depthTextureDesc.viewFormatCount = 1;
+	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
+	Texture depthTexture = device.createTexture(depthTextureDesc);
+
+	TextureViewDescriptor depthTextureViewDesc;
+	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
+	depthTextureViewDesc.baseArrayLayer = 0;
+	depthTextureViewDesc.arrayLayerCount = 1;
+	depthTextureViewDesc.baseMipLevel = 0;
+	depthTextureViewDesc.mipLevelCount = 1;
+	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
+	depthTextureViewDesc.format = depthTextureFormat;
+	TextureView depthTextureView = depthTexture.createView(depthTextureViewDesc);
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -289,16 +323,27 @@ int main (int, char**) {
 		
 		RenderPassDescriptor renderPassDesc{};
 
-		WGPURenderPassColorAttachment renderPassColorAttachment = {};
-		renderPassColorAttachment.view = nextTexture;
-		renderPassColorAttachment.resolveTarget = nullptr;
-		renderPassColorAttachment.loadOp = LoadOp::Clear;
-		renderPassColorAttachment.storeOp = StoreOp::Store;
-		renderPassColorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
+		RenderPassColorAttachment colorAttachment;
+		colorAttachment.view = nextTexture;
+		colorAttachment.resolveTarget = nullptr;
+		colorAttachment.loadOp = LoadOp::Clear;
+		colorAttachment.storeOp = StoreOp::Store;
+		colorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
 		renderPassDesc.colorAttachmentCount = 1;
-		renderPassDesc.colorAttachments = &renderPassColorAttachment;
+		renderPassDesc.colorAttachments = &colorAttachment;
 
-		renderPassDesc.depthStencilAttachment = nullptr;
+		RenderPassDepthStencilAttachment depthStencilAttachment;
+		depthStencilAttachment.view = depthTextureView;
+		depthStencilAttachment.depthClearValue = 100.0f;
+		depthStencilAttachment.depthLoadOp = LoadOp::Clear;
+		depthStencilAttachment.depthReadOnly = false;
+		depthStencilAttachment.depthStoreOp = StoreOp::Store;
+		depthStencilAttachment.stencilClearValue = 0;
+		depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
+		depthStencilAttachment.stencilReadOnly = true;
+		depthStencilAttachment.stencilStoreOp = StoreOp::Store;
+
+		renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
 		renderPassDesc.timestampWriteCount = 0;
 		renderPassDesc.timestampWrites = nullptr;
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);

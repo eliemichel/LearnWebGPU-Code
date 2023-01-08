@@ -29,7 +29,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	let tmp = mat2x2(c, s, -s, c) * position.yz;
 	position.y = tmp.x;
 	position.z = tmp.y;
-	out.position = vec4<f32>(position.x + offset.x, (position.y + offset.y) * ratio, 0.0, 1.0);
+	out.position = vec4<f32>(position.x, position.y * ratio, position.z * 0.5 + 0.5, 1.0);
 	out.color = in.color;
 	return out;
 }
