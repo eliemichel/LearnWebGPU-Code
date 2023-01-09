@@ -31,6 +31,9 @@
 #include <webgpu.hpp>
 #include <wgpu.h> // wgpuTextureViewDrop
 
+#include <glm/glm.hpp>
+#include <glm/ext/matrix_transform.hpp>
+
 #include <iostream>
 #include <cassert>
 #include <filesystem>
