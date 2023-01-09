@@ -1,20 +1,20 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
  *   https://github.com/eliemichel/LearnWebGPU
- * 
+ *
  * MIT License
  * Copyright (c) 2022-2023 Elie Michel
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -32,7 +32,7 @@
 #include <wgpu.h> // wgpuTextureViewDrop
 
 #include <glm/glm.hpp>
-#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext.hpp>
 
 #include <iostream>
 #include <cassert>
@@ -44,11 +44,15 @@
 
 using namespace wgpu;
 namespace fs = std::filesystem;
+using glm::mat4;
 
 /**
  * The same structure as in the shader, replicated in C++
  */
 struct MyUniforms {
+	mat4 projectionMatrix;
+	mat4 viewMatrix;
+	mat4 modelMatrix;
 	std::array<float, 4> color;
 	float time;
 	float _pad[3];
@@ -58,7 +62,7 @@ static_assert(sizeof(MyUniforms) % 16 == 0);
 ShaderModule loadShaderModule(const fs::path& path, Device device);
 bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData, int dimensions);
 
-int main (int, char**) {
+int main(int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
 	if (!instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
@@ -91,7 +95,7 @@ int main (int, char**) {
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
+	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
@@ -192,19 +196,27 @@ int main (int, char**) {
 
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
-	
-	DepthStencilState depthStencilState;
-	depthStencilState.setDefault();
-	depthStencilState.depthBias = 0;
-	depthStencilState.depthBiasClamp = 0.0f;
-	depthStencilState.depthBiasSlopeScale = 1.0f;
+
+	// Setup the Z-Buffer algorithm options
+	DepthStencilState depthStencilState = Default;
+
+	// A fragment is blended only if its depth is **less** than the current
+	// value of the Z-Buffer.
 	depthStencilState.depthCompare = CompareFunction::Less;
+
+	// Once a fragment passes the depth test, its depth is stored as the new
+	// value of the Z-Buffer.
 	depthStencilState.depthWriteEnabled = true;
-	depthStencilState.format = TextureFormat::Depth24Plus;
-	depthStencilState.stencilBack.compare = CompareFunction::Never;
-	depthStencilState.stencilFront.compare = CompareFunction::Never;
+
+	// We tell the pipeline how the depth values of the Z-Buffer are encoded in memory.
+	// Store the format in a variable as later parts of the code depend on it
+	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
+	depthStencilState.format = depthTextureFormat;
+
+	// Deactivate the stencil alltogether
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
+
 	pipelineDesc.depthStencil = &depthStencilState;
 
 	pipelineDesc.multisample.count = 1;
@@ -252,7 +264,7 @@ int main (int, char**) {
 	queue.writeBuffer(vertexBuffer, 0, pointData.data(), bufferDesc.size);
 
 	int indexCount = static_cast<int>(indexData.size());
-	
+
 	// Create index buffer
 	bufferDesc.size = indexData.size() * sizeof(float);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
@@ -270,6 +282,9 @@ int main (int, char**) {
 	MyUniforms uniforms;
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+	uniforms.projectionMatrix = glm::perspective(45.0f, 640.0f / 480.0f, 0.0f, 100.0f);
+	uniforms.viewMatrix = mat4(1.0);
+	uniforms.modelMatrix = mat4(1.0);
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
 	// Create a binding
@@ -285,18 +300,19 @@ int main (int, char**) {
 	bindGroupDesc.entries = &binding;
 	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
 
-	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
+	// Create the depth texture
 	TextureDescriptor depthTextureDesc;
 	depthTextureDesc.dimension = TextureDimension::_2D;
 	depthTextureDesc.format = depthTextureFormat;
 	depthTextureDesc.mipLevelCount = 1;
 	depthTextureDesc.sampleCount = 1;
-	depthTextureDesc.size = {640, 480, 1};
+	depthTextureDesc.size = { 640, 480, 1 };
 	depthTextureDesc.usage = TextureUsage::RenderAttachment;
 	depthTextureDesc.viewFormatCount = 1;
 	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
 	Texture depthTexture = device.createTexture(depthTextureDesc);
 
+	// Create the view of the depth texture manipulated by the rasterizer
 	TextureViewDescriptor depthTextureViewDesc;
 	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
 	depthTextureViewDesc.baseArrayLayer = 0;
@@ -323,7 +339,7 @@ int main (int, char**) {
 		CommandEncoderDescriptor commandEncoderDesc{};
 		commandEncoderDesc.label = "Command Encoder";
 		CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
-		
+
 		RenderPassDescriptor renderPassDesc{};
 
 		RenderPassColorAttachment colorAttachment;
@@ -336,15 +352,22 @@ int main (int, char**) {
 		renderPassDesc.colorAttachments = &colorAttachment;
 
 		RenderPassDepthStencilAttachment depthStencilAttachment;
+		// The view of the depth texture
 		depthStencilAttachment.view = depthTextureView;
+
+		// The initial value of the depth buffer, meaning "far"
 		depthStencilAttachment.depthClearValue = 100.0f;
+		// Operation settings comparable to the color attachment
 		depthStencilAttachment.depthLoadOp = LoadOp::Clear;
-		depthStencilAttachment.depthReadOnly = false;
 		depthStencilAttachment.depthStoreOp = StoreOp::Store;
+		// we could turn off writing to the depth buffer globally here
+		depthStencilAttachment.depthReadOnly = false;
+
+		// Stencil setup, mandatory but unused
 		depthStencilAttachment.stencilClearValue = 0;
 		depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
-		depthStencilAttachment.stencilReadOnly = true;
 		depthStencilAttachment.stencilStoreOp = StoreOp::Store;
+		depthStencilAttachment.stencilReadOnly = true;
 
 		renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
 		renderPassDesc.timestampWriteCount = 0;
@@ -360,7 +383,7 @@ int main (int, char**) {
 		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 		renderPass.end();
-		
+
 		wgpuTextureViewDrop(nextTexture);
 
 		CommandBufferDescriptor cmdBufferDescriptor{};

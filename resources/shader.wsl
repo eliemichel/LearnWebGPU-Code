@@ -12,6 +12,9 @@ struct VertexOutput {
  * A structure holding the value of our uniforms
  */
 struct MyUniforms {
+	projectionMatrix: mat4x4<f32>,
+	viewMatrix: mat4x4<f32>,
+	modelMatrix: mat4x4<f32>,
 	color: vec4<f32>,
 	time: f32,
 };
@@ -29,7 +32,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	let tmp = mat2x2(c, s, -s, c) * position.yz;
 	position.y = tmp.x;
 	position.z = tmp.y;
-	out.position = vec4<f32>(position.x, position.y * ratio, position.z * 0.5 + 0.5, 1.0);
+	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * vec4<f32>(position.x, position.y * ratio, position.z + 10.0, 1.0);
 	out.color = in.color;
 	return out;
 }
