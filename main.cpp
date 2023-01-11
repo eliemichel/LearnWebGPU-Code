@@ -282,7 +282,7 @@ int main(int, char**) {
 	MyUniforms uniforms;
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
-	uniforms.projectionMatrix = glm::perspective(45.0f, 640.0f / 480.0f, 0.0f, 100.0f);
+	uniforms.projectionMatrix = glm::perspective(45.0f, 640.0f / 480.0f, 0.001f, 100.0f);
 	uniforms.viewMatrix = mat4(1.0);
 	uniforms.modelMatrix = mat4(1.0);
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));

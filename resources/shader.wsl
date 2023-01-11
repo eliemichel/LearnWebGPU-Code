@@ -26,13 +26,26 @@ struct MyUniforms {
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 	let ratio = 640.0 / 480.0;
+	let angle = uMyUniforms.time; // you can multiply it go rotate faster
 	var position = in.position;
-	var c = cos(uMyUniforms.time);
-	var s = sin(uMyUniforms.time);
-	let tmp = mat2x2(c, s, -s, c) * position.yz;
-	position.y = tmp.x;
-	position.z = tmp.y;
-	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * vec4<f32>(position.x, position.y * ratio, position.z + 10.0, 1.0);
+	// Offset the object
+	position.x += 0.25;
+
+	// Rotate the view point
+	let c = cos(angle);
+	let s = sin(angle);
+
+	// Option B: Rotate the view point using a matrix
+	let R = mat3x3<f32>(
+		1.0, 0.0, 0.0,
+		0.0,   c,   s,
+		0.0,  -s,   c,
+	);
+	position = R * position;
+
+	// Project on the XY plane and apply ratio
+	out.position = vec4<f32>(position.x, position.y * ratio, position.z * 0.5 + 0.5, 1.0);
+	//out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * vec4<f32>(position.x, position.y, -(position.z + 2.0), 1.0);
 	out.color = in.color;
 	return out;
 }
