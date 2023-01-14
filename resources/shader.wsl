@@ -1,11 +1,13 @@
 struct VertexInput {
 	@location(0) position: vec3<f32>,
-	@location(1) color: vec3<f32>,
+	@location(1) normal: vec3<f32>,
+	@location(2) color: vec3<f32>,
 };
 
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
 	@location(0) color: vec3<f32>,
+	@location(1) normal: vec3<f32>, // <--- Add a normal output
 };
 
 /**
@@ -47,7 +49,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	));
 
 	// Rotate the view point
-	let angle1 = uMyUniforms.time;
+	let angle1 = 4.99;//uMyUniforms.time;
 	let c1 = cos(angle1);
 	let s1 = sin(angle1);
 	let R1 = transpose(mat4x4<f32>(
@@ -70,15 +72,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	position = (R2 * R1 * T * S * position4).xyz;
 
 	// Project on the XY plane and apply ratio
-	out.position = vec4<f32>(position.x, position.y * ratio, position.z * 0.5 + 0.5, 1.0);
-	//out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * vec4<f32>(position.x, position.y, -(position.z + 2.0), 1.0);
+	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * vec4<f32>(position.x, position.y, -(position.z + 1.5), 1.0);
 	out.color = in.color;
+	out.normal = in.normal;
 	return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-	let color = in.color * uMyUniforms.color.rgb;
+	let color = in.color * in.normal.x;// * uMyUniforms.color.rgb;
 	// Gamma-correction
 	let corrected_color = pow(color, vec3<f32>(2.2));
 	return vec4<f32>(corrected_color, uMyUniforms.color.a);
