@@ -35,6 +35,9 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
+#define TINYOBJLOADER_IMPLEMENTATION // add this to exactly 1 of your C++ files
+#include "tiny_obj_loader.h"
+
 #include <iostream>
 #include <cassert>
 #include <filesystem>
@@ -46,6 +49,8 @@
 using namespace wgpu;
 namespace fs = std::filesystem;
 using glm::mat4;
+
+using tinyobj::attrib_t;
 
 /**
  * The same structure as in the shader, replicated in C++
@@ -71,7 +76,7 @@ struct VertexAttributes {
 };
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
-bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData, int dimensions);
+bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& vertexData);
 
 int main(int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -250,10 +255,9 @@ int main(int, char**) {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	std::vector<float> pointData;
-	std::vector<uint16_t> indexData;
+	std::vector<VertexAttributes> vertexData;
 
-	bool success = loadGeometry(RESOURCE_DIR "/pyramid.txt", pointData, indexData, 6 /* dimensions */);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/pyramid.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -261,20 +265,13 @@ int main(int, char**) {
 
 	// Create vertex buffer
 	BufferDescriptor bufferDesc;
-	bufferDesc.size = pointData.size() * sizeof(float);
+	bufferDesc.size = vertexData.size() * sizeof(VertexAttributes);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
 	bufferDesc.mappedAtCreation = false;
 	Buffer vertexBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(vertexBuffer, 0, pointData.data(), bufferDesc.size);
+	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
-	int indexCount = static_cast<int>(indexData.size());
-
-	// Create index buffer
-	bufferDesc.size = indexData.size() * sizeof(float);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
-	bufferDesc.mappedAtCreation = false;
-	Buffer indexBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
+	int indexCount = static_cast<int>(vertexData.size());
 
 	// Create uniform buffer
 	bufferDesc.size = sizeof(MyUniforms);
@@ -373,11 +370,10 @@ int main(int, char**) {
 
 		renderPass.setPipeline(pipeline);
 
-		renderPass.setVertexBuffer(0, vertexBuffer, 0, pointData.size() * sizeof(float));
-		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
+		renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexData.size() * sizeof(VertexAttributes));
 		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
 
-		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
+		renderPass.draw(indexCount, 1, 0, 0);
 
 		renderPass.end();
 
@@ -419,52 +415,58 @@ ShaderModule loadShaderModule(const fs::path& path, Device device) {
 	return device.createShaderModule(shaderDesc);
 }
 
-bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData, int dimensions) {
-	std::ifstream file(path);
-	if (!file.is_open()) {
+bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& vertexData) {
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+
+	std::string warn;
+	std::string err;
+
+	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str());
+
+	if (!warn.empty()) {
+		std::cout << warn << std::endl;
+	}
+
+	if (!err.empty()) {
+		std::cerr << err << std::endl;
+	}
+
+	if (!ret) {
 		return false;
 	}
 
-	pointData.clear();
-	indexData.clear();
-
-	enum class Section {
-		None,
-		Points,
-		Indices,
-	};
-	Section currentSection = Section::None;
-
-	float value;
-	uint16_t index;
-	std::string line;
-	while (!file.eof()) {
-		getline(file, line);
-		if (line == "[points]") {
-			currentSection = Section::Points;
-		}
-		else if (line == "[indices]") {
-			currentSection = Section::Indices;
-		}
-		else if (line[0] == '#' || line.empty()) {
-			// Do nothing, this is a comment
-		}
-		else if (currentSection == Section::Points) {
-			std::istringstream iss(line);
-			// Get x, y, z, r, g, b
-			for (int i = 0; i < dimensions + 3; ++i) {
-				iss >> value;
-				pointData.push_back(value);
-			}
-		}
-		else if (currentSection == Section::Indices) {
-			std::istringstream iss(line);
-			// Get corners #0 #1 and #2
-			for (int i = 0; i < 3; ++i) {
-				iss >> index;
-				indexData.push_back(index);
-			}
-		}
+	if (shapes.empty()) {
+		return false;
 	}
+
+	vertexData.clear();
+	// for (const auto& shape : shapes) {
+	const auto& shape = shapes[0];
+
+	vertexData.resize(shape.mesh.indices.size());
+	for (int i = 0; i < vertexData.size(); ++i) {
+		const tinyobj::index_t& idx = shape.mesh.indices[i];
+
+		vertexData[i].position = {
+			attrib.vertices[3 * idx.vertex_index + 0],
+			-attrib.vertices[3 * idx.vertex_index + 2],
+			attrib.vertices[3 * idx.vertex_index + 1]
+		};
+
+		vertexData[i].normal = {
+			attrib.normals[3 * idx.normal_index + 0],
+			-attrib.normals[3 * idx.normal_index + 2],
+			attrib.normals[3 * idx.normal_index + 1]
+		};
+
+		vertexData[i].color = {
+			attrib.colors[3 * idx.vertex_index + 0],
+			attrib.colors[3 * idx.vertex_index + 1],
+			attrib.colors[3 * idx.vertex_index + 2]
+		};
+	}
+
 	return true;
 }

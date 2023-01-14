@@ -69,9 +69,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	));
 
 	var position4 = vec4<f32>(position, 1.0);
-	position = (R2 * R1 * T * S * position4).xyz;
-
 	let modelMatrix = R1 * T * S;
+	let viewMatrix = R2;
+	position = (viewMatrix * modelMatrix * position4).xyz;
 
 	// Project on the XY plane and apply ratio
 	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * vec4<f32>(position.x, position.y, -(position.z + 1.5), 1.0);
