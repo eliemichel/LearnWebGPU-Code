@@ -258,6 +258,7 @@ int main(int, char**) {
 	std::vector<VertexAttributes> vertexData;
 
 	bool success = loadGeometryFromObj(RESOURCE_DIR "/pyramid.obj", vertexData);
+	//bool success = loadGeometryFromObj("G:/SourceCode/LearnWebGPU/data/mammoth.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
