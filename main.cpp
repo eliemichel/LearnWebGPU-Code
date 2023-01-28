@@ -239,7 +239,7 @@ int main(int, char**) {
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
 	// Create binding layout
-	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(2, Default);
+	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(3, Default);
 
 	BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
 	bindingLayout.binding = 0;
@@ -252,7 +252,11 @@ int main(int, char**) {
 	textureBindingLayout.visibility = ShaderStage::Fragment;
 	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
 	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
-	textureBindingLayout.sampler.type = SamplerBindingType::NonFiltering;
+
+	BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
+	samplerBindingLayout.binding = 2;
+	samplerBindingLayout.visibility = ShaderStage::Fragment;
+	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -382,8 +386,22 @@ int main(int, char**) {
 	textureViewDesc.format = textureDesc.format;
 	TextureView textureView = texture.createView(textureViewDesc);
 
+	// Create a sampler
+	SamplerDescriptor samplerDesc;
+	samplerDesc.addressModeU = AddressMode::ClampToEdge;
+	samplerDesc.addressModeV = AddressMode::ClampToEdge;
+	samplerDesc.addressModeW = AddressMode::ClampToEdge;
+	samplerDesc.magFilter = FilterMode::Linear;
+	samplerDesc.minFilter = FilterMode::Linear;
+	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+	samplerDesc.lodMinClamp = 0.0f;
+	samplerDesc.lodMaxClamp = 1.0f;
+	samplerDesc.compare = CompareFunction::Undefined;
+	samplerDesc.maxAnisotropy = 0;
+	Sampler sampler = device.createSampler(samplerDesc);
+
 	// Create a binding
-	std::vector<BindGroupEntry> bindings(2);
+	std::vector<BindGroupEntry> bindings(3);
 
 	bindings[0].binding = 0;
 	bindings[0].buffer = uniformBuffer;
@@ -392,6 +410,9 @@ int main(int, char**) {
 
 	bindings[1].binding = 1;
 	bindings[1].textureView = textureView;
+
+	bindings[2].binding = 2;
+	bindings[2].sampler = sampler;
 
 	BindGroupDescriptor bindGroupDesc{};
 	bindGroupDesc.layout = bindGroupLayout;
