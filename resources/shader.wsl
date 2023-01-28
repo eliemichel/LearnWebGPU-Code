@@ -24,6 +24,9 @@ struct MyUniforms {
 // Instead of the simple uTime variable, our uniform variable is a struct
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 
+//@group(0) @binding(1) var textureSampler: sampler;
+@group(0) @binding(1) var gradientTexture: texture_2d<f32>;
+
 let pi = 3.14159266;
 
 @vertex
@@ -47,7 +50,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	let shading1 = max(0.0, dot(lightDirection1, normal));
 	let shading2 = max(0.0, dot(lightDirection2, normal));
 	let shading = shading1 * lightColor1 + shading2 * lightColor2;
-    let color = in.color * shading;
+    //let color = in.color * shading;
+
+    let color = textureLoad(gradientTexture, vec2<i32>(in.position.xy), 0).rgb;
 
 	// Gamma-correction
 	let corrected_color = pow(color, vec3<f32>(2.2));

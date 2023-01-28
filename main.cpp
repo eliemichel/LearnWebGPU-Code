@@ -220,26 +220,13 @@ int main(int, char**) {
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
 
-	// Setup the Z-Buffer algorithm options
 	DepthStencilState depthStencilState = Default;
-
-	// A fragment is blended only if its depth is **less** than the current
-	// value of the Z-Buffer.
 	depthStencilState.depthCompare = CompareFunction::Less;
-
-	// Once a fragment passes the depth test, its depth is stored as the new
-	// value of the Z-Buffer.
 	depthStencilState.depthWriteEnabled = true;
-
-	// We tell the pipeline how the depth values of the Z-Buffer are encoded in memory.
-	// Store the format in a variable as later parts of the code depend on it
 	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
 	depthStencilState.format = depthTextureFormat;
-
-	// Deactivate the stencil alltogether
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
-
 	pipelineDesc.depthStencil = &depthStencilState;
 
 	pipelineDesc.multisample.count = 1;
@@ -247,16 +234,25 @@ int main(int, char**) {
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
 	// Create binding layout
-	BindGroupLayoutEntry bindingLayout = Default;
+	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(2, Default);
+
+	BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
 	bindingLayout.binding = 0;
 	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
 	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
+	BindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
+	textureBindingLayout.binding = 1;
+	textureBindingLayout.visibility = ShaderStage::Fragment;
+	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
+	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
+	textureBindingLayout.sampler.type = SamplerBindingType::NonFiltering;
+
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
-	bindGroupLayoutDesc.entryCount = 1;
-	bindGroupLayoutDesc.entries = &bindingLayout;
+	bindGroupLayoutDesc.entryCount = (uint32_t)bindingLayoutEntries.size();
+	bindGroupLayoutDesc.entries = bindingLayoutEntries.data();
 	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
 
 	// Create the pipeline layout
@@ -272,7 +268,7 @@ int main(int, char**) {
 	std::vector<VertexAttributes> vertexData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometryFromObj(RESOURCE_DIR "/pyramid.obj", vertexData);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -299,42 +295,12 @@ int main(int, char**) {
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
 
-	// Model matrix
-	float angle1 = 2.0f;
-	mat4x4 S = glm::scale(mat4x4(1.0), vec3(0.3f));
-	mat4x4 T1 = glm::translate(mat4x4(1.0), vec3(0.5, 0.0, 0.0));
-	mat4x4 R1 = glm::rotate(mat4x4(1.0), angle1, vec3(0.0, 0.0, 1.0));
-	uniforms.modelMatrix = R1 * T1 * S;
-
-	// View matrix
-	float angle2 = 3.0f * PI / 4.0f;
-	vec3 focalPoint(0.0, 0.0, -2.0);
-	mat4x4 R2 = glm::rotate(mat4x4(1.0), -angle2, vec3(1.0, 0.0, 0.0));
-	mat4x4 T2 = glm::translate(mat4x4(1.0), -focalPoint);
-	uniforms.viewMatrix = T2 * R2;
-
-	// Projection matrix
-	float ratio = 640.0f / 480.0f;
-	float near = 0.01f;
-	float far = 100.0f;
-	float focalLength = 2.0f;
-	float fov = 2 * glm::atan(1 / focalLength);
-	uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
+	// Matrices
+	uniforms.modelMatrix = mat4x4(1.0);
+	uniforms.viewMatrix = glm::scale(mat4x4(1.0), vec3(1.0f));
+	uniforms.projectionMatrix = glm::ortho(-1, 1, -1, 1, -1, 1);
 
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
-
-	// Create a binding
-	BindGroupEntry binding{};
-	binding.binding = 0;
-	binding.buffer = uniformBuffer;
-	binding.offset = 0;
-	binding.size = sizeof(MyUniforms);
-
-	BindGroupDescriptor bindGroupDesc{};
-	bindGroupDesc.layout = bindGroupLayout;
-	bindGroupDesc.entryCount = bindGroupLayoutDesc.entryCount;
-	bindGroupDesc.entries = &binding;
-	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
 
 	// Create the depth texture
 	TextureDescriptor depthTextureDesc;
@@ -359,18 +325,81 @@ int main(int, char**) {
 	depthTextureViewDesc.format = depthTextureFormat;
 	TextureView depthTextureView = depthTexture.createView(depthTextureViewDesc);
 
+	// Create a texture
+	TextureDescriptor textureDesc;
+	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.format = TextureFormat::RGBA8Unorm;
+	textureDesc.mipLevelCount = 1;
+	textureDesc.sampleCount = 1;
+	textureDesc.size = { 256, 256, 1 };
+	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
+	textureDesc.viewFormatCount = 0;
+	textureDesc.viewFormats = nullptr;
+	Texture texture = device.createTexture(textureDesc);
+
+	// Create image data
+	std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
+	for (uint32_t i = 0; i < textureDesc.size.width; ++i) {
+		for (uint32_t j = 0; j < textureDesc.size.height; ++j) {
+			uint8_t *p = &pixels[4 * (j * textureDesc.size.width + i)];
+			p[0] = (uint8_t)i; // r
+			p[1] = (uint8_t)j; // g
+			p[2] = 128; // b
+			p[3] = 255; // a
+		}
+	}
+
+	// Arguments telling which part of the texture we upload to
+	// (together with the last argument of writeTexture)
+	ImageCopyTexture destination;
+	destination.texture = texture;
+	destination.mipLevel = 0;
+	destination.origin = { 0, 0, 0 };
+	destination.aspect = TextureAspect::All;
+
+	// Arguments telling how the C++ side pixel memory is laid out
+	TextureDataLayout source;
+	source.offset = 0;
+	source.bytesPerRow = 4 * textureDesc.size.width;
+	source.rowsPerImage = textureDesc.size.height;
+
+	// Upload data to the GPU texture
+	queue.writeTexture(destination, pixels.data(), pixels.size(), source, textureDesc.size);
+
+	// Create texture view for the shader.
+	TextureViewDescriptor textureViewDesc;
+	textureViewDesc.aspect = TextureAspect::All;
+	textureViewDesc.baseArrayLayer = 0;
+	textureViewDesc.arrayLayerCount = 1;
+	textureViewDesc.baseMipLevel = 0;
+	textureViewDesc.mipLevelCount = 1;
+	textureViewDesc.dimension = TextureViewDimension::_2D;
+	textureViewDesc.format = textureDesc.format;
+	TextureView textureView = texture.createView(textureViewDesc);
+
+	// Create a binding
+	std::vector<BindGroupEntry> bindings(2);
+
+	bindings[0].binding = 0;
+	bindings[0].buffer = uniformBuffer;
+	bindings[0].offset = 0;
+	bindings[0].size = sizeof(MyUniforms);
+
+	bindings[1].binding = 1;
+	bindings[1].textureView = textureView;
+
+	BindGroupDescriptor bindGroupDesc{};
+	bindGroupDesc.layout = bindGroupLayout;
+	bindGroupDesc.entryCount = (uint32_t)bindings.size();
+	bindGroupDesc.entries = bindings.data();
+	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
 		// Update uniform buffer
 		uniforms.time = static_cast<float>(glfwGetTime());
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
-
-		// Update view matrix
-		angle1 = uniforms.time;
-		R1 = glm::rotate(mat4x4(1.0), angle1, vec3(0.0, 0.0, 1.0));
-		uniforms.modelMatrix = R1 * T1 * S;
-		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, modelMatrix), &uniforms.modelMatrix, sizeof(MyUniforms::modelMatrix));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -394,18 +423,11 @@ int main(int, char**) {
 		renderPassDesc.colorAttachments = &colorAttachment;
 
 		RenderPassDepthStencilAttachment depthStencilAttachment;
-		// The view of the depth texture
 		depthStencilAttachment.view = depthTextureView;
-
-		// The initial value of the depth buffer, meaning "far"
 		depthStencilAttachment.depthClearValue = 100.0f;
-		// Operation settings comparable to the color attachment
 		depthStencilAttachment.depthLoadOp = LoadOp::Clear;
 		depthStencilAttachment.depthStoreOp = StoreOp::Store;
-		// we could turn off writing to the depth buffer globally here
 		depthStencilAttachment.depthReadOnly = false;
-
-		// Stencil setup, mandatory but unused
 		depthStencilAttachment.stencilClearValue = 0;
 		depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
 		depthStencilAttachment.stencilStoreOp = StoreOp::Store;
@@ -425,13 +447,12 @@ int main(int, char**) {
 
 		renderPass.end();
 
-		wgpuTextureViewDrop(nextTexture);
-
 		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 		queue.submit(command);
 
+		wgpuTextureViewDrop(nextTexture);
 		swapChain.present();
 	}
 
