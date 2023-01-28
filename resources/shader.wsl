@@ -2,12 +2,14 @@ struct VertexInput {
 	@location(0) position: vec3<f32>,
 	@location(1) normal: vec3<f32>,
 	@location(2) color: vec3<f32>,
+	@location(3) uv: vec2<f32>,
 };
 
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
 	@location(0) color: vec3<f32>,
-	@location(1) normal: vec3<f32>, // <--- Add a normal output
+	@location(1) normal: vec3<f32>,
+	@location(2) uv: vec2<f32>,
 };
 
 /**
@@ -35,8 +37,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
 	out.color = in.color;
 	out.normal = (uMyUniforms.modelMatrix * vec4<f32>(in.normal, 0.0)).xyz;
-	// Forward the normal
-	//out.normal = in.normal;
+	out.uv = in.uv;
 	return out;
 }
 
@@ -52,7 +53,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	let shading = shading1 * lightColor1 + shading2 * lightColor2;
     //let color = in.color * shading;
 
-    let color = textureLoad(gradientTexture, vec2<i32>(in.position.xy), 0).rgb;
+    let texelCoords = vec2<i32>(in.uv * vec2<f32>(textureDimensions(gradientTexture)));
+    let color = textureLoad(gradientTexture, texelCoords, 0).rgb;
 
 	// Gamma-correction
 	let corrected_color = pow(color, vec3<f32>(2.2));

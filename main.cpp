@@ -52,6 +52,7 @@ namespace fs = std::filesystem;
 using glm::mat4x4;
 using glm::vec4;
 using glm::vec3;
+using glm::vec2;
 
 constexpr float PI = 3.14159265358979323846f;
 
@@ -73,6 +74,7 @@ struct VertexAttributes {
 	vec3 position;
 	vec3 normal;
 	vec3 color;
+	vec2 uv;
 };
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
@@ -107,8 +109,7 @@ int main(int, char**) {
 
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
-	requiredLimits.limits.maxVertexAttributes = 3;
-	//                                          ^ This was a 2
+	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
@@ -160,8 +161,7 @@ int main(int, char**) {
 	RenderPipelineDescriptor pipelineDesc{};
 
 	// Vertex fetch
-	std::vector<VertexAttribute> vertexAttribs(3);
-	//                                         ^ This was a 2
+	std::vector<VertexAttribute> vertexAttribs(4);
 
 	// Position attribute
 	vertexAttribs[0].shaderLocation = 0;
@@ -177,6 +177,11 @@ int main(int, char**) {
 	vertexAttribs[2].shaderLocation = 2;
 	vertexAttribs[2].format = VertexFormat::Float32x3;
 	vertexAttribs[2].offset = offsetof(VertexAttributes, color);
+
+	// UV attribute
+	vertexAttribs[3].shaderLocation = 3;
+	vertexAttribs[3].format = VertexFormat::Float32x2;
+	vertexAttribs[3].offset = offsetof(VertexAttributes, uv);
 
 	VertexBufferLayout vertexBufferLayout;
 	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
@@ -268,7 +273,7 @@ int main(int, char**) {
 	std::vector<VertexAttributes> vertexData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/cube.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -297,8 +302,8 @@ int main(int, char**) {
 
 	// Matrices
 	uniforms.modelMatrix = mat4x4(1.0);
-	uniforms.viewMatrix = glm::scale(mat4x4(1.0), vec3(1.0f));
-	uniforms.projectionMatrix = glm::ortho(-1, 1, -1, 1, -1, 1);
+	uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
@@ -341,10 +346,10 @@ int main(int, char**) {
 	std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
 	for (uint32_t i = 0; i < textureDesc.size.width; ++i) {
 		for (uint32_t j = 0; j < textureDesc.size.height; ++j) {
-			uint8_t *p = &pixels[4 * (j * textureDesc.size.width + i)];
-			p[0] = (uint8_t)i; // r
-			p[1] = (uint8_t)j; // g
-			p[2] = 128; // b
+			uint8_t* p = &pixels[4 * (j * textureDesc.size.width + i)];
+			p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0; // r
+			p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0; // g
+			p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0; // b
 			p[3] = 255; // a
 		}
 	}
@@ -531,6 +536,11 @@ bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& ve
 				attrib.colors[3 * idx.vertex_index + 0],
 				attrib.colors[3 * idx.vertex_index + 1],
 				attrib.colors[3 * idx.vertex_index + 2]
+			};
+
+			vertexData[offset + i].uv = {
+				attrib.texcoords[2 * idx.texcoord_index + 0],
+				attrib.texcoords[2 * idx.texcoord_index + 1]
 			};
 		}
 	}
