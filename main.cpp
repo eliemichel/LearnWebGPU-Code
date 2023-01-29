@@ -240,6 +240,7 @@ int main(int, char**) {
 
 	// Create binding layout
 	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(3, Default);
+	//                                                     ^ This was a 2
 
 	BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
 	bindingLayout.binding = 0;
@@ -253,6 +254,7 @@ int main(int, char**) {
 	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
 	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
 
+	// The new binding layout, for the sampler
 	BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
 	samplerBindingLayout.binding = 2;
 	samplerBindingLayout.visibility = ShaderStage::Fragment;
@@ -402,6 +404,7 @@ int main(int, char**) {
 
 	// Create a binding
 	std::vector<BindGroupEntry> bindings(3);
+	//                                   ^ This was a 2
 
 	bindings[0].binding = 0;
 	bindings[0].buffer = uniformBuffer;
@@ -411,6 +414,7 @@ int main(int, char**) {
 	bindings[1].binding = 1;
 	bindings[1].textureView = textureView;
 
+	// A new binding for the sampler
 	bindings[2].binding = 2;
 	bindings[2].sampler = sampler;
 
@@ -561,7 +565,7 @@ bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& ve
 
 			vertexData[offset + i].uv = {
 				attrib.texcoords[2 * idx.texcoord_index + 0],
-				attrib.texcoords[2 * idx.texcoord_index + 1]
+				1 - attrib.texcoords[2 * idx.texcoord_index + 1]
 			};
 		}
 	}
