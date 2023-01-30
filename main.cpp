@@ -47,6 +47,9 @@
 #include <string>
 #include <array>
 
+// for debug
+#include "save_image.h"
+
 using namespace wgpu;
 namespace fs = std::filesystem;
 using glm::mat4x4;
@@ -124,21 +127,11 @@ int main(int, char**) {
 	std::cout << "Got device: " << device << std::endl;
 
 	// Add an error callback for more debug info
-	// (TODO: fix the callback in the webgpu.hpp wrapper)
-	auto myCallback = [](ErrorType type, char const* message) {
+	auto uncapturedErrorCallback = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
-	};
-	struct Context {
-		decltype(myCallback) theCallback;
-	};
-	Context ctx = { myCallback };
-	static auto cCallback = [](WGPUErrorType type, char const* message, void* userdata) -> void {
-		Context& ctx = *reinterpret_cast<Context*>(userdata);
-		ctx.theCallback(static_cast<ErrorType>(type), message);
-	};
-	wgpuDeviceSetUncapturedErrorCallback(device, cCallback, reinterpret_cast<void*>(&ctx));
+	});
 
 	Queue queue = device.getQueue();
 
@@ -147,7 +140,7 @@ int main(int, char**) {
 	SwapChainDescriptor swapChainDesc = {};
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
-	swapChainDesc.usage = TextureUsage::RenderAttachment;
+	swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
 	swapChainDesc.format = swapChainFormat;
 	swapChainDesc.presentMode = PresentMode::Fifo;
 	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
@@ -279,7 +272,7 @@ int main(int, char**) {
 	std::vector<VertexAttributes> vertexData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometryFromObj(RESOURCE_DIR "/cube.obj", vertexData);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -308,7 +301,9 @@ int main(int, char**) {
 
 	// Matrices
 	uniforms.modelMatrix = mat4x4(1.0);
-	uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	//uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	//uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -2.5f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -1.5f, 0.25f), vec3(0.0f), vec3(0, 0, 1));
 	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
@@ -390,9 +385,9 @@ int main(int, char**) {
 
 	// Create a sampler
 	SamplerDescriptor samplerDesc;
-	samplerDesc.addressModeU = AddressMode::ClampToEdge;
-	samplerDesc.addressModeV = AddressMode::ClampToEdge;
-	samplerDesc.addressModeW = AddressMode::ClampToEdge;
+	samplerDesc.addressModeU = AddressMode::Repeat;
+	samplerDesc.addressModeV = AddressMode::Repeat;
+	samplerDesc.addressModeW = AddressMode::Repeat;
 	samplerDesc.magFilter = FilterMode::Linear;
 	samplerDesc.minFilter = FilterMode::Linear;
 	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
@@ -424,12 +419,23 @@ int main(int, char**) {
 	bindGroupDesc.entries = bindings.data();
 	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
 
+	int frame = 0;
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
 		// Update uniform buffer
 		uniforms.time = static_cast<float>(glfwGetTime());
+		//uniforms.time = frame / 25.0f;
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
+
+		//float viewZ = glm::mix(0.5f, 8.0f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
+		//float viewZ = glm::mix(5.0f, 15.0f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
+		//uniforms.viewMatrix = glm::lookAt(vec3(0.0f, -0.5f, viewZ), vec3(0.0f), vec3(0, 0, 1));
+		//float viewX = cos(2 * PI * uniforms.time / 4);
+		//uniforms.viewMatrix = glm::lookAt(vec3(viewX, -0.5f, 3.0f), vec3(viewX * 0.5f, 0.0f, 0.0f), vec3(0, 0, 1));
+		float viewZ = glm::mix(0.0f, 0.25f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
+		uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -1.5f, viewZ + 0.25f), vec3(0.0f), vec3(0, 0, 1));
+		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, viewMatrix), &uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -481,6 +487,14 @@ int main(int, char**) {
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 		queue.submit(command);
+
+		if (0) { // export video
+			saveImage(resolvePath(frame), device, nextTexture, 640, 480);
+			++frame;
+			if (frame >= 100) {
+				break;
+			}
+		}
 
 		wgpuTextureViewDrop(nextTexture);
 		swapChain.present();
