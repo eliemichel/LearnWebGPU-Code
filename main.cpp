@@ -47,9 +47,6 @@
 #include <string>
 #include <array>
 
-// for debug
-#include "save_image.h"
-
 using namespace wgpu;
 namespace fs = std::filesystem;
 using glm::mat4x4;
@@ -111,6 +108,8 @@ int main(int, char**) {
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
+	SupportedLimits supportedLimits;
+	adapter.getLimits(&supportedLimits);
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 1;
@@ -335,42 +334,101 @@ int main(int, char**) {
 	TextureDescriptor textureDesc;
 	textureDesc.dimension = TextureDimension::_2D;
 	textureDesc.format = TextureFormat::RGBA8Unorm;
-	textureDesc.mipLevelCount = 1;
 	textureDesc.sampleCount = 1;
 	textureDesc.size = { 256, 256, 1 };
+	uint32_t maxMipLevelCount = (uint32_t)std::floor(std::log2(std::max(textureDesc.size.width, textureDesc.size.height))) + 1;
+	textureDesc.mipLevelCount = maxMipLevelCount;
 	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
 	textureDesc.viewFormatCount = 0;
 	textureDesc.viewFormats = nullptr;
 	Texture texture = device.createTexture(textureDesc);
 
 	// Create image data
-	std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
-	for (uint32_t i = 0; i < textureDesc.size.width; ++i) {
-		for (uint32_t j = 0; j < textureDesc.size.height; ++j) {
-			uint8_t* p = &pixels[4 * (j * textureDesc.size.width + i)];
-			p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0; // r
-			p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0; // g
-			p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0; // b
-			p[3] = 255; // a
+	{
+		std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
+		for (uint32_t i = 0; i < textureDesc.size.width; ++i) {
+			for (uint32_t j = 0; j < textureDesc.size.height; ++j) {
+				uint8_t* p = &pixels[4 * (j * textureDesc.size.width + i)];
+				
+				p[3] = 255; // a
+			}
 		}
+
+		// Arguments telling which part of the texture we upload to
+		// (together with the last argument of writeTexture)
+		ImageCopyTexture destination;
+		destination.texture = texture;
+		destination.mipLevel = 0;
+		destination.origin = { 0, 0, 0 };
+		destination.aspect = TextureAspect::All;
+
+		// Arguments telling how the C++ side pixel memory is laid out
+		TextureDataLayout source;
+		source.offset = 0;
+		source.bytesPerRow = 4 * textureDesc.size.width;
+		source.rowsPerImage = textureDesc.size.height;
+
+		// Upload data to the GPU texture
+		queue.writeTexture(destination, pixels.data(), pixels.size(), source, textureDesc.size);
 	}
 
-	// Arguments telling which part of the texture we upload to
-	// (together with the last argument of writeTexture)
-	ImageCopyTexture destination;
-	destination.texture = texture;
-	destination.mipLevel = 0;
-	destination.origin = { 0, 0, 0 };
-	destination.aspect = TextureAspect::All;
+	Extent3D mipLevelSize = textureDesc.size;
+	std::vector<uint8_t> previousLevelPixels;
+	for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
+		// Create image data
+		std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
+		for (uint32_t i = 0; i < mipLevelSize.width; ++i) {
+			for (uint32_t j = 0; j < mipLevelSize.height; ++j) {
+				uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
+				if (level == 0) {
+					p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0; // r
+					p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0; // g
+					p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0; // b
+				}
+				else {
+					// Debugging
+					//p[0] = level % 2 == 0 ? 255 : 0;
+					//p[1] = (level / 2) % 2 == 0 ? 255 : 0;
+					//p[2] = (level / 4) % 2 == 0 ? 255 : 0;
 
-	// Arguments telling how the C++ side pixel memory is laid out
-	TextureDataLayout source;
-	source.offset = 0;
-	source.bytesPerRow = 4 * textureDesc.size.width;
-	source.rowsPerImage = textureDesc.size.height;
+					// Filtering
+					// Get the corresponding 4 pixels from the previous level
+					uint8_t* p00 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 0))];
+					uint8_t* p01 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 1))];
+					uint8_t* p10 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 0))];
+					uint8_t* p11 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 1))];
+					// Average
+					p[0] = (p00[0] + p01[0] + p10[0] + p11[0]) / 4;
+					p[1] = (p00[1] + p01[1] + p10[1] + p11[1]) / 4;
+					p[2] = (p00[2] + p01[2] + p10[2] + p11[2]) / 4;
+				}
+				p[3] = 255; // a
+			}
+		}
 
-	// Upload data to the GPU texture
-	queue.writeTexture(destination, pixels.data(), pixels.size(), source, textureDesc.size);
+		// Arguments telling which part of the texture we upload to
+		// (together with the last argument of writeTexture)
+		ImageCopyTexture destination;
+		destination.texture = texture;
+		destination.mipLevel = level;
+		destination.origin = { 0, 0, 0 };
+		destination.aspect = TextureAspect::All;
+
+		// Arguments telling how the C++ side pixel memory is laid out
+		TextureDataLayout source;
+		source.offset = 0;
+		source.bytesPerRow = 4 * mipLevelSize.width;
+		source.rowsPerImage = mipLevelSize.height;
+
+		// Upload data to the GPU texture
+		queue.writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
+
+		// The size of the next mip level:
+		// (see https://www.w3.org/TR/webgpu/#logical-miplevel-specific-texture-extent)
+		mipLevelSize.width /= 2;
+		mipLevelSize.height /= 2;
+		previousLevelPixels = std::move(pixels);
+	}
 
 	// Create texture view for the shader.
 	TextureViewDescriptor textureViewDesc;
@@ -378,7 +436,7 @@ int main(int, char**) {
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = 1;
 	textureViewDesc.baseMipLevel = 0;
-	textureViewDesc.mipLevelCount = 1;
+	textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
 	textureViewDesc.dimension = TextureViewDimension::_2D;
 	textureViewDesc.format = textureDesc.format;
 	TextureView textureView = texture.createView(textureViewDesc);
@@ -392,9 +450,9 @@ int main(int, char**) {
 	samplerDesc.minFilter = FilterMode::Linear;
 	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
 	samplerDesc.lodMinClamp = 0.0f;
-	samplerDesc.lodMaxClamp = 1.0f;
+	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
-	samplerDesc.maxAnisotropy = 0;
+	samplerDesc.maxAnisotropy = 1;
 	Sampler sampler = device.createSampler(samplerDesc);
 
 	// Create a binding
@@ -419,13 +477,11 @@ int main(int, char**) {
 	bindGroupDesc.entries = bindings.data();
 	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
 
-	int frame = 0;
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
 		// Update uniform buffer
 		uniforms.time = static_cast<float>(glfwGetTime());
-		//uniforms.time = frame / 25.0f;
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
 
 		//float viewZ = glm::mix(0.5f, 8.0f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
@@ -487,14 +543,6 @@ int main(int, char**) {
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 		queue.submit(command);
-
-		if (0) { // export video
-			saveImage(resolvePath(frame), device, nextTexture, 640, 480);
-			++frame;
-			if (frame >= 100) {
-				break;
-			}
-		}
 
 		wgpuTextureViewDrop(nextTexture);
 		swapChain.present();
