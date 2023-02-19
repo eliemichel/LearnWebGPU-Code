@@ -24,16 +24,11 @@
  * SOFTWARE.
  */
 
-#include "Application.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tiny_obj_loader.h"
 
-int main(int, char**) {
-	Application app;
-	app.onInit();
+#define WEBGPU_CPP_IMPLEMENTATION
+#include <webgpu.hpp>
 
-	while (app.isRunning()) {
-		app.onFrame();
-	}
-
-	app.onFinish();
-	return 0;
-}
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"

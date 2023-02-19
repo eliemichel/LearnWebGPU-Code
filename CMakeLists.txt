@@ -16,6 +16,11 @@ add_subdirectory(webgpu)
 add_subdirectory(glfw3webgpu)
 
 add_executable(App
+	Application.h
+	Application.cpp
+	ResourceManager.h
+	ResourceManager.cpp
+	implementations.cpp
 	main.cpp
 )
 
