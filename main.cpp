@@ -344,34 +344,6 @@ int main(int, char**) {
 	Texture texture = device.createTexture(textureDesc);
 
 	// Create image data
-	{
-		std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
-		for (uint32_t i = 0; i < textureDesc.size.width; ++i) {
-			for (uint32_t j = 0; j < textureDesc.size.height; ++j) {
-				uint8_t* p = &pixels[4 * (j * textureDesc.size.width + i)];
-				
-				p[3] = 255; // a
-			}
-		}
-
-		// Arguments telling which part of the texture we upload to
-		// (together with the last argument of writeTexture)
-		ImageCopyTexture destination;
-		destination.texture = texture;
-		destination.mipLevel = 0;
-		destination.origin = { 0, 0, 0 };
-		destination.aspect = TextureAspect::All;
-
-		// Arguments telling how the C++ side pixel memory is laid out
-		TextureDataLayout source;
-		source.offset = 0;
-		source.bytesPerRow = 4 * textureDesc.size.width;
-		source.rowsPerImage = textureDesc.size.height;
-
-		// Upload data to the GPU texture
-		queue.writeTexture(destination, pixels.data(), pixels.size(), source, textureDesc.size);
-	}
-
 	Extent3D mipLevelSize = textureDesc.size;
 	std::vector<uint8_t> previousLevelPixels;
 	for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
