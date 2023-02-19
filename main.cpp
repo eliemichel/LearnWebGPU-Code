@@ -82,7 +82,7 @@ struct VertexAttributes {
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
 bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& vertexData);
-Texture loadTexture(const fs::path& path, Device device, TextureView* textureView = nullptr);
+Texture loadTexture(const fs::path& path, Device device, TextureView* pTextureView = nullptr);
 
 int main(int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -532,7 +532,7 @@ uint32_t bit_width(uint32_t m) {
 	else { uint32_t w = 0; while (m >>= 1) ++w; return w; }
 }
 
-Texture loadTexture(const fs::path& path, Device device, TextureView *textureView) {
+Texture loadTexture(const fs::path& path, Device device, TextureView * pTextureView) {
 	int width, height, channels;
 	unsigned char* pixelData = stbi_load(path.string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
 	if (nullptr == pixelData) return nullptr;
@@ -541,41 +541,36 @@ Texture loadTexture(const fs::path& path, Device device, TextureView *textureVie
 	textureDesc.dimension = TextureDimension::_2D;
 	textureDesc.format = TextureFormat::RGBA8Unorm;
 	textureDesc.size = { (unsigned int)width, (unsigned int)height, 1 };
-	textureDesc.mipLevelCount = bit_width(std::max(textureDesc.size.width, textureDesc.size.height));
+	textureDesc.mipLevelCount = bit_width(std::max(textureDesc.size.width, textureDesc.size.height));;
 	textureDesc.sampleCount = 1;
 	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
 	textureDesc.viewFormatCount = 0;
 	textureDesc.viewFormats = nullptr;
 	Texture texture = device.createTexture(textureDesc);
 
+	// Arguments telling which part of the texture we upload to
+	ImageCopyTexture destination;
+	destination.texture = texture;
+	destination.origin = { 0, 0, 0 };
+	destination.aspect = TextureAspect::All;
+
+	// Arguments telling how the C++ side pixel memory is laid out
+	TextureDataLayout source;
+	source.offset = 0;
+
 	// Create image data
 	Extent3D mipLevelSize = textureDesc.size;
 	std::vector<uint8_t> previousLevelPixels;
 	Extent3D previousMipLevelSize;
 	for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
-		// Arguments telling which part of the texture we upload to
-		// (together with the last argument of writeTexture)
-		ImageCopyTexture destination;
-		destination.texture = texture;
-		destination.mipLevel = level;
-		destination.origin = { 0, 0, 0 };
-		destination.aspect = TextureAspect::All;
-
-		// Arguments telling how the C++ side pixel memory is laid out
-		TextureDataLayout source;
-		source.offset = 0;
-		source.bytesPerRow = 4 * mipLevelSize.width;
-		source.rowsPerImage = mipLevelSize.height;
-
+		std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
 		if (level == 0) {
-			// Use loaded bytes
-			device.getQueue().writeTexture(destination, pixelData, 4 * width * height, source, textureDesc.size);
-			previousLevelPixels.resize(4 * width * height);
-			memcpy(previousLevelPixels.data(), pixelData, 4 * width * height);
+			// We cannot really avoid this copy since we need this
+			// in previousLevelPixels at the next iteration
+			memcpy(pixels.data(), pixelData, pixels.size());
 		}
 		else {
 			// Create mip level data
-			std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
 			for (uint32_t i = 0; i < mipLevelSize.width; ++i) {
 				for (uint32_t j = 0; j < mipLevelSize.height; ++j) {
 					uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
@@ -591,13 +586,15 @@ Texture loadTexture(const fs::path& path, Device device, TextureView *textureVie
 					p[3] = (p00[3] + p01[3] + p10[3] + p11[3]) / 4;
 				}
 			}
-
-			// Upload data to the GPU texture
-			device.getQueue().writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
-
-			previousLevelPixels = std::move(pixels);
 		}
 
+		// Upload data to the GPU texture
+		destination.mipLevel = level;
+		source.bytesPerRow = 4 * mipLevelSize.width;
+		source.rowsPerImage = mipLevelSize.height;
+		device.getQueue().writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
+
+		previousLevelPixels = std::move(pixels);
 		previousMipLevelSize = mipLevelSize;
 		mipLevelSize.width /= 2;
 		mipLevelSize.height /= 2;
@@ -605,7 +602,7 @@ Texture loadTexture(const fs::path& path, Device device, TextureView *textureVie
 
 	stbi_image_free(pixelData);
 
-	if (textureView) {
+	if (pTextureView) {
 		TextureViewDescriptor textureViewDesc;
 		textureViewDesc.aspect = TextureAspect::All;
 		textureViewDesc.baseArrayLayer = 0;
@@ -614,7 +611,7 @@ Texture loadTexture(const fs::path& path, Device device, TextureView *textureVie
 		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
 		textureViewDesc.dimension = TextureViewDimension::_2D;
 		textureViewDesc.format = textureDesc.format;
-		*textureView = texture.createView(textureViewDesc);
+		*pTextureView = texture.createView(textureViewDesc);
 	}
 
 	return texture;
