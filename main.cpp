@@ -39,6 +39,9 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <iostream>
 #include <cassert>
 #include <filesystem>
@@ -79,6 +82,7 @@ struct VertexAttributes {
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
 bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& vertexData);
+Texture loadTexture(const fs::path& path, Device device, TextureView* textureView = nullptr);
 
 int main(int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -271,7 +275,7 @@ int main(int, char**) {
 	std::vector<VertexAttributes> vertexData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -300,9 +304,7 @@ int main(int, char**) {
 
 	// Matrices
 	uniforms.modelMatrix = mat4x4(1.0);
-	//uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
-	//uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -2.5f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
-	uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -1.5f, 0.25f), vec3(0.0f), vec3(0, 0, 1));
+	uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
 	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
@@ -331,87 +333,12 @@ int main(int, char**) {
 	TextureView depthTextureView = depthTexture.createView(depthTextureViewDesc);
 
 	// Create a texture
-	TextureDescriptor textureDesc;
-	textureDesc.dimension = TextureDimension::_2D;
-	textureDesc.format = TextureFormat::RGBA8Unorm;
-	textureDesc.sampleCount = 1;
-	textureDesc.size = { 256, 256, 1 };
-	uint32_t maxMipLevelCount = (uint32_t)std::floor(std::log2(std::max(textureDesc.size.width, textureDesc.size.height))) + 1;
-	textureDesc.mipLevelCount = maxMipLevelCount;
-	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
-	textureDesc.viewFormatCount = 0;
-	textureDesc.viewFormats = nullptr;
-	Texture texture = device.createTexture(textureDesc);
-
-	// Create image data
-	Extent3D mipLevelSize = textureDesc.size;
-	std::vector<uint8_t> previousLevelPixels;
-	for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
-		// Create image data
-		std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
-		for (uint32_t i = 0; i < mipLevelSize.width; ++i) {
-			for (uint32_t j = 0; j < mipLevelSize.height; ++j) {
-				uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
-				if (level == 0) {
-					p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0; // r
-					p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0; // g
-					p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0; // b
-				}
-				else {
-					// Debugging
-					//p[0] = level % 2 == 0 ? 255 : 0;
-					//p[1] = (level / 2) % 2 == 0 ? 255 : 0;
-					//p[2] = (level / 4) % 2 == 0 ? 255 : 0;
-
-					// Filtering
-					// Get the corresponding 4 pixels from the previous level
-					uint8_t* p00 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 0))];
-					uint8_t* p01 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 1))];
-					uint8_t* p10 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 0))];
-					uint8_t* p11 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 1))];
-					// Average
-					p[0] = (p00[0] + p01[0] + p10[0] + p11[0]) / 4;
-					p[1] = (p00[1] + p01[1] + p10[1] + p11[1]) / 4;
-					p[2] = (p00[2] + p01[2] + p10[2] + p11[2]) / 4;
-				}
-				p[3] = 255; // a
-			}
-		}
-
-		// Arguments telling which part of the texture we upload to
-		// (together with the last argument of writeTexture)
-		ImageCopyTexture destination;
-		destination.texture = texture;
-		destination.mipLevel = level;
-		destination.origin = { 0, 0, 0 };
-		destination.aspect = TextureAspect::All;
-
-		// Arguments telling how the C++ side pixel memory is laid out
-		TextureDataLayout source;
-		source.offset = 0;
-		source.bytesPerRow = 4 * mipLevelSize.width;
-		source.rowsPerImage = mipLevelSize.height;
-
-		// Upload data to the GPU texture
-		queue.writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
-
-		// The size of the next mip level:
-		// (see https://www.w3.org/TR/webgpu/#logical-miplevel-specific-texture-extent)
-		mipLevelSize.width /= 2;
-		mipLevelSize.height /= 2;
-		previousLevelPixels = std::move(pixels);
+	TextureView textureView = nullptr;
+	Texture texture = loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", device, &textureView);
+	if (!texture) {
+		std::cerr << "Could not load texture!" << std::endl;
+		return 1;
 	}
-
-	// Create texture view for the shader.
-	TextureViewDescriptor textureViewDesc;
-	textureViewDesc.aspect = TextureAspect::All;
-	textureViewDesc.baseArrayLayer = 0;
-	textureViewDesc.arrayLayerCount = 1;
-	textureViewDesc.baseMipLevel = 0;
-	textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
-	textureViewDesc.dimension = TextureViewDimension::_2D;
-	textureViewDesc.format = textureDesc.format;
-	TextureView textureView = texture.createView(textureViewDesc);
 
 	// Create a sampler
 	SamplerDescriptor samplerDesc;
@@ -455,15 +382,6 @@ int main(int, char**) {
 		// Update uniform buffer
 		uniforms.time = static_cast<float>(glfwGetTime());
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
-
-		//float viewZ = glm::mix(0.5f, 8.0f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
-		//float viewZ = glm::mix(5.0f, 15.0f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
-		//uniforms.viewMatrix = glm::lookAt(vec3(0.0f, -0.5f, viewZ), vec3(0.0f), vec3(0, 0, 1));
-		//float viewX = cos(2 * PI * uniforms.time / 4);
-		//uniforms.viewMatrix = glm::lookAt(vec3(viewX, -0.5f, 3.0f), vec3(viewX * 0.5f, 0.0f, 0.0f), vec3(0, 0, 1));
-		float viewZ = glm::mix(0.0f, 0.25f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
-		uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -1.5f, viewZ + 0.25f), vec3(0.0f), vec3(0, 0, 1));
-		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, viewMatrix), &uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -597,6 +515,7 @@ bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& ve
 				attrib.colors[3 * idx.vertex_index + 2]
 			};
 
+			// Fix the UV convention
 			vertexData[offset + i].uv = {
 				attrib.texcoords[2 * idx.texcoord_index + 0],
 				1 - attrib.texcoords[2 * idx.texcoord_index + 1]
@@ -605,4 +524,98 @@ bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& ve
 	}
 
 	return true;
+}
+
+// Equivalent of std::bit_width that is available from C++20 onward
+uint32_t bit_width(uint32_t m) {
+	if (m == 0) return 0;
+	else { uint32_t w = 0; while (m >>= 1) ++w; return w; }
+}
+
+Texture loadTexture(const fs::path& path, Device device, TextureView *textureView) {
+	int width, height, channels;
+	unsigned char* pixelData = stbi_load(path.string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
+	if (nullptr == pixelData) return nullptr;
+
+	TextureDescriptor textureDesc;
+	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.format = TextureFormat::RGBA8Unorm;
+	textureDesc.size = { (unsigned int)width, (unsigned int)height, 1 };
+	textureDesc.mipLevelCount = bit_width(std::max(textureDesc.size.width, textureDesc.size.height));
+	textureDesc.sampleCount = 1;
+	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
+	textureDesc.viewFormatCount = 0;
+	textureDesc.viewFormats = nullptr;
+	Texture texture = device.createTexture(textureDesc);
+
+	// Create image data
+	Extent3D mipLevelSize = textureDesc.size;
+	std::vector<uint8_t> previousLevelPixels;
+	Extent3D previousMipLevelSize;
+	for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
+		// Arguments telling which part of the texture we upload to
+		// (together with the last argument of writeTexture)
+		ImageCopyTexture destination;
+		destination.texture = texture;
+		destination.mipLevel = level;
+		destination.origin = { 0, 0, 0 };
+		destination.aspect = TextureAspect::All;
+
+		// Arguments telling how the C++ side pixel memory is laid out
+		TextureDataLayout source;
+		source.offset = 0;
+		source.bytesPerRow = 4 * mipLevelSize.width;
+		source.rowsPerImage = mipLevelSize.height;
+
+		if (level == 0) {
+			// Use loaded bytes
+			device.getQueue().writeTexture(destination, pixelData, 4 * width * height, source, textureDesc.size);
+			previousLevelPixels.resize(4 * width * height);
+			memcpy(previousLevelPixels.data(), pixelData, 4 * width * height);
+		}
+		else {
+			// Create mip level data
+			std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
+			for (uint32_t i = 0; i < mipLevelSize.width; ++i) {
+				for (uint32_t j = 0; j < mipLevelSize.height; ++j) {
+					uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
+					// Get the corresponding 4 pixels from the previous level
+					uint8_t* p00 = &previousLevelPixels[4 * ((2 * j + 0) * previousMipLevelSize.width + (2 * i + 0))];
+					uint8_t* p01 = &previousLevelPixels[4 * ((2 * j + 0) * previousMipLevelSize.width + (2 * i + 1))];
+					uint8_t* p10 = &previousLevelPixels[4 * ((2 * j + 1) * previousMipLevelSize.width + (2 * i + 0))];
+					uint8_t* p11 = &previousLevelPixels[4 * ((2 * j + 1) * previousMipLevelSize.width + (2 * i + 1))];
+					// Average
+					p[0] = (p00[0] + p01[0] + p10[0] + p11[0]) / 4;
+					p[1] = (p00[1] + p01[1] + p10[1] + p11[1]) / 4;
+					p[2] = (p00[2] + p01[2] + p10[2] + p11[2]) / 4;
+					p[3] = (p00[3] + p01[3] + p10[3] + p11[3]) / 4;
+				}
+			}
+
+			// Upload data to the GPU texture
+			device.getQueue().writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
+
+			previousLevelPixels = std::move(pixels);
+		}
+
+		previousMipLevelSize = mipLevelSize;
+		mipLevelSize.width /= 2;
+		mipLevelSize.height /= 2;
+	}
+
+	stbi_image_free(pixelData);
+
+	if (textureView) {
+		TextureViewDescriptor textureViewDesc;
+		textureViewDesc.aspect = TextureAspect::All;
+		textureViewDesc.baseArrayLayer = 0;
+		textureViewDesc.arrayLayerCount = 1;
+		textureViewDesc.baseMipLevel = 0;
+		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
+		textureViewDesc.dimension = TextureViewDimension::_2D;
+		textureViewDesc.format = textureDesc.format;
+		*textureView = texture.createView(textureViewDesc);
+	}
+
+	return texture;
 }
