@@ -406,9 +406,7 @@ void Application::onFrame() {
 
 	renderPass.end();
 
-	CommandBufferDescriptor cmdBufferDescriptor{};
-	cmdBufferDescriptor.label = "Command buffer";
-	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(command);
 
 	wgpuTextureViewDrop(nextTexture);

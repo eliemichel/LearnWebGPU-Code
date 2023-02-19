@@ -35,17 +35,6 @@
 
 class Application {
 public:
-	struct MyUniforms {
-		glm::mat4x4 projectionMatrix;
-		glm::mat4x4 viewMatrix;
-		glm::mat4x4 modelMatrix;
-		glm::vec4 color;
-		float time;
-		float _pad[3];
-	};
-	static_assert(sizeof(MyUniforms) % 16 == 0);
-
-public:
 	// A function called only once at the beginning. Returns false is init failed.
 	bool onInit();
 
@@ -59,6 +48,16 @@ public:
 	bool isRunning();
 
 private:
+	struct MyUniforms {
+		glm::mat4x4 projectionMatrix;
+		glm::mat4x4 viewMatrix;
+		glm::mat4x4 modelMatrix;
+		glm::vec4 color;
+		float time;
+		float _pad[3];
+	};
+	static_assert(sizeof(MyUniforms) % 16 == 0);
+
 	// Everything that is initialized in `onInit` and needed in `onFrame`.
 	GLFWwindow* window = nullptr;
 	wgpu::Instance instance = nullptr;
