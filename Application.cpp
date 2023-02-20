@@ -55,6 +55,13 @@ using glm::vec4;
 using glm::vec3;
 using glm::vec2;
 
+// GLFW callbacks
+void onWindowResize(GLFWwindow* window, int width, int height) {
+	(void)width; (void)height;
+	auto pApp = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+	if (pApp != nullptr) pApp->onResize();
+}
+
 bool Application::onInit() {
 	// Create instance
 	instance = createInstance(InstanceDescriptor{});
@@ -70,12 +77,16 @@ bool Application::onInit() {
 
 	// Create window
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
 	if (!window) {
 		std::cerr << "Could not open window!" << std::endl;
 		return false;
 	}
+
+	// Add window callbacks
+	glfwSetWindowUserPointer(window, this);
+	glfwSetFramebufferSizeCallback(window, onWindowResize);
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
@@ -114,16 +125,8 @@ bool Application::onInit() {
 	Queue queue = device.getQueue();
 
 	// Create swapchain
-	std::cout << "Creating swapchain..." << std::endl;
-	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
-	SwapChainDescriptor swapChainDesc = {};
-	swapChainDesc.width = 640;
-	swapChainDesc.height = 480;
-	swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
-	swapChainDesc.format = swapChainFormat;
-	swapChainDesc.presentMode = PresentMode::Fifo;
-	swapChain = device.createSwapChain(surface, swapChainDesc);
-	std::cout << "Swapchain: " << swapChain << std::endl;
+	swapChainFormat = surface.getPreferredFormat(adapter);
+	buildSwapChain();
 
 	std::cout << "Creating shader module..." << std::endl;
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", device);
@@ -200,7 +203,6 @@ bool Application::onInit() {
 	DepthStencilState depthStencilState = Default;
 	depthStencilState.depthCompare = CompareFunction::Less;
 	depthStencilState.depthWriteEnabled = true;
-	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
 	depthStencilState.format = depthTextureFormat;
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
@@ -281,28 +283,7 @@ bool Application::onInit() {
 
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
-	// Create the depth texture
-	TextureDescriptor depthTextureDesc;
-	depthTextureDesc.dimension = TextureDimension::_2D;
-	depthTextureDesc.format = depthTextureFormat;
-	depthTextureDesc.mipLevelCount = 1;
-	depthTextureDesc.sampleCount = 1;
-	depthTextureDesc.size = { 640, 480, 1 };
-	depthTextureDesc.usage = TextureUsage::RenderAttachment;
-	depthTextureDesc.viewFormatCount = 1;
-	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
-	Texture depthTexture = device.createTexture(depthTextureDesc);
-
-	// Create the view of the depth texture manipulated by the rasterizer
-	TextureViewDescriptor depthTextureViewDesc;
-	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
-	depthTextureViewDesc.baseArrayLayer = 0;
-	depthTextureViewDesc.arrayLayerCount = 1;
-	depthTextureViewDesc.baseMipLevel = 0;
-	depthTextureViewDesc.mipLevelCount = 1;
-	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
-	depthTextureViewDesc.format = depthTextureFormat;
-	depthTextureView = depthTexture.createView(depthTextureViewDesc);
+	buildDepthBuffer();
 
 	// Create a texture
 	TextureView textureView = nullptr;
@@ -350,6 +331,51 @@ bool Application::onInit() {
 	bindGroup = device.createBindGroup(bindGroupDesc);
 
 	return true;
+}
+
+void Application::buildSwapChain() {
+	int width, height;
+	glfwGetFramebufferSize(window, &width, &height);
+
+	std::cout << "Creating swapchain..." << std::endl;
+	swapChainDesc = {};
+	swapChainDesc.width = (uint32_t)width;
+	swapChainDesc.height = (uint32_t)height;
+	swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
+	swapChainDesc.format = swapChainFormat;
+	swapChainDesc.presentMode = PresentMode::Fifo;
+	swapChain = device.createSwapChain(surface, swapChainDesc);
+	std::cout << "Swapchain: " << swapChain << std::endl;
+}
+
+void Application::buildDepthBuffer() {
+	// Destroy previously allocated texture
+	if (depthTexture != nullptr) depthTexture.destroy();
+
+	std::cout << "Creating depth texture..." << std::endl;
+	// Create the depth texture
+	TextureDescriptor depthTextureDesc;
+	depthTextureDesc.dimension = TextureDimension::_2D;
+	depthTextureDesc.format = depthTextureFormat;
+	depthTextureDesc.mipLevelCount = 1;
+	depthTextureDesc.sampleCount = 1;
+	depthTextureDesc.size = { swapChainDesc.width, swapChainDesc.height, 1 };
+	depthTextureDesc.usage = TextureUsage::RenderAttachment;
+	depthTextureDesc.viewFormatCount = 1;
+	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
+	depthTexture = device.createTexture(depthTextureDesc);
+	std::cout << "Depth texture: " << depthTexture << std::endl;
+
+	// Create the view of the depth texture manipulated by the rasterizer
+	TextureViewDescriptor depthTextureViewDesc;
+	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
+	depthTextureViewDesc.baseArrayLayer = 0;
+	depthTextureViewDesc.arrayLayerCount = 1;
+	depthTextureViewDesc.baseMipLevel = 0;
+	depthTextureViewDesc.mipLevelCount = 1;
+	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
+	depthTextureViewDesc.format = depthTextureFormat;
+	depthTextureView = depthTexture.createView(depthTextureViewDesc);
 }
 
 void Application::onFrame() {
@@ -415,9 +441,19 @@ void Application::onFrame() {
 
 void Application::onFinish() {
 	texture.destroy();
+	depthTexture.destroy();
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
+}
+
+void Application::onResize() {
+	buildSwapChain();
+	buildDepthBuffer();
+
+	float ratio = swapChainDesc.width / (float)swapChainDesc.height;
+	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
+	device.getQueue().writeBuffer(uniformBuffer, offsetof(MyUniforms, projectionMatrix), &uniforms.projectionMatrix, sizeof(MyUniforms::projectionMatrix));
 }
 
 bool Application::isRunning() {

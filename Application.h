@@ -44,8 +44,15 @@ public:
 	// A function called only once at the very end.
 	void onFinish();
 
+	// A function called when the window is resized.
+	void onResize();
+
 	// A function that tells if the application is still running.
 	bool isRunning();
+
+private:
+	void buildSwapChain();
+	void buildDepthBuffer();
 
 private:
 	struct MyUniforms {
@@ -62,14 +69,18 @@ private:
 	GLFWwindow* window = nullptr;
 	wgpu::Instance instance = nullptr;
 	wgpu::Surface surface = nullptr;
-	wgpu::SwapChain swapChain = nullptr;
+	wgpu::TextureFormat swapChainFormat = wgpu::TextureFormat::Undefined;
+	wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
 	wgpu::Device device = nullptr;
+	wgpu::SwapChain swapChain = nullptr;
 	wgpu::Buffer uniformBuffer = nullptr;
 	wgpu::TextureView depthTextureView = nullptr;
 	wgpu::RenderPipeline pipeline = nullptr;
 	wgpu::Buffer vertexBuffer = nullptr;
 	wgpu::BindGroup bindGroup = nullptr;
 	wgpu::Texture texture = nullptr;
+	wgpu::Texture depthTexture = nullptr;
+	wgpu::SwapChainDescriptor swapChainDesc;
 	MyUniforms uniforms;
 	std::vector<ResourceManager::VertexAttributes> vertexData;
 	int indexCount;
