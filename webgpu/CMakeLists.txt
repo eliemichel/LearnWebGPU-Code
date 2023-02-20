@@ -10,36 +10,38 @@ endif()
 # linked library (SHARED, meaning .dll, .so or .dylib).
 add_library(webgpu SHARED IMPORTED GLOBAL)
 
+# This is used to advertise the flavor of WebGPU that this zip provides
+target_compile_definitions(webgpu INTERFACE WEBGPU_BACKEND_WGPU)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 
-	set(WGPU_RUNTIME_LIB ${WGPU}/windows-${ARCH}/wgpu_native.dll)
+	set(WGPU_RUNTIME_LIB ${WGPU}/bin/windows-${ARCH}/wgpu_native.dll)
 	set_target_properties(
 		webgpu
 		PROPERTIES
 			IMPORTED_LOCATION "${WGPU_RUNTIME_LIB}"
-			IMPORTED_IMPLIB "${WGPU}/windows-${ARCH}/wgpu_native.lib"
-			INTERFACE_INCLUDE_DIRECTORIES "${WGPU}"
+			IMPORTED_IMPLIB "${WGPU}/bin/windows-${ARCH}/wgpu_native.lib"
+			INTERFACE_INCLUDE_DIRECTORIES "${WGPU}/include;${WGPU}/include/webgpu"
 	)
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
-
-	set(WGPU_RUNTIME_LIB ${WGPU}/linux-${ARCH}/libwgpu.so)
+	set(WGPU_RUNTIME_LIB ${WGPU}/bin/linux-${ARCH}/libwgpu.so)
 	set_target_properties(
 		webgpu
 		PROPERTIES
 			IMPORTED_LOCATION "${WGPU_RUNTIME_LIB}"
-			INTERFACE_INCLUDE_DIRECTORIES "${WGPU}"
+			INTERFACE_INCLUDE_DIRECTORIES "${WGPU}/include;${WGPU}/include/webgpu"
 	)
 
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 
-	set(WGPU_RUNTIME_LIB ${WGPU}/macos-${ARCH}/libwgpu_native.dylib)
+	set(WGPU_RUNTIME_LIB ${WGPU}/bin/macos-${ARCH}/libwgpu_native.dylib)
 	set_target_properties(
 		webgpu
 		PROPERTIES
 			IMPORTED_LOCATION "${WGPU_RUNTIME_LIB}"
-			INTERFACE_INCLUDE_DIRECTORIES "${WGPU}"
+			INTERFACE_INCLUDE_DIRECTORIES "${WGPU}/include;${WGPU}/include/webgpu"
 	)
 
 else()

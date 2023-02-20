@@ -31,6 +31,7 @@
 #include <limits.h>
 #include <webgpu.h>
 
+// Many destroy function are not available in the official webgpu.h header.
 // These differences of implementation should vanish as soon as WebGPU gets in version 1.0 stable
 #if defined(WEBGPU_BACKEND_WGPU)
 #include <wgpu.h>
@@ -38,8 +39,8 @@
 #elif defined(WEBGPU_BACKEND_DAWN)
 // TODO
 #define WEBGPU_NONSTD_DESTROY(type, var) {}
-#else
-#define WEBGPU_NONSTD_DESTROY(type, var) {}
+#else // assuming WEBGPU_BACKEND_EMSCRIPTEN
+#define WEBGPU_NONSTD_DESTROY(type, var) wgpu ## type ## Release(res);
 #endif // WEBGPU_BACKEND_WGPU
 
 // Dear ImGui prototypes from imgui_internal.h
@@ -295,7 +296,7 @@ void ImGui_ImplWGPU_RenderDrawData(ImDrawData* draw_data, WGPURenderPassEncoder 
             nullptr,
             "Dear ImGui Vertex buffer",
             WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex,
-            (fr->VertexBufferSize * sizeof(ImDrawVert) + 3) & ~3,
+            fr->VertexBufferSize * sizeof(ImDrawVert),
             false
         };
         fr->VertexBuffer = wgpuDeviceCreateBuffer(g_wgpuDevice, &vb_desc);
@@ -318,7 +319,7 @@ void ImGui_ImplWGPU_RenderDrawData(ImDrawData* draw_data, WGPURenderPassEncoder 
             nullptr,
             "Dear ImGui Index buffer",
             WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index,
-            (fr->IndexBufferSize * sizeof(ImDrawIdx) + 3) & ~3,
+            fr->IndexBufferSize * sizeof(ImDrawIdx),
             false
         };
         fr->IndexBuffer = wgpuDeviceCreateBuffer(g_wgpuDevice, &ib_desc);
@@ -475,7 +476,7 @@ static void ImGui_ImplWGPU_CreateUniformBuffer()
         nullptr,
         "Dear ImGui Uniform buffer",
         WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-        (sizeof(Uniforms) + 3) & ~3,
+        sizeof(Uniforms),
         false
     };
     g_resources.Uniforms = wgpuDeviceCreateBuffer(g_wgpuDevice, &ub_desc);
