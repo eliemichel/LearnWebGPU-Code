@@ -59,41 +59,69 @@ private:
 	void buildSwapChain();
 	void buildDepthBuffer();
 	void updateViewMatrix();
+	void updateDragInertia();
 
 private:
+	using vec2 = glm::vec2;
+	using vec4 = glm::vec4;
+	using mat4x4 = glm::mat4x4;
+
 	struct MyUniforms {
-		glm::mat4x4 projectionMatrix;
-		glm::mat4x4 viewMatrix;
-		glm::mat4x4 modelMatrix;
-		glm::vec4 color;
+		mat4x4 projectionMatrix;
+		mat4x4 viewMatrix;
+		mat4x4 modelMatrix;
+		vec4 color;
 		float time;
 		float _pad[3];
 	};
 	static_assert(sizeof(MyUniforms) % 16 == 0);
 
 	// Everything that is initialized in `onInit` and needed in `onFrame`.
-	GLFWwindow* window = nullptr;
-	wgpu::Instance instance = nullptr;
-	wgpu::Surface surface = nullptr;
-	wgpu::TextureFormat swapChainFormat = wgpu::TextureFormat::Undefined;
-	wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
-	wgpu::Device device = nullptr;
-	wgpu::SwapChain swapChain = nullptr;
-	wgpu::Buffer uniformBuffer = nullptr;
-	wgpu::TextureView depthTextureView = nullptr;
-	wgpu::RenderPipeline pipeline = nullptr;
-	wgpu::Buffer vertexBuffer = nullptr;
-	wgpu::BindGroup bindGroup = nullptr;
-	wgpu::Texture texture = nullptr;
-	wgpu::Texture depthTexture = nullptr;
-	wgpu::SwapChainDescriptor swapChainDesc;
-	MyUniforms uniforms;
-	std::vector<ResourceManager::VertexAttributes> vertexData;
-	int indexCount;
+	GLFWwindow* m_window = nullptr;
+	wgpu::Instance m_instance = nullptr;
+	wgpu::Surface m_surface = nullptr;
+	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
+	wgpu::TextureFormat m_depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+	wgpu::Device m_device = nullptr;
+	wgpu::SwapChain m_swapChain = nullptr;
+	wgpu::Buffer m_uniformBuffer = nullptr;
+	wgpu::TextureView m_depthTextureView = nullptr;
+	wgpu::RenderPipeline m_pipeline = nullptr;
+	wgpu::Buffer m_vertexBuffer = nullptr;
+	wgpu::BindGroup m_bindGroup = nullptr;
+	wgpu::Texture m_texture = nullptr;
+	wgpu::Texture m_depthTexture = nullptr;
+	wgpu::SwapChainDescriptor m_swapChainDesc;
+	MyUniforms m_uniforms;
+	std::vector<ResourceManager::VertexAttributes> m_vertexData;
+	int m_indexCount;
 
-	bool m_isDragging = false;
-	glm::vec2 m_startDragMouse;
-	glm::vec2 m_startDragCameraEulerAngles;
-	glm::vec2 m_cameraEulerAngles = {0.8f, 0.5f};
-	float m_zoom = -1.2f;
+	struct CameraState {
+		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x
+		// angles.y is the rotation of the camera around its local horizontal axis, affected by mouse.y
+		vec2 angles = { 0.8f, 0.5f };
+		// zoom is the position of the camera along its local forward axis, affected by the scroll wheel
+		float zoom = -1.2f;
+	};
+
+	struct DragState {
+		// Whether a drag action is ongoing (i.e., we are between mouse press and mouse release)
+		bool active = false;
+		// The position of the mouse at the beginning of the drag action
+		vec2 startMouse;
+		// The camera state at the beginning of the drag action
+		CameraState startCameraState;
+
+		// Constant settings
+		float sensitivity = 0.01f;
+		float scrollSensitivity = 0.1f;
+
+		// Inertia
+		vec2 velocity = {0.0, 0.0};
+		vec2 previousDelta;
+		float intertia = 0.9f;
+	};
+
+	CameraState m_cameraState;
+	DragState m_drag;
 };

@@ -76,8 +76,8 @@ void onWindowScroll(GLFWwindow* window, double xoffset, double yoffset) {
 
 bool Application::onInit() {
 	// Create instance
-	instance = createInstance(InstanceDescriptor{});
-	if (!instance) {
+	m_instance = createInstance(InstanceDescriptor{});
+	if (!m_instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return false;
 	}
@@ -90,25 +90,25 @@ bool Application::onInit() {
 	// Create window
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-	window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
-	if (!window) {
+	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	if (!m_window) {
 		std::cerr << "Could not open window!" << std::endl;
 		return false;
 	}
 
 	// Add window callbacks
-	glfwSetWindowUserPointer(window, this);
-	glfwSetFramebufferSizeCallback(window, onWindowResize);
-	glfwSetCursorPosCallback(window, onWindowMouseMove);
-	glfwSetMouseButtonCallback(window, onWindowMouseButton);
-	glfwSetScrollCallback(window, onWindowScroll);
+	glfwSetWindowUserPointer(m_window, this);
+	glfwSetFramebufferSizeCallback(m_window, onWindowResize);
+	glfwSetCursorPosCallback(m_window, onWindowMouseMove);
+	glfwSetMouseButtonCallback(m_window, onWindowMouseButton);
+	glfwSetScrollCallback(m_window, onWindowScroll);
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
-	surface = glfwGetWGPUSurface(instance, window);
+	m_surface = glfwGetWGPUSurface(m_instance, m_window);
 	RequestAdapterOptions adapterOpts{};
-	adapterOpts.compatibleSurface = surface;
-	Adapter adapter = instance.requestAdapter(adapterOpts);
+	adapterOpts.compatibleSurface = m_surface;
+	Adapter adapter = m_instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
@@ -127,24 +127,24 @@ bool Application::onInit() {
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
-	device = adapter.requestDevice(deviceDesc);
-	std::cout << "Got device: " << device << std::endl;
+	m_device = adapter.requestDevice(deviceDesc);
+	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
-	auto uncapturedErrorCallback = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
+	auto uncapturedErrorCallback = m_device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
 	});
 
-	Queue queue = device.getQueue();
+	Queue queue = m_device.getQueue();
 
 	// Create swapchain
-	swapChainFormat = surface.getPreferredFormat(adapter);
+	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
 	buildSwapChain();
 
 	std::cout << "Creating shader module..." << std::endl;
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
 	std::cout << "Creating render pipeline..." << std::endl;
@@ -208,7 +208,7 @@ bool Application::onInit() {
 	blendState.alpha.operation = BlendOperation::Add;
 
 	ColorTargetState colorTarget{};
-	colorTarget.format = swapChainFormat;
+	colorTarget.format = m_swapChainFormat;
 	colorTarget.blend = &blendState;
 	colorTarget.writeMask = ColorWriteMask::All;
 
@@ -218,7 +218,7 @@ bool Application::onInit() {
 	DepthStencilState depthStencilState = Default;
 	depthStencilState.depthCompare = CompareFunction::Less;
 	depthStencilState.depthWriteEnabled = true;
-	depthStencilState.format = depthTextureFormat;
+	depthStencilState.format = m_depthTextureFormat;
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
 	pipelineDesc.depthStencil = &depthStencilState;
@@ -253,19 +253,19 @@ bool Application::onInit() {
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindingLayoutEntries.size();
 	bindGroupLayoutDesc.entries = bindingLayoutEntries.data();
-	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
+	BindGroupLayout bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
 
 	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 1;
 	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
-	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
+	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
-	pipeline = device.createRenderPipeline(pipelineDesc);
-	std::cout << "Render pipeline: " << pipeline << std::endl;
+	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
+	std::cout << "Render pipeline: " << m_pipeline << std::endl;
 
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", vertexData);
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -273,38 +273,38 @@ bool Application::onInit() {
 
 	// Create vertex buffer
 	BufferDescriptor bufferDesc;
-	bufferDesc.size = vertexData.size() * sizeof(VertexAttributes);
+	bufferDesc.size = m_vertexData.size() * sizeof(VertexAttributes);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
 	bufferDesc.mappedAtCreation = false;
-	vertexBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+	m_vertexBuffer = m_device.createBuffer(bufferDesc);
+	queue.writeBuffer(m_vertexBuffer, 0, m_vertexData.data(), bufferDesc.size);
 
-	indexCount = static_cast<int>(vertexData.size());
+	m_indexCount = static_cast<int>(m_vertexData.size());
 
 	// Create uniform buffer
 	bufferDesc.size = sizeof(MyUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
-	uniformBuffer = device.createBuffer(bufferDesc);
+	m_uniformBuffer = m_device.createBuffer(bufferDesc);
 
 	// Upload the initial value of the uniforms
-	uniforms.time = 1.0f;
-	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+	m_uniforms.time = 1.0f;
+	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
 
 	// Matrices
-	uniforms.modelMatrix = mat4x4(1.0);
-	uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
-	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
+	m_uniforms.modelMatrix = mat4x4(1.0);
+	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 
-	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
 	updateViewMatrix();
 
 	buildDepthBuffer();
 
 	// Create a texture
 	TextureView textureView = nullptr;
-	texture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", device, &textureView);
-	if (!texture) {
+	m_texture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", m_device, &textureView);
+	if (!m_texture) {
 		std::cerr << "Could not load texture!" << std::endl;
 		return 1;
 	}
@@ -321,14 +321,14 @@ bool Application::onInit() {
 	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
 	samplerDesc.maxAnisotropy = 1;
-	Sampler sampler = device.createSampler(samplerDesc);
+	Sampler sampler = m_device.createSampler(samplerDesc);
 
 	// Create a binding
 	std::vector<BindGroupEntry> bindings(3);
 	//                                   ^ This was a 2
 
 	bindings[0].binding = 0;
-	bindings[0].buffer = uniformBuffer;
+	bindings[0].buffer = m_uniformBuffer;
 	bindings[0].offset = 0;
 	bindings[0].size = sizeof(MyUniforms);
 
@@ -344,43 +344,43 @@ bool Application::onInit() {
 	bindGroupDesc.layout = bindGroupLayout;
 	bindGroupDesc.entryCount = (uint32_t)bindings.size();
 	bindGroupDesc.entries = bindings.data();
-	bindGroup = device.createBindGroup(bindGroupDesc);
+	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
 	return true;
 }
 
 void Application::buildSwapChain() {
 	int width, height;
-	glfwGetFramebufferSize(window, &width, &height);
+	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
-	swapChainDesc = {};
-	swapChainDesc.width = (uint32_t)width;
-	swapChainDesc.height = (uint32_t)height;
-	swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
-	swapChainDesc.format = swapChainFormat;
-	swapChainDesc.presentMode = PresentMode::Fifo;
-	swapChain = device.createSwapChain(surface, swapChainDesc);
-	std::cout << "Swapchain: " << swapChain << std::endl;
+	m_swapChainDesc = {};
+	m_swapChainDesc.width = (uint32_t)width;
+	m_swapChainDesc.height = (uint32_t)height;
+	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
+	m_swapChainDesc.format = m_swapChainFormat;
+	m_swapChainDesc.presentMode = PresentMode::Fifo;
+	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
+	std::cout << "Swapchain: " << m_swapChain << std::endl;
 }
 
 void Application::buildDepthBuffer() {
 	// Destroy previously allocated texture
-	if (depthTexture != nullptr) depthTexture.destroy();
+	if (m_depthTexture != nullptr) m_depthTexture.destroy();
 
 	std::cout << "Creating depth texture..." << std::endl;
 	// Create the depth texture
 	TextureDescriptor depthTextureDesc;
 	depthTextureDesc.dimension = TextureDimension::_2D;
-	depthTextureDesc.format = depthTextureFormat;
+	depthTextureDesc.format = m_depthTextureFormat;
 	depthTextureDesc.mipLevelCount = 1;
 	depthTextureDesc.sampleCount = 1;
-	depthTextureDesc.size = { swapChainDesc.width, swapChainDesc.height, 1 };
+	depthTextureDesc.size = { m_swapChainDesc.width, m_swapChainDesc.height, 1 };
 	depthTextureDesc.usage = TextureUsage::RenderAttachment;
 	depthTextureDesc.viewFormatCount = 1;
-	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
-	depthTexture = device.createTexture(depthTextureDesc);
-	std::cout << "Depth texture: " << depthTexture << std::endl;
+	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&m_depthTextureFormat;
+	m_depthTexture = m_device.createTexture(depthTextureDesc);
+	std::cout << "Depth texture: " << m_depthTexture << std::endl;
 
 	// Create the view of the depth texture manipulated by the rasterizer
 	TextureViewDescriptor depthTextureViewDesc;
@@ -390,19 +390,21 @@ void Application::buildDepthBuffer() {
 	depthTextureViewDesc.baseMipLevel = 0;
 	depthTextureViewDesc.mipLevelCount = 1;
 	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
-	depthTextureViewDesc.format = depthTextureFormat;
-	depthTextureView = depthTexture.createView(depthTextureViewDesc);
+	depthTextureViewDesc.format = m_depthTextureFormat;
+	m_depthTextureView = m_depthTexture.createView(depthTextureViewDesc);
 }
 
 void Application::onFrame() {
 	glfwPollEvents();
-	Queue queue = device.getQueue();
+	Queue queue = m_device.getQueue();
+
+	updateDragInertia();
 
 	// Update uniform buffer
-	uniforms.time = static_cast<float>(glfwGetTime());
-	queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
+	m_uniforms.time = static_cast<float>(glfwGetTime());
+	queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
 
-	TextureView nextTexture = swapChain.getCurrentTextureView();
+	TextureView nextTexture = m_swapChain.getCurrentTextureView();
 	if (!nextTexture) {
 		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 		return;
@@ -410,7 +412,7 @@ void Application::onFrame() {
 
 	CommandEncoderDescriptor commandEncoderDesc{};
 	commandEncoderDesc.label = "Command Encoder";
-	CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
+	CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
 	RenderPassDescriptor renderPassDesc{};
 
@@ -424,7 +426,7 @@ void Application::onFrame() {
 	renderPassDesc.colorAttachments = &colorAttachment;
 
 	RenderPassDepthStencilAttachment depthStencilAttachment;
-	depthStencilAttachment.view = depthTextureView;
+	depthStencilAttachment.view = m_depthTextureView;
 	depthStencilAttachment.depthClearValue = 100.0f;
 	depthStencilAttachment.depthLoadOp = LoadOp::Clear;
 	depthStencilAttachment.depthStoreOp = StoreOp::Store;
@@ -439,12 +441,12 @@ void Application::onFrame() {
 	renderPassDesc.timestampWrites = nullptr;
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
-	renderPass.setPipeline(pipeline);
+	renderPass.setPipeline(m_pipeline);
 
-	renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexData.size() * sizeof(VertexAttributes));
-	renderPass.setBindGroup(0, bindGroup, 0, nullptr);
+	renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexData.size() * sizeof(VertexAttributes));
+	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-	renderPass.draw(indexCount, 1, 0, 0);
+	renderPass.draw(m_indexCount, 1, 0, 0);
 
 	renderPass.end();
 
@@ -452,14 +454,14 @@ void Application::onFrame() {
 	queue.submit(command);
 
 	wgpuTextureViewDrop(nextTexture);
-	swapChain.present();
+	m_swapChain.present();
 }
 
 void Application::onFinish() {
-	texture.destroy();
-	depthTexture.destroy();
+	m_texture.destroy();
+	m_depthTexture.destroy();
 
-	glfwDestroyWindow(window);
+	glfwDestroyWindow(m_window);
 	glfwTerminate();
 }
 
@@ -467,18 +469,22 @@ void Application::onResize() {
 	buildSwapChain();
 	buildDepthBuffer();
 
-	float ratio = swapChainDesc.width / (float)swapChainDesc.height;
-	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
-	device.getQueue().writeBuffer(uniformBuffer, offsetof(MyUniforms, projectionMatrix), &uniforms.projectionMatrix, sizeof(MyUniforms::projectionMatrix));
+	float ratio = m_swapChainDesc.width / (float)m_swapChainDesc.height;
+	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, projectionMatrix), &m_uniforms.projectionMatrix, sizeof(MyUniforms::projectionMatrix));
 }
 
 void Application::onMouseMove(double xpos, double ypos) {
-	constexpr float sensitivity = 0.01f;
-	if (m_isDragging) {
-		vec2 delta = vec2(-(float)xpos, (float)ypos);
-		m_cameraEulerAngles = m_startDragCameraEulerAngles + (delta - m_startDragMouse) * sensitivity;
-		m_cameraEulerAngles.y = std::min(std::max(-PI / 2, m_cameraEulerAngles.y), PI / 2);
+	if (m_drag.active) {
+		vec2 currentMouse = vec2(-(float)xpos, (float)ypos);
+		vec2 delta = (currentMouse - m_drag.startMouse) * m_drag.sensitivity;
+		m_cameraState.angles = m_drag.startCameraState.angles + delta;
+		m_cameraState.angles.y = glm::clamp(m_cameraState.angles.y, -PI / 2 + 1e-5f, PI / 2 - 1e-5f);
 		updateViewMatrix();
+
+		// Inertia
+		m_drag.velocity = delta - m_drag.previousDelta;
+		m_drag.previousDelta = delta;
 	}
 }
 
@@ -487,14 +493,14 @@ void Application::onMouseButton(int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_LEFT) {
 		switch(action) {
 		case GLFW_PRESS:
-			m_isDragging = true;
+			m_drag.active = true;
 			double xpos, ypos;
-			glfwGetCursorPos(window, &xpos, &ypos);
-			m_startDragMouse = vec2(-(float)xpos, (float)ypos);
-			m_startDragCameraEulerAngles = m_cameraEulerAngles;
+			glfwGetCursorPos(m_window, &xpos, &ypos);
+			m_drag.startMouse = vec2(-(float)xpos, (float)ypos);
+			m_drag.startCameraState = m_cameraState;
 			break;
 		case GLFW_RELEASE:
-			m_isDragging = false;
+			m_drag.active = false;
 			break;
 		}
 	}
@@ -502,20 +508,34 @@ void Application::onMouseButton(int button, int action, int mods) {
 
 void Application::onScroll(double xoffset, double yoffset) {
 	(void)xoffset;
-	m_zoom += 0.1f * (float)yoffset;
+	m_cameraState.zoom += m_drag.scrollSensitivity * (float)yoffset;
+	m_cameraState.zoom = glm::clamp(m_cameraState.zoom, -2.0f, 2.0f);
 	updateViewMatrix();
 }
 
 bool Application::isRunning() {
-	return !glfwWindowShouldClose(window);
+	return !glfwWindowShouldClose(m_window);
 }
 
 void Application::updateViewMatrix() {
-	float cx = cos(m_cameraEulerAngles.x);
-	float sx = sin(m_cameraEulerAngles.x);
-	float cy = cos(m_cameraEulerAngles.y);
-	float sy = sin(m_cameraEulerAngles.y);
-	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_zoom);
-	uniforms.viewMatrix = uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
-	device.getQueue().writeBuffer(uniformBuffer, offsetof(MyUniforms, viewMatrix), &uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
+	float cx = cos(m_cameraState.angles.x);
+	float sx = sin(m_cameraState.angles.x);
+	float cy = cos(m_cameraState.angles.y);
+	float sy = sin(m_cameraState.angles.y);
+	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_cameraState.zoom);
+	m_uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
+}
+
+void Application::updateDragInertia() {
+	constexpr float eps = 1e-4f;
+	if (!m_drag.active) {
+		if (std::abs(m_drag.velocity.x) < eps && std::abs(m_drag.velocity.y) < eps) {
+			return;
+		}
+		m_cameraState.angles += m_drag.velocity;
+		m_cameraState.angles.y = glm::clamp(m_cameraState.angles.y, -PI / 2 + 1e-5f, PI / 2 - 1e-5f);
+		m_drag.velocity *= m_drag.intertia;
+		updateViewMatrix();
+	}
 }
