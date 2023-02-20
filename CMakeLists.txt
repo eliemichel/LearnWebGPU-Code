@@ -14,6 +14,7 @@ option(DEV_MODE "Set up development helper settings" ON)
 add_subdirectory(glfw)
 add_subdirectory(webgpu)
 add_subdirectory(glfw3webgpu)
+add_subdirectory(imgui)
 
 add_executable(App
 	Application.h
@@ -40,7 +41,7 @@ else()
 endif()
 
 target_include_directories(App PRIVATE .)
-target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
+target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu imgui)
 
 if(MSVC)
 	target_compile_options(App PRIVATE /wd4201)

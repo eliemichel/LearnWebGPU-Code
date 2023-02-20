@@ -61,6 +61,9 @@ private:
 	void updateViewMatrix();
 	void updateDragInertia();
 
+	void initGui(); // called in onInit
+	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
+
 private:
 	using vec2 = glm::vec2;
 	using vec4 = glm::vec4;
@@ -95,6 +98,7 @@ private:
 	MyUniforms m_uniforms;
 	std::vector<ResourceManager::VertexAttributes> m_vertexData;
 	int m_indexCount;
+	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
 
 	struct CameraState {
 		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x

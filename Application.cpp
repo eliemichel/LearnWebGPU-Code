@@ -35,6 +35,10 @@
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
+#include <imgui.h>
+#include <backends/imgui_impl_wgpu.h>
+#include <backends/imgui_impl_glfw.h>
+
 #include <webgpu.hpp>
 #include <wgpu.h> // wgpuTextureViewDrop
 
@@ -117,7 +121,7 @@ bool Application::onInit() {
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 1;
-	requiredLimits.limits.maxBindGroups = 1;
+	requiredLimits.limits.maxBindGroups = 2;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 
@@ -131,7 +135,7 @@ bool Application::onInit() {
 	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
-	auto uncapturedErrorCallback = m_device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
+	m_uncapturedErrorCallback = m_device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
@@ -346,6 +350,8 @@ bool Application::onInit() {
 	bindGroupDesc.entries = bindings.data();
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
+	initGui();
+
 	return true;
 }
 
@@ -448,6 +454,8 @@ void Application::onFrame() {
 
 	renderPass.draw(m_indexCount, 1, 0, 0);
 
+	updateGui(renderPass);
+
 	renderPass.end();
 
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
@@ -489,6 +497,11 @@ void Application::onMouseMove(double xpos, double ypos) {
 }
 
 void Application::onMouseButton(int button, int action, int mods) {
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	if (io.WantCaptureMouse) {
+		return;
+	}
+
 	(void)mods;
 	if (button == GLFW_MOUSE_BUTTON_LEFT) {
 		switch(action) {
@@ -538,4 +551,50 @@ void Application::updateDragInertia() {
 		m_drag.velocity *= m_drag.intertia;
 		updateViewMatrix();
 	}
+}
+
+void Application::initGui() {
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplGlfw_InitForOther(m_window, true);
+	ImGui_ImplWGPU_Init(m_device, 3, m_swapChainFormat, m_depthTextureFormat);
+}
+
+void Application::updateGui(RenderPassEncoder renderPass) {
+	// Start the Dear ImGui frame
+	ImGui_ImplWGPU_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	{
+		static float f = 0.0f;
+		static int counter = 0;
+		static bool show_demo_window = true;
+		static bool show_another_window = false;
+		static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+		ImGui::Begin("Hello, world!");                                // Create a window called "Hello, world!" and append into it.
+
+		ImGui::Text("This is some useful text.");                     // Display some text (you can use a format strings too)
+		ImGui::Checkbox("Demo Window", &show_demo_window);            // Edit bools storing our window open/close state
+		ImGui::Checkbox("Another Window", &show_another_window);
+
+		ImGui::SliderFloat("float", &f, 0.0f, 1.0f);                  // Edit 1 float using a slider from 0.0f to 1.0f
+		ImGui::ColorEdit3("clear color", (float*)&clear_color);       // Edit 3 floats representing a color
+
+		if (ImGui::Button("Button"))                                  // Buttons return true when clicked (most widgets return true when edited/activated)
+			counter++;
+		ImGui::SameLine();
+		ImGui::Text("counter = %d", counter);
+
+		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+		ImGui::End();
+	}
+
+	ImGui::Render();
+	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 }
