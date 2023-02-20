@@ -29,7 +29,7 @@ struct MyUniforms {
 @group(0) @binding(1) var gradientTexture: texture_2d<f32>;
 @group(0) @binding(2) var textureSampler: sampler;
 
-let pi = 3.14159266;
+const pi = 3.14159266;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -58,6 +58,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = textureSample(gradientTexture, textureSampler, in.uv).rgb;
 
 	// Gamma-correction
-	let corrected_color = pow(color, vec3<f32>(2.2));
+	let corrected_color = color;//pow(color, vec3<f32>(2.2));
 	return vec4<f32>(corrected_color, uMyUniforms.color.a);
 }

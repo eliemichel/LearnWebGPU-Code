@@ -8,15 +8,14 @@
   <a href="https://github.com/eliemichel/LearnWebGPU">LearnWebGPU</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-Cpp">WebGPU-C++</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/glfw3webgpu">glfw3webgpu</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-binaries">WebGPU-binaries</a>
 </div>
 
-WebGPU binaries
-===============
+WebGPU distribution - Dawn
+==========================
 
-This is the binary release used by the [Learn WebGPU for native C++](https://eliemichel.github.io/LearnWebGPU) tutorial series. It is a build of [wgpu-native](https://github.com/gfx-rs/wgpu-native) to which a `CMakeLists.txt` file has been added to easily integrate it to CMake projects.
+This branch is an alternative the binary release used by the [Learn WebGPU for native C++](https://eliemichel.github.io/LearnWebGPU) tutorial series that are based on [wgpu-native](https://github.com/gfx-rs/wgpu-native).
 
-**Differences with wgpu-native release**
+This distribution is based instead on a concurrent implementation, namely Google's [Dawn](https://dawn.googlesource.com/dawn). It is not a binary release but rather a CMake script that builds the WebGPU implementation together with your project (expect longer build time the first time then).
 
- - Rename binaries for Windows and macOS. (The build process of wgpu-native gives them a wrong name that makes the linking fail.)
- - Add a CMakeLists.txt so that this can be easily integrated into a CMake project (just `add_subdirectory` this repo).
- - Add [webgpu.hpp](https://github.com/eliemichel/WebGPU-Cpp) to also provide a more idiomatic C++ API.
+**Differences with Dawn**
 
-**NB** There is also an experimental [Dawn](https://dawn.googlesource.com/dawn)-based distribution in [the `dawn` branch](https://github.com/eliemichel/WebGPU-binaries/tree/dawn).
+ - Replace Dawn's custom gclient tool with a basic Python script (no need to install `depot_tools` then).
+ - Add [webgpu.hpp](https://github.com/eliemichel/WebGPU-Cpp) to also provide a common C++ API with the wgpu-native implementation.

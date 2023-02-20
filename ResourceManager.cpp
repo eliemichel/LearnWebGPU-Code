@@ -47,10 +47,17 @@ ShaderModule ResourceManager::loadShaderModule(const path& path, Device device) 
 	ShaderModuleWGSLDescriptor shaderCodeDesc{};
 	shaderCodeDesc.chain.next = nullptr;
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
+#if defined(WEBGPU_BACKEND_DAWN)
+	shaderCodeDesc.source = shaderSource.c_str();
+#else
 	shaderCodeDesc.code = shaderSource.c_str();
+#endif
+
 	ShaderModuleDescriptor shaderDesc{};
+#if !defined(WEBGPU_BACKEND_DAWN)
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
+#endif
 	shaderDesc.nextInChain = &shaderCodeDesc.chain;
 	return device.createShaderModule(shaderDesc);
 }

@@ -40,7 +40,10 @@
 #include <backends/imgui_impl_glfw.h>
 
 #include <webgpu.hpp>
+
+#if defined(WEBGPU_BACKEND_WGPU)
 #include <wgpu.h> // wgpuTextureViewDrop
+#endif
 
 #include <iostream>
 #include <cassert>
@@ -144,7 +147,11 @@ bool Application::onInit() {
 	Queue queue = m_device.getQueue();
 
 	// Create swapchain
+#if defined(WEBGPU_BACKEND_DAWN)
+	m_swapChainFormat = WGPUTextureFormat_BGRA8Unorm;
+#else
 	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#endif
 	buildSwapChain();
 
 	std::cout << "Creating shader module..." << std::endl;
@@ -320,7 +327,11 @@ bool Application::onInit() {
 	samplerDesc.addressModeW = AddressMode::Repeat;
 	samplerDesc.magFilter = FilterMode::Linear;
 	samplerDesc.minFilter = FilterMode::Linear;
+#if defined(WEBGPU_BACKEND_WGPU)
 	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+#else
+	samplerDesc.mipmapFilter = FilterMode::Linear;
+#endif
 	samplerDesc.lodMinClamp = 0.0f;
 	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
@@ -363,7 +374,11 @@ void Application::buildSwapChain() {
 	m_swapChainDesc = {};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
+#if defined(WEBGPU_BACKEND_DAWN)
+	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
+#else
 	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
+#endif
 	m_swapChainDesc.format = m_swapChainFormat;
 	m_swapChainDesc.presentMode = PresentMode::Fifo;
 	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
@@ -428,6 +443,10 @@ void Application::onFrame() {
 	colorAttachment.loadOp = LoadOp::Clear;
 	colorAttachment.storeOp = StoreOp::Store;
 	colorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
+#if defined(WEBGPU_BACKEND_DAWN)
+	constexpr auto NaN = std::numeric_limits<double>::quiet_NaN();
+	colorAttachment.clearColor = Color{ NaN, NaN, NaN, NaN };
+#endif
 	renderPassDesc.colorAttachmentCount = 1;
 	renderPassDesc.colorAttachments = &colorAttachment;
 
@@ -438,8 +457,13 @@ void Application::onFrame() {
 	depthStencilAttachment.depthStoreOp = StoreOp::Store;
 	depthStencilAttachment.depthReadOnly = false;
 	depthStencilAttachment.stencilClearValue = 0;
+#if defined(WEBGPU_BACKEND_DAWN)
+	depthStencilAttachment.stencilLoadOp = LoadOp::Undefined;
+	depthStencilAttachment.stencilStoreOp = StoreOp::Undefined;
+#else
 	depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
 	depthStencilAttachment.stencilStoreOp = StoreOp::Store;
+#endif
 	depthStencilAttachment.stencilReadOnly = true;
 
 	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
@@ -461,7 +485,9 @@ void Application::onFrame() {
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(command);
 
+#if defined(WEBGPU_BACKEND_WGPU)
 	wgpuTextureViewDrop(nextTexture);
+#endif
 	m_swapChain.present();
 }
 
