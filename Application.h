@@ -47,12 +47,18 @@ public:
 	// A function called when the window is resized.
 	void onResize();
 
+	// Mouse events
+	void onMouseMove(double xpos, double ypos);
+	void onMouseButton(int button, int action, int mods);
+	void onScroll(double xoffset, double yoffset);
+
 	// A function that tells if the application is still running.
 	bool isRunning();
 
 private:
 	void buildSwapChain();
 	void buildDepthBuffer();
+	void updateViewMatrix();
 
 private:
 	struct MyUniforms {
@@ -84,4 +90,10 @@ private:
 	MyUniforms uniforms;
 	std::vector<ResourceManager::VertexAttributes> vertexData;
 	int indexCount;
+
+	bool m_isDragging = false;
+	glm::vec2 m_startDragMouse;
+	glm::vec2 m_startDragCameraEulerAngles;
+	glm::vec2 m_cameraEulerAngles = {0.8f, 0.5f};
+	float m_zoom = -1.2f;
 };

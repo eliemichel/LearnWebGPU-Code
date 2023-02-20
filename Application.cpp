@@ -61,6 +61,18 @@ void onWindowResize(GLFWwindow* window, int width, int height) {
 	auto pApp = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
 	if (pApp != nullptr) pApp->onResize();
 }
+void onWindowMouseMove(GLFWwindow* window, double xpos, double ypos) {
+	auto pApp = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+	if (pApp != nullptr) pApp->onMouseMove(xpos, ypos);
+}
+void onWindowMouseButton(GLFWwindow* window, int button, int action, int mods) {
+	auto pApp = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+	if (pApp != nullptr) pApp->onMouseButton(button, action, mods);
+}
+void onWindowScroll(GLFWwindow* window, double xoffset, double yoffset) {
+	auto pApp = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+	if (pApp != nullptr) pApp->onScroll(xoffset, yoffset);
+}
 
 bool Application::onInit() {
 	// Create instance
@@ -87,6 +99,9 @@ bool Application::onInit() {
 	// Add window callbacks
 	glfwSetWindowUserPointer(window, this);
 	glfwSetFramebufferSizeCallback(window, onWindowResize);
+	glfwSetCursorPosCallback(window, onWindowMouseMove);
+	glfwSetMouseButtonCallback(window, onWindowMouseButton);
+	glfwSetScrollCallback(window, onWindowScroll);
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
@@ -282,6 +297,7 @@ bool Application::onInit() {
 	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+	updateViewMatrix();
 
 	buildDepthBuffer();
 
@@ -456,6 +472,50 @@ void Application::onResize() {
 	device.getQueue().writeBuffer(uniformBuffer, offsetof(MyUniforms, projectionMatrix), &uniforms.projectionMatrix, sizeof(MyUniforms::projectionMatrix));
 }
 
+void Application::onMouseMove(double xpos, double ypos) {
+	constexpr float sensitivity = 0.01f;
+	if (m_isDragging) {
+		vec2 delta = vec2(-(float)xpos, (float)ypos);
+		m_cameraEulerAngles = m_startDragCameraEulerAngles + (delta - m_startDragMouse) * sensitivity;
+		m_cameraEulerAngles.y = std::min(std::max(-PI / 2, m_cameraEulerAngles.y), PI / 2);
+		updateViewMatrix();
+	}
+}
+
+void Application::onMouseButton(int button, int action, int mods) {
+	(void)mods;
+	if (button == GLFW_MOUSE_BUTTON_LEFT) {
+		switch(action) {
+		case GLFW_PRESS:
+			m_isDragging = true;
+			double xpos, ypos;
+			glfwGetCursorPos(window, &xpos, &ypos);
+			m_startDragMouse = vec2(-(float)xpos, (float)ypos);
+			m_startDragCameraEulerAngles = m_cameraEulerAngles;
+			break;
+		case GLFW_RELEASE:
+			m_isDragging = false;
+			break;
+		}
+	}
+}
+
+void Application::onScroll(double xoffset, double yoffset) {
+	(void)xoffset;
+	m_zoom += 0.1f * (float)yoffset;
+	updateViewMatrix();
+}
+
 bool Application::isRunning() {
 	return !glfwWindowShouldClose(window);
+}
+
+void Application::updateViewMatrix() {
+	float cx = cos(m_cameraEulerAngles.x);
+	float sx = sin(m_cameraEulerAngles.x);
+	float cy = cos(m_cameraEulerAngles.y);
+	float sy = sin(m_cameraEulerAngles.y);
+	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_zoom);
+	uniforms.viewMatrix = uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
+	device.getQueue().writeBuffer(uniformBuffer, offsetof(MyUniforms, viewMatrix), &uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
 }
