@@ -442,17 +442,23 @@ void Application::onFrame() {
 	colorAttachment.resolveTarget = nullptr;
 	colorAttachment.loadOp = LoadOp::Clear;
 	colorAttachment.storeOp = StoreOp::Store;
-	colorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
 #if defined(WEBGPU_BACKEND_DAWN)
 	constexpr auto NaN = std::numeric_limits<double>::quiet_NaN();
 	colorAttachment.clearColor = Color{ NaN, NaN, NaN, NaN };
+	colorAttachment.clearValue = Color{ 0.256, 0.256, 0.256, 1.0 };
+#else
+	colorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
 #endif
 	renderPassDesc.colorAttachmentCount = 1;
 	renderPassDesc.colorAttachments = &colorAttachment;
 
 	RenderPassDepthStencilAttachment depthStencilAttachment;
 	depthStencilAttachment.view = m_depthTextureView;
-	depthStencilAttachment.depthClearValue = 100.0f;
+	depthStencilAttachment.depthClearValue = 1.0f;
+#if defined(WEBGPU_BACKEND_DAWN)
+	constexpr auto NaNf = std::numeric_limits<float>::quiet_NaN();
+	depthStencilAttachment.clearDepth = NaNf;
+#endif
 	depthStencilAttachment.depthLoadOp = LoadOp::Clear;
 	depthStencilAttachment.depthStoreOp = StoreOp::Store;
 	depthStencilAttachment.depthReadOnly = false;
