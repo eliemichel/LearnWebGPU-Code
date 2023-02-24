@@ -40,7 +40,6 @@
 #include <backends/imgui_impl_glfw.h>
 
 #include <webgpu.hpp>
-#include <wgpu.h> // wgpuTextureViewDrop
 
 #include <iostream>
 #include <cassert>
@@ -49,6 +48,11 @@
 #include <sstream>
 #include <string>
 #include <array>
+
+#if defined(WEBGPU_BACKEND_WGPU)
+#include <wgpu.h>
+#define wgpuTextureViewRelease wgpuTextureViewDrop
+#endif
 
 constexpr float PI = 3.14159265358979323846f;
 
@@ -144,7 +148,11 @@ bool Application::onInit() {
 	Queue queue = m_device.getQueue();
 
 	// Create swapchain
+#if defined(WEBGPU_BACKEND_DAWN)
+	m_swapChainFormat = WGPUTextureFormat_BGRA8Unorm;
+#else
 	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#endif
 	buildSwapChain();
 
 	std::cout << "Creating shader module..." << std::endl;
@@ -320,7 +328,11 @@ bool Application::onInit() {
 	samplerDesc.addressModeW = AddressMode::Repeat;
 	samplerDesc.magFilter = FilterMode::Linear;
 	samplerDesc.minFilter = FilterMode::Linear;
+#if defined(WEBGPU_BACKEND_WGPU)
 	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+#else
+	samplerDesc.mipmapFilter = FilterMode::Linear;
+#endif
 	samplerDesc.lodMinClamp = 0.0f;
 	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
@@ -364,7 +376,7 @@ void Application::buildSwapChain() {
 	m_swapChainDesc = {};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
-	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
+	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
 	m_swapChainDesc.format = m_swapChainFormat;
 	m_swapChainDesc.presentMode = PresentMode::Fifo;
 	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
@@ -402,6 +414,8 @@ void Application::buildDepthBuffer() {
 }
 
 void Application::onFrame() {
+	computeStuff();
+
 	glfwPollEvents();
 	Queue queue = m_device.getQueue();
 
@@ -462,7 +476,7 @@ void Application::onFrame() {
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(command);
 
-	wgpuTextureViewDrop(nextTexture);
+	wgpuTextureViewRelease(nextTexture);
 	m_swapChain.present();
 }
 
@@ -655,7 +669,7 @@ void Application::computeStuff() {
 	computePipelineDesc.compute.constants = nullptr;
 	computePipelineDesc.compute.entryPoint = "computeStuff";
 	computePipelineDesc.compute.module = computeShaderModule;
-	computePipelineDesc.layout = nullptr; // pipelineLayout;
+	computePipelineDesc.layout = pipelineLayout;
 	ComputePipeline computePipeline = m_device.createComputePipeline(computePipelineDesc);
 
 	// Create compute bind group
@@ -686,7 +700,7 @@ void Application::computeStuff() {
 	// Use compute pass
 	computePass.setPipeline(computePipeline);
 	computePass.setBindGroup(0, bindGroup, 0, nullptr);
-	computePass.dispatchWorkgroups(1, 0, 0);
+	computePass.dispatchWorkgroups(1, 1, 1);
 
 	// Finalize compute pass
 	computePass.end();
@@ -701,7 +715,11 @@ void Application::computeStuff() {
 	bool done = false;
 	auto handle = mapBuffer.mapAsync(MapMode::Read, 0, bufferDesc.size, [&](BufferMapAsyncStatus status) {
 		if (status == BufferMapAsyncStatus::Success) {
-			float* output = (float*)mapBuffer.getMappedRange(0, bufferDesc.size);
+#ifdef WEBGPU_BACKEND_WGPU
+			const float* output = (const float*)mapBuffer.getMappedRange(0, bufferDesc.size);
+#else
+			const float* output = (const float*)wgpuBufferGetConstMappedRange(mapBuffer, 0, bufferDesc.size);
+#endif
 			for (int i = 0; i < input.size(); ++i) {
 				std::cout << "input " << input[i] << " became " << output[i] << std::endl;
 			}
