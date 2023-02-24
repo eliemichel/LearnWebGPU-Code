@@ -61,6 +61,9 @@ private:
 	void updateViewMatrix();
 	void updateDragInertia();
 
+	// The fonction used for introducing compute shaders
+	void computeStuff();
+
 	void initGui(); // called in onInit
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
 

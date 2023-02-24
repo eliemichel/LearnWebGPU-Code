@@ -1,0 +1,8 @@
+@group(0) @binding(0) var<storage,read> inputBuffer: array<f32,64>;
+@group(0) @binding(1) var<storage,write> outputBuffer: array<f32,64>;
+
+@compute @workgroup_size(64)
+fn computeStuff() {
+	// Compute stuff
+	outputBuffer[0] = 2.0 * inputBuffer[0];
+}

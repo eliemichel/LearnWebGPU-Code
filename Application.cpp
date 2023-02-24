@@ -351,6 +351,7 @@ bool Application::onInit() {
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
 	initGui();
+	computeStuff();
 
 	return true;
 }
@@ -597,4 +598,120 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
+}
+
+void Application::computeStuff() {
+	// Initialize a command encoder
+	Queue queue = m_device.getQueue();
+	CommandEncoderDescriptor encoderDesc = Default;
+	CommandEncoder encoder = m_device.createCommandEncoder(encoderDesc);
+
+	// Create input/output buffers
+	BufferDescriptor bufferDesc;
+	bufferDesc.mappedAtCreation = false;
+	bufferDesc.size = 32 * sizeof(float);
+	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopyDst;
+	Buffer inputBuffer = m_device.createBuffer(bufferDesc);
+	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopySrc;
+	Buffer outputBuffer = m_device.createBuffer(bufferDesc);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::MapRead;
+	Buffer mapBuffer = m_device.createBuffer(bufferDesc);
+
+	// Fill in input buffer
+	std::vector<float> input(32);
+	for (int i = 0; i < input.size(); ++i) {
+		input[i] = 0.1f * i;
+	}
+	queue.writeBuffer(inputBuffer, 0, input.data(), input.size() * sizeof(float));
+
+	// Create bind group layout
+	std::vector<BindGroupLayoutEntry> bindings(2, Default);
+	// Input buffer
+	bindings[0].binding = 0;
+	bindings[0].buffer.type = BufferBindingType::ReadOnlyStorage;
+	bindings[0].visibility = ShaderStage::Compute;
+	// Output buffer
+	bindings[1].binding = 1;
+	bindings[1].buffer.type = BufferBindingType::Storage;
+	bindings[1].visibility = ShaderStage::Compute;
+
+	BindGroupLayoutDescriptor bindGroupLayoutDesc;
+	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
+	bindGroupLayoutDesc.entries = bindings.data();
+	BindGroupLayout bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+
+	// Create compute pipeline layout
+	PipelineLayoutDescriptor pipelineLayoutDesc;
+	pipelineLayoutDesc.bindGroupLayoutCount = 1;
+	pipelineLayoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
+	PipelineLayout pipelineLayout = m_device.createPipelineLayout(pipelineLayoutDesc);
+
+	// Load compute shader
+	ShaderModule computeShaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/compute-shader.wsl", m_device);
+
+	// Create compute pipeline
+	ComputePipelineDescriptor computePipelineDesc;
+	computePipelineDesc.compute.constantCount = 0;
+	computePipelineDesc.compute.constants = nullptr;
+	computePipelineDesc.compute.entryPoint = "computeStuff";
+	computePipelineDesc.compute.module = computeShaderModule;
+	computePipelineDesc.layout = nullptr; // pipelineLayout;
+	ComputePipeline computePipeline = m_device.createComputePipeline(computePipelineDesc);
+
+	// Create compute bind group
+	std::vector<BindGroupEntry> entries(2, Default);
+	// Input buffer
+	entries[0].binding = 0;
+	entries[0].buffer = inputBuffer;
+	entries[0].offset = 0;
+	entries[0].size = bufferDesc.size;
+	// Output buffer
+	entries[1].binding = 1;
+	entries[1].buffer = outputBuffer;
+	entries[1].offset = 0;
+	entries[1].size = bufferDesc.size;
+
+	BindGroupDescriptor bindGroupDesc;
+	bindGroupDesc.layout = bindGroupLayout;
+	bindGroupDesc.entryCount = (uint32_t)entries.size();
+	bindGroupDesc.entries = (WGPUBindGroupEntry*)entries.data();
+	BindGroup bindGroup = m_device.createBindGroup(bindGroupDesc);
+
+	// Create compute pass
+	ComputePassDescriptor computePassDesc;
+	computePassDesc.timestampWriteCount = 0;
+	computePassDesc.timestampWrites = nullptr;
+	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
+
+	// Use compute pass
+	computePass.setPipeline(computePipeline);
+	computePass.setBindGroup(0, bindGroup, 0, nullptr);
+	computePass.dispatchWorkgroups(1, 0, 0);
+
+	// Finalize compute pass
+	computePass.end();
+
+	encoder.copyBufferToBuffer(outputBuffer, 0, mapBuffer, 0, bufferDesc.size);
+
+	// Encode and submit the GPU commands
+	CommandBuffer commands = encoder.finish(CommandBufferDescriptor{});
+	queue.submit(commands);
+
+	// Print output
+	bool done = false;
+	auto handle = mapBuffer.mapAsync(MapMode::Read, 0, bufferDesc.size, [&](BufferMapAsyncStatus status) {
+		if (status == BufferMapAsyncStatus::Success) {
+			float* output = (float*)mapBuffer.getMappedRange(0, bufferDesc.size);
+			for (int i = 0; i < input.size(); ++i) {
+				std::cout << "input " << input[i] << " became " << output[i] << std::endl;
+			}
+			mapBuffer.unmap();
+		}
+		done = true;
+	});
+
+	while (!done) {
+		// Do nothing, this checks for ongoing asynchronous operations and call their callbacks if needed
+		wgpuQueueSubmit(queue, 0, nullptr);
+	}
 }
