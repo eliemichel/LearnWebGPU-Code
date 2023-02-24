@@ -13,7 +13,7 @@
 
 // CHANGELOG
 // (minor and older changes stripped away, please see git history for details)
-//  2023-02-20: Adapter for LearnWebGPU tutorial series
+//  2023-02-20: Adapt to wgpu-native backend. Define WEBGPU_BACKEND_WGPU when using the wgpu-backend.
 //  2023-01-25: Revert automatic pipeline layout generation (see https://github.com/gpuweb/gpuweb/issues/2470)
 //  2022-11-24: Fixed validation error with default depth buffer settings.
 //  2022-11-10: Fixed rendering when a depth buffer is enabled. Added 'WGPUTextureFormat depth_format' parameter to ImGui_ImplWGPU_Init().
@@ -32,14 +32,18 @@
 #include <webgpu/webgpu.h>
 
 // These differences of implementation should vanish as soon as WebGPU gets in version 1.0 stable
-#if defined(WEBGPU_BACKEND_WGPU)
+#ifdef WEBGPU_BACKEND_WGPU
 #include <wgpu.h>
-#define WEBGPU_NONSTD_RELEASE(type, var) wgpu ## type ## Drop(var);
-#elif defined(WEBGPU_BACKEND_DAWN)
-#define WEBGPU_NONSTD_RELEASE(type, var) wgpu ## type ## Release(var);
-#else // assuming WEBGPU_BACKEND_EMSCRIPTEN
-#define WEBGPU_NONSTD_RELEASE(type, var) wgpu ## type ## Release(var);
-#endif
+#define wgpuBindGroupLayoutRelease wgpuBindGroupLayoutDrop
+#define wgpuBindGroupRelease wgpuBindGroupDrop
+#define wgpuRenderPipelineRelease wgpuRenderPipelineDrop
+#define wgpuSamplerRelease wgpuSamplerDrop
+#define wgpuShaderModuleRelease wgpuShaderModuleDrop
+#define wgpuTextureViewRelease wgpuTextureViewDrop
+#define wgpuTextureRelease wgpuTextureDrop
+#define wgpuBufferRelease wgpuBufferDrop
+#define wgpuQueueRelease(...)
+#endif // WEBGPU_BACKEND_WGPU
 
 // Dear ImGui prototypes from imgui_internal.h
 extern ImGuiID ImHashData(const void* data_p, size_t data_size, ImU32 seed = 0);
@@ -89,15 +93,15 @@ struct Uniforms
 
 static const char __shader_vert_wgsl[] = R"(
 struct VertexInput {
-	@location(0) position: vec2<f32>,
-	@location(1) uv: vec2<f32>,
-	@location(2) color: vec4<f32>,
+    @location(0) position: vec2<f32>,
+    @location(1) uv: vec2<f32>,
+    @location(2) color: vec4<f32>,
 };
 
 struct VertexOutput {
-	@builtin(position) position: vec4<f32>,
-	@location(0) color: vec4<f32>,
-	@location(1) uv: vec2<f32>,
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec4<f32>,
+    @location(1) uv: vec2<f32>,
 };
 
 @group(0) @binding(0) var<uniform> mvp: mat4x4<f32>;
@@ -114,9 +118,9 @@ fn main(in: VertexInput) -> VertexOutput {
 
 static const char __shader_frag_wgsl[] = R"(
 struct VertexOutput {
-	@builtin(position) position: vec4<f32>,
-	@location(0) color: vec4<f32>,
-	@location(1) uv: vec2<f32>,
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec4<f32>,
+    @location(1) uv: vec2<f32>,
 };
 
 @group(0) @binding(1) var s: sampler;
@@ -126,8 +130,8 @@ struct VertexOutput {
 @fragment
 fn main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = in.color * textureSample(t, s, in.uv);
-	let corrected_color = pow(color.rgb, vec3<f32>(gamma));
-	return vec4<f32>(corrected_color, color.a);
+    let corrected_color = pow(color.rgb, vec3<f32>(gamma));
+    return vec4<f32>(corrected_color, color.a);
 }
 )";
 
@@ -146,49 +150,49 @@ static void SafeRelease(ImDrawVert*& res)
 static void SafeRelease(WGPUBindGroupLayout& res)
 {
     if (res)
-        WEBGPU_NONSTD_RELEASE(BindGroupLayout, res);
+        wgpuBindGroupLayoutRelease(res);
     res = nullptr;
 }
 static void SafeRelease(WGPUBindGroup& res)
 {
     if (res)
-        WEBGPU_NONSTD_RELEASE(BindGroup, res);
+        wgpuBindGroupRelease(res);
     res = nullptr;
 }
 static void SafeRelease(WGPUBuffer& res)
 {
     if (res)
-        wgpuBufferDestroy(res);
+        wgpuBufferRelease(res);
     res = nullptr;
 }
 static void SafeRelease(WGPURenderPipeline& res)
 {
     if (res)
-        WEBGPU_NONSTD_RELEASE(RenderPipeline, res);
+        wgpuRenderPipelineRelease(res);
     res = nullptr;
 }
 static void SafeRelease(WGPUSampler& res)
 {
     if (res)
-        WEBGPU_NONSTD_RELEASE(Sampler, res);
+        wgpuSamplerRelease(res);
     res = nullptr;
 }
 static void SafeRelease(WGPUShaderModule& res)
 {
     if (res)
-        WEBGPU_NONSTD_RELEASE(ShaderModule, res);
+        wgpuShaderModuleRelease(res);
     res = nullptr;
 }
 static void SafeRelease(WGPUTextureView& res)
 {
     if (res)
-        WEBGPU_NONSTD_RELEASE(TextureView, res);
+        wgpuTextureViewRelease(res);
     res = nullptr;
 }
 static void SafeRelease(WGPUTexture& res)
 {
     if (res)
-        wgpuTextureDestroy(res);
+        wgpuTextureRelease(res);
     res = nullptr;
 }
 
@@ -323,6 +327,7 @@ void ImGui_ImplWGPU_RenderDrawData(ImDrawData* draw_data, WGPURenderPassEncoder 
         if (fr->VertexBuffer)
         {
             wgpuBufferDestroy(fr->VertexBuffer);
+            wgpuBufferRelease(fr->VertexBuffer);
         }
         SafeRelease(fr->VertexBufferHost);
         fr->VertexBufferSize = draw_data->TotalVtxCount + 5000;
@@ -346,7 +351,7 @@ void ImGui_ImplWGPU_RenderDrawData(ImDrawData* draw_data, WGPURenderPassEncoder 
         if (fr->IndexBuffer)
         {
             wgpuBufferDestroy(fr->IndexBuffer);
-            WEBGPU_NONSTD_RELEASE(Buffer, fr->IndexBuffer);
+            wgpuBufferRelease(fr->IndexBuffer);
         }
         SafeRelease(fr->IndexBufferHost);
         fr->IndexBufferSize = draw_data->TotalIdxCount + 10000;
@@ -723,9 +728,7 @@ void ImGui_ImplWGPU_Shutdown()
     ImGui_ImplWGPU_InvalidateDeviceObjects();
     delete[] g_pFrameResources;
     g_pFrameResources = nullptr;
-#if !defined(WEBGPU_BACKEND_WGPU)
-    WEBGPU_NONSTD_RELEASE(Queue, g_defaultQueue);
-#endif
+    wgpuQueueRelease(g_defaultQueue);
     g_wgpuDevice = nullptr;
     g_numFramesInFlight = 0;
     g_frameIndex = UINT_MAX;
