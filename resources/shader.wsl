@@ -29,7 +29,7 @@ struct MyUniforms {
 @group(0) @binding(1) var gradientTexture: texture_2d<f32>;
 @group(0) @binding(2) var textureSampler: sampler;
 
-let pi = 3.14159266;
+const pi = 3.14159266;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
