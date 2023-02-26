@@ -47,6 +47,10 @@
 #include <webgpu/wgpu.h> // wgpuTextureViewDrop
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/html5_webgpu.h>
+#endif
+
 #include <iostream>
 #include <cassert>
 #include <filesystem>
@@ -84,13 +88,6 @@ void onWindowScroll(GLFWwindow* window, double xoffset, double yoffset) {
 }
 
 bool Application::onInit() {
-	// Create instance
-	m_instance = createInstance(InstanceDescriptor{});
-	if (!m_instance) {
-		std::cerr << "Could not initialize WebGPU!" << std::endl;
-		return false;
-	}
-
 	if (!glfwInit()) {
 		std::cerr << "Could not initialize GLFW!" << std::endl;
 		return false;
@@ -105,6 +102,26 @@ bool Application::onInit() {
 		return false;
 	}
 
+#ifdef __EMSCRIPTEN__
+	m_device = emscripten_webgpu_get_device();
+
+	// emscripten-specific extension not supported by webgpu.cpp
+	WGPUSurfaceDescriptorFromCanvasHTMLSelector canvDesc = {};
+	canvDesc.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
+	canvDesc.selector = "canvas";
+	
+	WGPUSurfaceDescriptor surfDesc = {};
+	surfDesc.nextInChain = reinterpret_cast<WGPUChainedStruct*>(&canvDesc);
+	
+	m_surface = wgpuInstanceCreateSurface(nullptr, &surfDesc);
+#else // __EMSCRIPTEN__
+	// Create instance
+	m_instance = createInstance(InstanceDescriptor{});
+	if (!m_instance) {
+		std::cerr << "Could not initialize WebGPU!" << std::endl;
+		return false;
+	}
+
 	// Add window callbacks
 	glfwSetWindowUserPointer(m_window, this);
 	glfwSetFramebufferSizeCallback(m_window, onWindowResize);
@@ -114,11 +131,8 @@ bool Application::onInit() {
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
-#ifdef __EMSCRIPTEN__
-	// TODO
-#else
 	m_surface = glfwGetWGPUSurface(m_instance, m_window);
-#endif
+
 	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = m_surface;
 	Adapter adapter = m_instance.requestAdapter(adapterOpts);
@@ -142,6 +156,7 @@ bool Application::onInit() {
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << m_device << std::endl;
+#endif // __EMSCRIPTEN__
 
 	// Add an error callback for more debug info
 	m_uncapturedErrorCallback = m_device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
@@ -153,10 +168,10 @@ bool Application::onInit() {
 	Queue queue = m_device.getQueue();
 
 	// Create swapchain
-#if defined(WEBGPU_BACKEND_DAWN)
-	m_swapChainFormat = WGPUTextureFormat_BGRA8Unorm;
-#else
+#if defined(WEBGPU_BACKEND_WGPU)
 	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#else
+	m_swapChainFormat = WGPUTextureFormat_BGRA8Unorm;
 #endif
 	buildSwapChain();
 

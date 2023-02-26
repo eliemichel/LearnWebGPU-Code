@@ -26,13 +26,32 @@
 
 #include "Application.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/html5.h>
+#endif
+
 int main(int, char**) {
 	Application app;
 	app.onInit();
 
+#ifdef __EMSCRIPTEN__
+
+    emscripten_request_animation_frame_loop(
+        [](double /* time */, void *userData) -> EM_BOOL {
+            Application& app = *reinterpret_cast<Application*>(userData);
+            app.onFrame();
+            return EM_TRUE;
+        },
+        (void*)&app
+    );
+
+#else // __EMSCRIPTEN__
+
 	while (app.isRunning()) {
 		app.onFrame();
 	}
+
+#endif // __EMSCRIPTEN__
 
 	app.onFinish();
 	return 0;

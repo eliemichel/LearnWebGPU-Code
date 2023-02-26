@@ -139,7 +139,25 @@
           if (text) console.error('[post-exception status] ' + text);
         };
       };
+
+      (async () => {
+        // Custom for WebGPU
+        if (!navigator.gpu) {
+          console.error("Sorry, WebGPU is not suported by your browser.");
+          return;
+        } else {
+          const adapter = await navigator.gpu.requestAdapter();
+          const device = await adapter.requestDevice();
+          Module.preinitializedWebGPUDevice = device;
+        
+          const jsTemplate = document.getElementById("main-script");
+          const js = jsTemplate.content.cloneNode(true);
+          document.body.appendChild(js);
+        }
+      })();
     </script>
-    {{{ SCRIPT }}}
+    <template id="main-script">
+      {{{ SCRIPT }}}
+    </template>
   </body>
 </html>

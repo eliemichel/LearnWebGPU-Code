@@ -25,6 +25,7 @@ add_executable(App
 	ResourceManager.cpp
 	implementations.cpp
 	main.cpp
+	#main_test.cpp
 )
 
 if(DEV_MODE)
@@ -54,7 +55,9 @@ if (EMSCRIPTEN)
 	target_link_options(App PRIVATE
 		-sUSE_GLFW=3
 		-sUSE_WEBGPU
+		-sALLOW_MEMORY_GROWTH
 		--shell-file "${CMAKE_CURRENT_SOURCE_DIR}/${SHELL_FILE}"
+		--preload-file "${CMAKE_CURRENT_SOURCE_DIR}/resources"
 	)
 
 	# Make sure to re-link when the shell file changes
