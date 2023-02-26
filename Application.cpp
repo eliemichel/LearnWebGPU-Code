@@ -384,7 +384,6 @@ void Application::buildDepthBuffer() {
 }
 
 void Application::onFrame() {
-
 	glfwPollEvents();
 	Queue queue = m_device.getQueue();
 
