@@ -83,8 +83,8 @@ private:
 		mat4x4 viewMatrix;
 		mat4x4 modelMatrix;
 		vec4 color;
+		vec3 cameraWorldPosition;
 		float time;
-		float _pad[3];
 	};
 	static_assert(sizeof(MyUniforms) % 16 == 0);
 
@@ -116,6 +116,10 @@ private:
 	struct LightingUniforms {
 		std::array<vec4, 2> directions;
 		std::array<vec4, 2> colors;
+		float hardness;
+		float kd;
+		float ks;
+		float _pad;
 	};
 	static_assert(sizeof(LightingUniforms) % 16 == 0);
 	wgpu::Buffer m_lightingUniformBuffer = nullptr;

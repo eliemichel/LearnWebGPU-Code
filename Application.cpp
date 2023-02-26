@@ -384,6 +384,7 @@ void Application::buildDepthBuffer() {
 }
 
 void Application::onFrame() {
+
 	glfwPollEvents();
 	Queue queue = m_device.getQueue();
 
@@ -524,6 +525,9 @@ void Application::updateViewMatrix() {
 	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_cameraState.zoom);
 	m_uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
 	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
+
+	m_uniforms.cameraWorldPosition = position;
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(MyUniforms::cameraWorldPosition));
 }
 
 void Application::updateDragInertia() {
@@ -571,6 +575,9 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	changed = ImGui::DragDirection("Direction #0", m_lightingUniforms.directions[0]) || changed;
 	changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1])) || changed;
 	changed = ImGui::DragDirection("Direction #1", m_lightingUniforms.directions[1]) || changed;
+	changed = ImGui::SliderFloat("Hardness", &m_lightingUniforms.hardness, 0.01f, 128.0f) || changed;
+	changed = ImGui::SliderFloat("K Diffuse", &m_lightingUniforms.kd, 0.0f, 2.0f) || changed;
+	changed = ImGui::SliderFloat("K Specular", &m_lightingUniforms.ks, 0.0f, 2.0f) || changed;
 	ImGui::End();
 	m_lightingUniformsChanged = changed;
 
@@ -624,6 +631,9 @@ void Application::initLighting() {
 		vec4{1.0, 0.9, 0.6, 1.0},
 		vec4{0.6, 0.9, 1.0, 1.0}
 	};
+	m_lightingUniforms.hardness = 16.0f;
+	m_lightingUniforms.kd = 1.0f;
+	m_lightingUniforms.ks = 0.5f;
 
 	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 

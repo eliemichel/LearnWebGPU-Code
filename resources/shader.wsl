@@ -10,6 +10,7 @@ struct VertexOutput {
 	@location(0) color: vec3<f32>,
 	@location(1) normal: vec3<f32>,
 	@location(2) uv: vec2<f32>,
+	@location(3) viewDirection: vec3<f32>,
 }
 
 /**
@@ -20,6 +21,7 @@ struct MyUniforms {
 	viewMatrix: mat4x4<f32>,
 	modelMatrix: mat4x4<f32>,
 	color: vec4<f32>,
+	cameraWorldPosition: vec3<f32>,
 	time: f32,
 }
 
@@ -29,6 +31,9 @@ struct MyUniforms {
 struct LightingUniforms {
 	directions: array<vec4<f32>, 2>,
 	colors: array<vec4<f32>, 2>,
+	hardness: f32,
+	kd: f32,
+	ks: f32,
 }
 
 // Instead of the simple uTime variable, our uniform variable is a struct
@@ -41,29 +46,42 @@ struct LightingUniforms {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
+	let worldPosition = uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
+	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * worldPosition;
 	out.color = in.color;
 	out.normal = (uMyUniforms.modelMatrix * vec4<f32>(in.normal, 0.0)).xyz;
 	out.uv = in.uv;
+	out.viewDirection = uMyUniforms.cameraWorldPosition - worldPosition.xyz;
 	return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// Compute shading
-	let normal = normalize(in.normal);
-	var shading = vec3<f32>(0.0);
+	let N = normalize(in.normal);
+	let V = normalize(in.viewDirection);
+	var diffuse = vec3<f32>(0.0);
+	var specular = vec3<f32>(0.0);
 	for (var i: i32 = 0; i < 2; i++) {
-		let direction = normalize(uLighting.directions[i].xyz);
+		let L = normalize(uLighting.directions[i].xyz);
+		let R = -reflect(L, N); // equivalent to 2.0 * dot(N, L) * N - L
 		let color = uLighting.colors[i].rgb;
-		shading += max(0.0, dot(direction, normal)) * color;
+		let RoV = max(0.0, dot(R, V));
+		let LoN = max(0.0, dot(L, N));
+
+		diffuse += LoN * color;
+
+		// You may or may not multiply by the light color here, the Phong model
+		// even allows to have a different color for diffuse and specular
+		// contributions.
+		specular += pow(RoV, uLighting.hardness);
 	}
 	
 	// Sample texture
 	let baseColor = textureSample(baseColorTexture, textureSampler, in.uv).rgb;
 
 	// Combine texture and lighting
-	let color = baseColor * shading;
+	let color = baseColor * uLighting.kd * diffuse + uLighting.ks * specular;
 
 	// Gamma-correction
 	let corrected_color = pow(color, vec3<f32>(2.2));
