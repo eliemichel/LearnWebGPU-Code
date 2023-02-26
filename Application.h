@@ -33,6 +33,8 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
+
 class Application {
 public:
 	// A function called only once at the beginning. Returns false is init failed.
@@ -64,8 +66,12 @@ private:
 	void initGui(); // called in onInit
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
 
+	void initLighting();
+	void updateLighting();
+
 private:
 	using vec2 = glm::vec2;
+	using vec3 = glm::vec3;
 	using vec4 = glm::vec4;
 	using mat4x4 = glm::mat4x4;
 
@@ -99,6 +105,19 @@ private:
 	std::vector<ResourceManager::VertexAttributes> m_vertexData;
 	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
+
+	std::vector<wgpu::BindGroupLayoutEntry> m_bindingLayoutEntries;
+	std::vector<wgpu::BindGroupEntry> m_bindings;
+
+	// Lighting
+	struct LightingUniforms {
+		std::array<vec4, 2> directions;
+		std::array<vec4, 2> colors;
+	};
+	static_assert(sizeof(LightingUniforms) % 16 == 0);
+	wgpu::Buffer m_lightingUniformBuffer = nullptr;
+	LightingUniforms m_lightingUniforms;
+	bool m_lightingUniformsChanged = false;
 
 	struct CameraState {
 		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x
