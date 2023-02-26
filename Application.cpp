@@ -34,6 +34,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#include <glm/gtx/polar_coordinates.hpp>
 
 #include <imgui.h>
 #include <backends/imgui_impl_wgpu.h>
@@ -564,6 +565,15 @@ void Application::initGui() {
 	ImGui_ImplWGPU_Init(m_device, 3, m_swapChainFormat, m_depthTextureFormat);
 }
 
+namespace ImGui {
+bool DragDirection(const char *label, vec4& direction) {
+	vec2 angles = glm::degrees(glm::polar(vec3(direction)));
+	bool changed = ImGui::DragFloat2(label, glm::value_ptr(angles));
+	direction = vec4(glm::euclidean(glm::radians(angles)), direction.w);
+	return changed;
+}
+} // namespace ImGui
+
 void Application::updateGui(RenderPassEncoder renderPass) {
 	// Start the Dear ImGui frame
 	ImGui_ImplWGPU_NewFrame();
@@ -573,9 +583,9 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	bool changed = false;
 	ImGui::Begin("Lighting");
 	changed = ImGui::ColorEdit3("Color #0", glm::value_ptr(m_lightingUniforms.colors[0])) || changed;
-	changed = ImGui::DragFloat3("Direction #0", glm::value_ptr(m_lightingUniforms.directions[0])) || changed;
+	changed = ImGui::DragDirection("Direction #0", m_lightingUniforms.directions[0]) || changed;
 	changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1])) || changed;
-	changed = ImGui::DragFloat3("Direction #1", glm::value_ptr(m_lightingUniforms.directions[1])) || changed;
+	changed = ImGui::DragDirection("Direction #1", m_lightingUniforms.directions[1]) || changed;
 	ImGui::End();
 	m_lightingUniformsChanged = changed;
 
