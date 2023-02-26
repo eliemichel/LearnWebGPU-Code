@@ -188,14 +188,6 @@ bool Application::onInit() {
 
 	buildDepthBuffer();
 
-	// Create a texture
-	TextureView textureView = nullptr;
-	m_texture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", m_device, &textureView);
-	if (!m_texture) {
-		std::cerr << "Could not load texture!" << std::endl;
-		return 1;
-	}
-
 	// Create a sampler
 	SamplerDescriptor samplerDesc;
 	samplerDesc.addressModeU = AddressMode::Repeat;
@@ -211,7 +203,7 @@ bool Application::onInit() {
 	Sampler sampler = m_device.createSampler(samplerDesc);
 
 	// Create binding layout
-	m_bindingLayoutEntries.resize(3, Default);
+	m_bindingLayoutEntries.resize(2, Default);
 
 	BindGroupLayoutEntry& bindingLayout = m_bindingLayoutEntries[0];
 	bindingLayout.binding = 0;
@@ -219,20 +211,13 @@ bool Application::onInit() {
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
 	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
-	BindGroupLayoutEntry& textureBindingLayout = m_bindingLayoutEntries[1];
-	textureBindingLayout.binding = 1;
-	textureBindingLayout.visibility = ShaderStage::Fragment;
-	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
-	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
-
-	// The new binding layout, for the sampler
-	BindGroupLayoutEntry& samplerBindingLayout = m_bindingLayoutEntries[2];
-	samplerBindingLayout.binding = 2;
+	BindGroupLayoutEntry& samplerBindingLayout = m_bindingLayoutEntries[1];
+	samplerBindingLayout.binding = 1;
 	samplerBindingLayout.visibility = ShaderStage::Fragment;
 	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
 
 	// Create bindings
-	m_bindings.resize(3);
+	m_bindings.resize(2);
 
 	m_bindings[0].binding = 0;
 	m_bindings[0].buffer = m_uniformBuffer;
@@ -240,11 +225,9 @@ bool Application::onInit() {
 	m_bindings[0].size = sizeof(MyUniforms);
 
 	m_bindings[1].binding = 1;
-	m_bindings[1].textureView = textureView;
+	m_bindings[1].sampler = sampler;
 
-	m_bindings[2].binding = 2;
-	m_bindings[2].sampler = sampler;
-
+	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
 	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
@@ -467,7 +450,9 @@ void Application::onFrame() {
 }
 
 void Application::onFinish() {
-	m_texture.destroy();
+	for (auto texture : m_textures) {
+		texture.destroy();
+	}
 	m_depthTexture.destroy();
 
 	glfwDestroyWindow(m_window);
@@ -591,6 +576,33 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
+}
+
+bool Application::initTexture(const std::filesystem::path &path) {
+	// Create a texture
+	TextureView textureView = nullptr;
+	Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
+	if (!texture) {
+		std::cerr << "Could not load texture!" << std::endl;
+		return false;
+	}
+	m_textures.push_back(texture);
+
+	// Setup binding
+	uint32_t bindingIndex = (uint32_t)m_bindingLayoutEntries.size();
+	BindGroupLayoutEntry bindingLayout = Default;
+	bindingLayout.binding = bindingIndex;
+	bindingLayout.visibility = ShaderStage::Fragment;
+	bindingLayout.texture.sampleType = TextureSampleType::Float;
+	bindingLayout.texture.viewDimension = TextureViewDimension::_2D;
+	m_bindingLayoutEntries.push_back(bindingLayout);
+
+	BindGroupEntry binding = Default;
+	binding.binding = bindingIndex;
+	binding.textureView = textureView;
+	m_bindings.push_back(binding);
+
+	return true;
 }
 
 void Application::initLighting() {

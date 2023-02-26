@@ -34,6 +34,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <filesystem>
 
 class Application {
 public:
@@ -65,6 +66,8 @@ private:
 
 	void initGui(); // called in onInit
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
+
+	bool initTexture(const std::filesystem::path& path);
 
 	void initLighting();
 	void updateLighting();
@@ -98,7 +101,7 @@ private:
 	wgpu::RenderPipeline m_pipeline = nullptr;
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
-	wgpu::Texture m_texture = nullptr;
+	std::vector<wgpu::Texture> m_textures;
 	wgpu::Texture m_depthTexture = nullptr;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
 	MyUniforms m_uniforms;
