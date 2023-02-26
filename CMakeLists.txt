@@ -11,9 +11,11 @@ include(utils.cmake)
 # when distributing it.
 option(DEV_MODE "Set up development helper settings" ON)
 
-add_subdirectory(glfw)
 add_subdirectory(webgpu)
-add_subdirectory(glfw3webgpu)
+if (NOT EMSCRIPTEN)
+	add_subdirectory(glfw)
+	add_subdirectory(glfw3webgpu)
+endif()
 add_subdirectory(imgui)
 
 add_executable(App
@@ -41,7 +43,29 @@ else()
 endif()
 
 target_include_directories(App PRIVATE .)
-target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu imgui)
+target_link_libraries(App PRIVATE glfw webgpu imgui)
+if (NOT EMSCRIPTEN)
+	target_link_libraries(App PRIVATE glfw3webgpu)
+endif()
+
+if (EMSCRIPTEN)
+	set(SHELL_FILE shell.html)
+
+	target_link_options(App PRIVATE
+		-sUSE_GLFW=3
+		-sUSE_WEBGPU
+		--shell-file "${CMAKE_CURRENT_SOURCE_DIR}/${SHELL_FILE}"
+	)
+
+	# Make sure to re-link when the shell file changes
+	set_property(
+		TARGET App
+		PROPERTY LINK_DEPENDS
+		"${CMAKE_CURRENT_SOURCE_DIR}/${SHELL_FILE}"
+	)
+
+	set_target_properties(App PROPERTIES SUFFIX ".html")
+endif()
 
 if(MSVC)
 	target_compile_options(App PRIVATE /wd4201)

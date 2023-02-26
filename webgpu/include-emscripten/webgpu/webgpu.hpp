@@ -74,7 +74,6 @@ public: \
 	Type(const W &other) : W(other) { nextInChain = nullptr; } \
 	Type(const DefaultFlag &) : W() { setDefault(); } \
 	Type& operator=(const DefaultFlag &) { setDefault(); return *this; } \
-	operator W&() { return *this; } \
 	friend auto operator<<(std::ostream &stream, const S&) -> std::ostream & { \
 		return stream << "<wgpu::" << #Type << ">"; \
 	} \
@@ -126,12 +125,6 @@ ENUM(AddressMode)
 	ENUM_ENTRY(ClampToEdge, 0x00000002)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
-ENUM(AlphaMode)
-	ENUM_ENTRY(Premultiplied, 0x00000000)
-	ENUM_ENTRY(Unpremultiplied, 0x00000001)
-	ENUM_ENTRY(Opaque, 0x00000002)
-	ENUM_ENTRY(Force32, 0x7FFFFFFF)
-END
 ENUM(BackendType)
 	ENUM_ENTRY(Null, 0x00000000)
 	ENUM_ENTRY(WebGPU, 0x00000001)
@@ -181,12 +174,6 @@ ENUM(BufferMapAsyncStatus)
 	ENUM_ENTRY(DeviceLost, 0x00000003)
 	ENUM_ENTRY(DestroyedBeforeCallback, 0x00000004)
 	ENUM_ENTRY(UnmappedBeforeCallback, 0x00000005)
-	ENUM_ENTRY(Force32, 0x7FFFFFFF)
-END
-ENUM(BufferMapState)
-	ENUM_ENTRY(Unmapped, 0x00000000)
-	ENUM_ENTRY(Pending, 0x00000001)
-	ENUM_ENTRY(Mapped, 0x00000002)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(CompareFunction)
@@ -241,23 +228,14 @@ END
 ENUM(ErrorFilter)
 	ENUM_ENTRY(Validation, 0x00000000)
 	ENUM_ENTRY(OutOfMemory, 0x00000001)
-	ENUM_ENTRY(Internal, 0x00000002)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(ErrorType)
 	ENUM_ENTRY(NoError, 0x00000000)
 	ENUM_ENTRY(Validation, 0x00000001)
 	ENUM_ENTRY(OutOfMemory, 0x00000002)
-	ENUM_ENTRY(Internal, 0x00000003)
-	ENUM_ENTRY(Unknown, 0x00000004)
-	ENUM_ENTRY(DeviceLost, 0x00000005)
-	ENUM_ENTRY(Force32, 0x7FFFFFFF)
-END
-ENUM(ExternalTextureRotation)
-	ENUM_ENTRY(Rotate0Degrees, 0x00000000)
-	ENUM_ENTRY(Rotate90Degrees, 0x00000001)
-	ENUM_ENTRY(Rotate180Degrees, 0x00000002)
-	ENUM_ENTRY(Rotate270Degrees, 0x00000003)
+	ENUM_ENTRY(Unknown, 0x00000003)
+	ENUM_ENTRY(DeviceLost, 0x00000004)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(FeatureName)
@@ -270,14 +248,6 @@ ENUM(FeatureName)
 	ENUM_ENTRY(TextureCompressionETC2, 0x00000006)
 	ENUM_ENTRY(TextureCompressionASTC, 0x00000007)
 	ENUM_ENTRY(IndirectFirstInstance, 0x00000008)
-	ENUM_ENTRY(ShaderF16, 0x00000009)
-	ENUM_ENTRY(RG11B10UfloatRenderable, 0x0000000A)
-	ENUM_ENTRY(DawnShaderFloat16, 0x000003E9)
-	ENUM_ENTRY(DawnInternalUsages, 0x000003EA)
-	ENUM_ENTRY(DawnMultiPlanarFormats, 0x000003EB)
-	ENUM_ENTRY(DawnNative, 0x000003EC)
-	ENUM_ENTRY(ChromiumExperimentalDp4a, 0x000003ED)
-	ENUM_ENTRY(TimestampQueryInsidePasses, 0x000003EE)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(FilterMode)
@@ -300,13 +270,6 @@ ENUM(LoadOp)
 	ENUM_ENTRY(Undefined, 0x00000000)
 	ENUM_ENTRY(Clear, 0x00000001)
 	ENUM_ENTRY(Load, 0x00000002)
-	ENUM_ENTRY(Force32, 0x7FFFFFFF)
-END
-ENUM(LoggingType)
-	ENUM_ENTRY(Verbose, 0x00000000)
-	ENUM_ENTRY(Info, 0x00000001)
-	ENUM_ENTRY(Warning, 0x00000002)
-	ENUM_ENTRY(Error, 0x00000003)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(PipelineStatisticName)
@@ -370,27 +333,11 @@ ENUM(RequestDeviceStatus)
 END
 ENUM(SType)
 	ENUM_ENTRY(Invalid, 0x00000000)
-	ENUM_ENTRY(SurfaceDescriptorFromMetalLayer, 0x00000001)
-	ENUM_ENTRY(SurfaceDescriptorFromWindowsHWND, 0x00000002)
-	ENUM_ENTRY(SurfaceDescriptorFromXlibWindow, 0x00000003)
 	ENUM_ENTRY(SurfaceDescriptorFromCanvasHTMLSelector, 0x00000004)
 	ENUM_ENTRY(ShaderModuleSPIRVDescriptor, 0x00000005)
 	ENUM_ENTRY(ShaderModuleWGSLDescriptor, 0x00000006)
 	ENUM_ENTRY(PrimitiveDepthClipControl, 0x00000007)
-	ENUM_ENTRY(SurfaceDescriptorFromWaylandSurface, 0x00000008)
-	ENUM_ENTRY(SurfaceDescriptorFromAndroidNativeWindow, 0x00000009)
-	ENUM_ENTRY(SurfaceDescriptorFromWindowsCoreWindow, 0x0000000B)
-	ENUM_ENTRY(ExternalTextureBindingEntry, 0x0000000C)
-	ENUM_ENTRY(ExternalTextureBindingLayout, 0x0000000D)
-	ENUM_ENTRY(SurfaceDescriptorFromWindowsSwapChainPanel, 0x0000000E)
 	ENUM_ENTRY(RenderPassDescriptorMaxDrawCount, 0x0000000F)
-	ENUM_ENTRY(DawnTextureInternalUsageDescriptor, 0x000003E8)
-	ENUM_ENTRY(DawnTogglesDeviceDescriptor, 0x000003EA)
-	ENUM_ENTRY(DawnEncoderInternalUsageDescriptor, 0x000003EB)
-	ENUM_ENTRY(DawnInstanceDescriptor, 0x000003EC)
-	ENUM_ENTRY(DawnCacheDeviceDescriptor, 0x000003ED)
-	ENUM_ENTRY(DawnAdapterPropertiesPowerPreference, 0x000003EE)
-	ENUM_ENTRY(DawnBufferDescriptorErrorInfoFromWireClient, 0x000003EF)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(SamplerBindingType)
@@ -426,8 +373,6 @@ ENUM(TextureAspect)
 	ENUM_ENTRY(All, 0x00000000)
 	ENUM_ENTRY(StencilOnly, 0x00000001)
 	ENUM_ENTRY(DepthOnly, 0x00000002)
-	ENUM_ENTRY(Plane0Only, 0x00000003)
-	ENUM_ENTRY(Plane1Only, 0x00000004)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(TextureComponentType)
@@ -539,7 +484,6 @@ ENUM(TextureFormat)
 	ENUM_ENTRY(ASTC12x10UnormSrgb, 0x0000005C)
 	ENUM_ENTRY(ASTC12x12Unorm, 0x0000005D)
 	ENUM_ENTRY(ASTC12x12UnormSrgb, 0x0000005E)
-	ENUM_ENTRY(R8BG8Biplanar420Unorm, 0x0000005F)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(TextureSampleType)
@@ -652,7 +596,6 @@ ENUM(TextureUsage)
 	ENUM_ENTRY(TextureBinding, 0x00000004)
 	ENUM_ENTRY(StorageBinding, 0x00000008)
 	ENUM_ENTRY(RenderAttachment, 0x00000010)
-	ENUM_ENTRY(Present, 0x00000020)
 	ENUM_ENTRY(Force32, 0x7FFFFFFF)
 END
 ENUM(TextureUsageFlags)
@@ -680,56 +623,12 @@ STRUCT(ComputePassTimestampWrite)
 	void setDefault();
 END
 
-STRUCT(DawnAdapterPropertiesPowerPreference)
-	void setDefault();
-END
-
-STRUCT(DawnBufferDescriptorErrorInfoFromWireClient)
-	void setDefault();
-END
-
-STRUCT(DawnCacheDeviceDescriptor)
-	void setDefault();
-END
-
-STRUCT(DawnEncoderInternalUsageDescriptor)
-	void setDefault();
-END
-
-STRUCT(DawnInstanceDescriptor)
-	void setDefault();
-END
-
-STRUCT(DawnTextureInternalUsageDescriptor)
-	void setDefault();
-END
-
-STRUCT(DawnTogglesDeviceDescriptor)
-	void setDefault();
-END
-
-STRUCT(Extent2D)
-	void setDefault();
-END
-
 STRUCT(Extent3D)
 	Extent3D(uint32_t width, uint32_t height, uint32_t depthOrArrayLayers) : WGPUExtent3D{ width, height, depthOrArrayLayers } {}
 	void setDefault();
 END
 
-STRUCT(ExternalTextureBindingEntry)
-	void setDefault();
-END
-
-STRUCT(ExternalTextureBindingLayout)
-	void setDefault();
-END
-
 STRUCT(Limits)
-	void setDefault();
-END
-
-STRUCT(Origin2D)
 	void setDefault();
 END
 
@@ -766,35 +665,7 @@ STRUCT(StencilFaceState)
 	void setDefault();
 END
 
-STRUCT(SurfaceDescriptorFromAndroidNativeWindow)
-	void setDefault();
-END
-
 STRUCT(SurfaceDescriptorFromCanvasHTMLSelector)
-	void setDefault();
-END
-
-STRUCT(SurfaceDescriptorFromMetalLayer)
-	void setDefault();
-END
-
-STRUCT(SurfaceDescriptorFromWaylandSurface)
-	void setDefault();
-END
-
-STRUCT(SurfaceDescriptorFromWindowsCoreWindow)
-	void setDefault();
-END
-
-STRUCT(SurfaceDescriptorFromWindowsHWND)
-	void setDefault();
-END
-
-STRUCT(SurfaceDescriptorFromWindowsSwapChainPanel)
-	void setDefault();
-END
-
-STRUCT(SurfaceDescriptorFromXlibWindow)
 	void setDefault();
 END
 
@@ -845,10 +716,6 @@ DESCRIPTOR(CompilationMessage)
 END
 
 DESCRIPTOR(ConstantEntry)
-	void setDefault();
-END
-
-DESCRIPTOR(CopyTextureForBrowserOptions)
 	void setDefault();
 END
 
@@ -944,15 +811,7 @@ DESCRIPTOR(DepthStencilState)
 	void setDefault();
 END
 
-DESCRIPTOR(ExternalTextureDescriptor)
-	void setDefault();
-END
-
 DESCRIPTOR(ImageCopyBuffer)
-	void setDefault();
-END
-
-DESCRIPTOR(ImageCopyExternalTexture)
 	void setDefault();
 END
 
@@ -1019,7 +878,6 @@ class CommandEncoder;
 class ComputePassEncoder;
 class ComputePipeline;
 class Device;
-class ExternalTexture;
 class Instance;
 class PipelineLayout;
 class QuerySet;
@@ -1042,17 +900,14 @@ using CreateComputePipelineAsyncCallback = std::function<void(CreatePipelineAsyn
 using CreateRenderPipelineAsyncCallback = std::function<void(CreatePipelineAsyncStatus status, RenderPipeline pipeline, char const * message)>;
 using DeviceLostCallback = std::function<void(DeviceLostReason reason, char const * message)>;
 using ErrorCallback = std::function<void(ErrorType type, char const * message)>;
-using LoggingCallback = std::function<void(LoggingType type, char const * message)>;
 using QueueWorkDoneCallback = std::function<void(QueueWorkDoneStatus status)>;
 using RequestAdapterCallback = std::function<void(RequestAdapterStatus status, Adapter adapter, char const * message)>;
 using RequestDeviceCallback = std::function<void(RequestDeviceStatus status, Device device, char const * message)>;
 using ProcDeviceSetDeviceLostCallback = std::function<void(Device device, DeviceLostCallback&& callback)>;
-using ProcDeviceSetLoggingCallback = std::function<void(Device device, LoggingCallback&& callback)>;
 using ProcDeviceSetUncapturedErrorCallback = std::function<void(Device device, ErrorCallback&& callback)>;
 
 // Handles detailed declarations
 HANDLE(Adapter)
-	Device createDevice(const DeviceDescriptor& descriptor);
 	size_t enumerateFeatures(FeatureName * features);
 	bool getLimits(SupportedLimits * limits);
 	void getProperties(AdapterProperties * properties);
@@ -1075,7 +930,6 @@ END
 
 HANDLE(Buffer)
 	void destroy();
-	BufferMapState getMapState();
 	void * getMappedRange(size_t offset, size_t size);
 	uint64_t getSize();
 	BufferUsage getUsage();
@@ -1098,24 +952,18 @@ HANDLE(CommandEncoder)
 	void copyBufferToTexture(const ImageCopyBuffer& source, const ImageCopyTexture& destination, const Extent3D& copySize);
 	void copyTextureToBuffer(const ImageCopyTexture& source, const ImageCopyBuffer& destination, const Extent3D& copySize);
 	void copyTextureToTexture(const ImageCopyTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize);
-	void copyTextureToTextureInternal(const ImageCopyTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize);
 	CommandBuffer finish(const CommandBufferDescriptor& descriptor);
-	void injectValidationError(char const * message);
 	void insertDebugMarker(char const * markerLabel);
 	void popDebugGroup();
 	void pushDebugGroup(char const * groupLabel);
-	void writeBuffer(Buffer buffer, uint64_t bufferOffset, uint8_t const * data, uint64_t size);
 	void reference();
 	void release();
 END
 
 HANDLE(ComputePassEncoder)
-	void dispatch(uint32_t workgroupCountX, uint32_t workgroupCountY, uint32_t workgroupCountZ);
-	void dispatchIndirect(Buffer indirectBuffer, uint64_t indirectOffset);
 	void dispatchWorkgroups(uint32_t workgroupCountX, uint32_t workgroupCountY, uint32_t workgroupCountZ);
 	void dispatchWorkgroupsIndirect(Buffer indirectBuffer, uint64_t indirectOffset);
 	void end();
-	void endPass();
 	void insertDebugMarker(char const * markerLabel);
 	void popDebugGroup();
 	void pushDebugGroup(char const * groupLabel);
@@ -1140,10 +988,6 @@ HANDLE(Device)
 	Buffer createBuffer(const BufferDescriptor& descriptor);
 	CommandEncoder createCommandEncoder(const CommandEncoderDescriptor& descriptor);
 	ComputePipeline createComputePipeline(const ComputePipelineDescriptor& descriptor);
-	Buffer createErrorBuffer(const BufferDescriptor& descriptor);
-	ExternalTexture createErrorExternalTexture();
-	Texture createErrorTexture(const TextureDescriptor& descriptor);
-	ExternalTexture createExternalTexture(const ExternalTextureDescriptor& externalTextureDescriptor);
 	PipelineLayout createPipelineLayout(const PipelineLayoutDescriptor& descriptor);
 	RenderBundleEncoder createRenderBundleEncoder(const RenderBundleEncoderDescriptor& descriptor);
 	RenderPipeline createRenderPipeline(const RenderPipelineDescriptor& descriptor);
@@ -1153,23 +997,11 @@ HANDLE(Device)
 	Texture createTexture(const TextureDescriptor& descriptor);
 	void destroy();
 	size_t enumerateFeatures(FeatureName * features);
-	void forceLoss(DeviceLostReason type, char const * message);
-	Adapter getAdapter();
 	bool getLimits(SupportedLimits * limits);
 	Queue getQueue();
 	bool hasFeature(FeatureName feature);
-	void injectError(ErrorType type, char const * message);
 	std::unique_ptr<DeviceLostCallback> setDeviceLostCallback(DeviceLostCallback&& callback);
-	std::unique_ptr<LoggingCallback> setLoggingCallback(LoggingCallback&& callback);
 	std::unique_ptr<ErrorCallback> setUncapturedErrorCallback(ErrorCallback&& callback);
-	void tick();
-	void reference();
-	void release();
-END
-
-HANDLE(ExternalTexture)
-	void destroy();
-	void setLabel(char const * label);
 	void reference();
 	void release();
 END
@@ -1195,8 +1027,6 @@ HANDLE(QuerySet)
 END
 
 HANDLE(Queue)
-	void copyExternalTextureForBrowser(const ImageCopyExternalTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize, const CopyTextureForBrowserOptions& options);
-	void copyTextureForBrowser(const ImageCopyTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize, const CopyTextureForBrowserOptions& options);
 	void submit(uint32_t commandCount, CommandBuffer const * commands);
 	void submit(const std::vector<WGPUCommandBuffer>& commands);
 	void submit(const WGPUCommandBuffer& commands);
@@ -1236,8 +1066,7 @@ HANDLE(RenderPassEncoder)
 	void drawIndexedIndirect(Buffer indirectBuffer, uint64_t indirectOffset);
 	void drawIndirect(Buffer indirectBuffer, uint64_t indirectOffset);
 	void end();
-	void endPass();
-	void executeBundles(uint32_t bundleCount, RenderBundle const * bundles);
+	void executeBundles(uint32_t bundlesCount, RenderBundle const * bundles);
 	void executeBundles(const std::vector<WGPURenderBundle>& bundles);
 	void executeBundles(const WGPURenderBundle& bundles);
 	void insertDebugMarker(char const * markerLabel);
@@ -1275,12 +1104,12 @@ HANDLE(ShaderModule)
 END
 
 HANDLE(Surface)
+	TextureFormat getPreferredFormat(Adapter adapter);
 	void reference();
 	void release();
 END
 
 HANDLE(SwapChain)
-	void configure(TextureFormat format, TextureUsageFlags allowedUsage, uint32_t width, uint32_t height);
 	TextureView getCurrentTextureView();
 	void present();
 	void reference();
@@ -1380,73 +1209,10 @@ void ComputePassTimestampWrite::setDefault() {
 void ConstantEntry::setDefault() {
 }
 
-// Methods of CopyTextureForBrowserOptions
-void CopyTextureForBrowserOptions::setDefault() {
-}
-
-// Methods of DawnAdapterPropertiesPowerPreference
-void DawnAdapterPropertiesPowerPreference::setDefault() {
-	powerPreference = PowerPreference::Undefined;
-	((ChainedStructOut*)&chain)->setDefault();
-	chain.sType = SType::DawnAdapterPropertiesPowerPreference;
-}
-
-// Methods of DawnBufferDescriptorErrorInfoFromWireClient
-void DawnBufferDescriptorErrorInfoFromWireClient::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::DawnBufferDescriptorErrorInfoFromWireClient;
-}
-
-// Methods of DawnCacheDeviceDescriptor
-void DawnCacheDeviceDescriptor::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::DawnCacheDeviceDescriptor;
-}
-
-// Methods of DawnEncoderInternalUsageDescriptor
-void DawnEncoderInternalUsageDescriptor::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::DawnEncoderInternalUsageDescriptor;
-}
-
-// Methods of DawnInstanceDescriptor
-void DawnInstanceDescriptor::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::DawnInstanceDescriptor;
-}
-
-// Methods of DawnTextureInternalUsageDescriptor
-void DawnTextureInternalUsageDescriptor::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::DawnTextureInternalUsageDescriptor;
-}
-
-// Methods of DawnTogglesDeviceDescriptor
-void DawnTogglesDeviceDescriptor::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::DawnTogglesDeviceDescriptor;
-}
-
-// Methods of Extent2D
-void Extent2D::setDefault() {
-}
-
 // Methods of Extent3D
 void Extent3D::setDefault() {
 	height = 1;
 	depthOrArrayLayers = 1;
-}
-
-// Methods of ExternalTextureBindingEntry
-void ExternalTextureBindingEntry::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::ExternalTextureBindingEntry;
-}
-
-// Methods of ExternalTextureBindingLayout
-void ExternalTextureBindingLayout::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::ExternalTextureBindingLayout;
 }
 
 // Methods of InstanceDescriptor
@@ -1460,7 +1226,6 @@ void Limits::setDefault() {
 	maxTextureDimension3D = 0;
 	maxTextureArrayLayers = 0;
 	maxBindGroups = 0;
-	maxBindingsPerBindGroup = 0;
 	maxDynamicUniformBuffersPerPipelineLayout = 0;
 	maxDynamicStorageBuffersPerPipelineLayout = 0;
 	maxSampledTexturesPerShaderStage = 0;
@@ -1473,13 +1238,11 @@ void Limits::setDefault() {
 	minUniformBufferOffsetAlignment = 64;
 	minStorageBufferOffsetAlignment = 16;
 	maxVertexBuffers = 0;
-	maxBufferSize = 0;
 	maxVertexAttributes = 0;
 	maxVertexBufferArrayStride = 0;
 	maxInterStageShaderComponents = 0;
 	maxInterStageShaderVariables = 0;
 	maxColorAttachments = 0;
-	maxColorAttachmentBytesPerSample = 0;
 	maxComputeWorkgroupStorageSize = 0;
 	maxComputeInvocationsPerWorkgroup = 0;
 	maxComputeWorkgroupSizeX = 0;
@@ -1493,10 +1256,6 @@ void MultisampleState::setDefault() {
 	count = 1;
 	mask = 0xFFFFFFFF;
 	alphaToCoverageEnabled = false;
-}
-
-// Methods of Origin2D
-void Origin2D::setDefault() {
 }
 
 // Methods of Origin3D
@@ -1626,52 +1385,10 @@ void StorageTextureBindingLayout::setDefault() {
 void SurfaceDescriptor::setDefault() {
 }
 
-// Methods of SurfaceDescriptorFromAndroidNativeWindow
-void SurfaceDescriptorFromAndroidNativeWindow::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::SurfaceDescriptorFromAndroidNativeWindow;
-}
-
 // Methods of SurfaceDescriptorFromCanvasHTMLSelector
 void SurfaceDescriptorFromCanvasHTMLSelector::setDefault() {
 	((ChainedStruct*)&chain)->setDefault();
 	chain.sType = SType::SurfaceDescriptorFromCanvasHTMLSelector;
-}
-
-// Methods of SurfaceDescriptorFromMetalLayer
-void SurfaceDescriptorFromMetalLayer::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::SurfaceDescriptorFromMetalLayer;
-}
-
-// Methods of SurfaceDescriptorFromWaylandSurface
-void SurfaceDescriptorFromWaylandSurface::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::SurfaceDescriptorFromWaylandSurface;
-}
-
-// Methods of SurfaceDescriptorFromWindowsCoreWindow
-void SurfaceDescriptorFromWindowsCoreWindow::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::SurfaceDescriptorFromWindowsCoreWindow;
-}
-
-// Methods of SurfaceDescriptorFromWindowsHWND
-void SurfaceDescriptorFromWindowsHWND::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::SurfaceDescriptorFromWindowsHWND;
-}
-
-// Methods of SurfaceDescriptorFromWindowsSwapChainPanel
-void SurfaceDescriptorFromWindowsSwapChainPanel::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::SurfaceDescriptorFromWindowsSwapChainPanel;
-}
-
-// Methods of SurfaceDescriptorFromXlibWindow
-void SurfaceDescriptorFromXlibWindow::setDefault() {
-	((ChainedStruct*)&chain)->setDefault();
-	chain.sType = SType::SurfaceDescriptorFromXlibWindow;
 }
 
 // Methods of SwapChainDescriptor
@@ -1748,20 +1465,9 @@ void DepthStencilState::setDefault() {
 	((StencilFaceState*)&stencilBack)->setDefault();
 }
 
-// Methods of ExternalTextureDescriptor
-void ExternalTextureDescriptor::setDefault() {
-	((Origin2D*)&visibleOrigin)->setDefault();
-	((Extent2D*)&visibleSize)->setDefault();
-}
-
 // Methods of ImageCopyBuffer
 void ImageCopyBuffer::setDefault() {
 	((TextureDataLayout*)&layout)->setDefault();
-}
-
-// Methods of ImageCopyExternalTexture
-void ImageCopyExternalTexture::setDefault() {
-	((Origin3D*)&origin)->setDefault();
 }
 
 // Methods of ImageCopyTexture
@@ -1779,7 +1485,6 @@ void ProgrammableStageDescriptor::setDefault() {
 void RenderPassColorAttachment::setDefault() {
 	loadOp = LoadOp::Undefined;
 	storeOp = StoreOp::Undefined;
-	((Color*)&clearColor)->setDefault();
 	((Color*)&clearValue)->setDefault();
 }
 
@@ -1846,9 +1551,6 @@ void RenderPipelineDescriptor::setDefault() {
 }
 
 // Methods of Adapter
-Device Adapter::createDevice(const DeviceDescriptor& descriptor) {
-	return wgpuAdapterCreateDevice(m_raw, &descriptor);
-}
 size_t Adapter::enumerateFeatures(FeatureName * features) {
 	return wgpuAdapterEnumerateFeatures(m_raw, reinterpret_cast<WGPUFeatureName *>(features));
 }
@@ -1868,7 +1570,7 @@ std::unique_ptr<RequestDeviceCallback> Adapter::requestDevice(const DeviceDescri
 		callback(static_cast<RequestDeviceStatus>(status), device, message);
 	};
 	wgpuAdapterRequestDevice(m_raw, &descriptor, cCallback, reinterpret_cast<void*>(handle.get()));
-	return std::move(handle);
+	return handle;
 }
 void Adapter::reference() {
 	return wgpuAdapterReference(m_raw);
@@ -1900,9 +1602,6 @@ void BindGroupLayout::release() {
 void Buffer::destroy() {
 	return wgpuBufferDestroy(m_raw);
 }
-BufferMapState Buffer::getMapState() {
-	return static_cast<BufferMapState>(wgpuBufferGetMapState(m_raw));
-}
 void * Buffer::getMappedRange(size_t offset, size_t size) {
 	return wgpuBufferGetMappedRange(m_raw, offset, size);
 }
@@ -1919,7 +1618,7 @@ std::unique_ptr<BufferMapCallback> Buffer::mapAsync(MapModeFlags mode, size_t of
 		callback(static_cast<BufferMapAsyncStatus>(status));
 	};
 	wgpuBufferMapAsync(m_raw, static_cast<WGPUMapModeFlags>(mode), offset, size, cCallback, reinterpret_cast<void*>(handle.get()));
-	return std::move(handle);
+	return handle;
 }
 void Buffer::unmap() {
 	return wgpuBufferUnmap(m_raw);
@@ -1963,14 +1662,8 @@ void CommandEncoder::copyTextureToBuffer(const ImageCopyTexture& source, const I
 void CommandEncoder::copyTextureToTexture(const ImageCopyTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize) {
 	return wgpuCommandEncoderCopyTextureToTexture(m_raw, &source, &destination, &copySize);
 }
-void CommandEncoder::copyTextureToTextureInternal(const ImageCopyTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize) {
-	return wgpuCommandEncoderCopyTextureToTextureInternal(m_raw, &source, &destination, &copySize);
-}
 CommandBuffer CommandEncoder::finish(const CommandBufferDescriptor& descriptor) {
 	return wgpuCommandEncoderFinish(m_raw, &descriptor);
-}
-void CommandEncoder::injectValidationError(char const * message) {
-	return wgpuCommandEncoderInjectValidationError(m_raw, message);
 }
 void CommandEncoder::insertDebugMarker(char const * markerLabel) {
 	return wgpuCommandEncoderInsertDebugMarker(m_raw, markerLabel);
@@ -1981,9 +1674,6 @@ void CommandEncoder::popDebugGroup() {
 void CommandEncoder::pushDebugGroup(char const * groupLabel) {
 	return wgpuCommandEncoderPushDebugGroup(m_raw, groupLabel);
 }
-void CommandEncoder::writeBuffer(Buffer buffer, uint64_t bufferOffset, uint8_t const * data, uint64_t size) {
-	return wgpuCommandEncoderWriteBuffer(m_raw, buffer, bufferOffset, data, size);
-}
 void CommandEncoder::reference() {
 	return wgpuCommandEncoderReference(m_raw);
 }
@@ -1993,12 +1683,6 @@ void CommandEncoder::release() {
 
 
 // Methods of ComputePassEncoder
-void ComputePassEncoder::dispatch(uint32_t workgroupCountX, uint32_t workgroupCountY, uint32_t workgroupCountZ) {
-	return wgpuComputePassEncoderDispatch(m_raw, workgroupCountX, workgroupCountY, workgroupCountZ);
-}
-void ComputePassEncoder::dispatchIndirect(Buffer indirectBuffer, uint64_t indirectOffset) {
-	return wgpuComputePassEncoderDispatchIndirect(m_raw, indirectBuffer, indirectOffset);
-}
 void ComputePassEncoder::dispatchWorkgroups(uint32_t workgroupCountX, uint32_t workgroupCountY, uint32_t workgroupCountZ) {
 	return wgpuComputePassEncoderDispatchWorkgroups(m_raw, workgroupCountX, workgroupCountY, workgroupCountZ);
 }
@@ -2007,9 +1691,6 @@ void ComputePassEncoder::dispatchWorkgroupsIndirect(Buffer indirectBuffer, uint6
 }
 void ComputePassEncoder::end() {
 	return wgpuComputePassEncoderEnd(m_raw);
-}
-void ComputePassEncoder::endPass() {
-	return wgpuComputePassEncoderEndPass(m_raw);
 }
 void ComputePassEncoder::insertDebugMarker(char const * markerLabel) {
 	return wgpuComputePassEncoderInsertDebugMarker(m_raw, markerLabel);
@@ -2071,18 +1752,6 @@ CommandEncoder Device::createCommandEncoder(const CommandEncoderDescriptor& desc
 ComputePipeline Device::createComputePipeline(const ComputePipelineDescriptor& descriptor) {
 	return wgpuDeviceCreateComputePipeline(m_raw, &descriptor);
 }
-Buffer Device::createErrorBuffer(const BufferDescriptor& descriptor) {
-	return wgpuDeviceCreateErrorBuffer(m_raw, &descriptor);
-}
-ExternalTexture Device::createErrorExternalTexture() {
-	return wgpuDeviceCreateErrorExternalTexture(m_raw);
-}
-Texture Device::createErrorTexture(const TextureDescriptor& descriptor) {
-	return wgpuDeviceCreateErrorTexture(m_raw, &descriptor);
-}
-ExternalTexture Device::createExternalTexture(const ExternalTextureDescriptor& externalTextureDescriptor) {
-	return wgpuDeviceCreateExternalTexture(m_raw, &externalTextureDescriptor);
-}
 PipelineLayout Device::createPipelineLayout(const PipelineLayoutDescriptor& descriptor) {
 	return wgpuDeviceCreatePipelineLayout(m_raw, &descriptor);
 }
@@ -2110,12 +1779,6 @@ void Device::destroy() {
 size_t Device::enumerateFeatures(FeatureName * features) {
 	return wgpuDeviceEnumerateFeatures(m_raw, reinterpret_cast<WGPUFeatureName *>(features));
 }
-void Device::forceLoss(DeviceLostReason type, char const * message) {
-	return wgpuDeviceForceLoss(m_raw, static_cast<WGPUDeviceLostReason>(type), message);
-}
-Adapter Device::getAdapter() {
-	return wgpuDeviceGetAdapter(m_raw);
-}
 bool Device::getLimits(SupportedLimits * limits) {
 	return wgpuDeviceGetLimits(m_raw, limits);
 }
@@ -2125,9 +1788,6 @@ Queue Device::getQueue() {
 bool Device::hasFeature(FeatureName feature) {
 	return wgpuDeviceHasFeature(m_raw, static_cast<WGPUFeatureName>(feature));
 }
-void Device::injectError(ErrorType type, char const * message) {
-	return wgpuDeviceInjectError(m_raw, static_cast<WGPUErrorType>(type), message);
-}
 std::unique_ptr<DeviceLostCallback> Device::setDeviceLostCallback(DeviceLostCallback&& callback) {
 	auto handle = std::make_unique<DeviceLostCallback>(callback);
 	static auto cCallback = [](WGPUDeviceLostReason reason, char const * message, void * userdata) -> void {
@@ -2135,16 +1795,7 @@ std::unique_ptr<DeviceLostCallback> Device::setDeviceLostCallback(DeviceLostCall
 		callback(static_cast<DeviceLostReason>(reason), message);
 	};
 	wgpuDeviceSetDeviceLostCallback(m_raw, cCallback, reinterpret_cast<void*>(handle.get()));
-	return std::move(handle);
-}
-std::unique_ptr<LoggingCallback> Device::setLoggingCallback(LoggingCallback&& callback) {
-	auto handle = std::make_unique<LoggingCallback>(callback);
-	static auto cCallback = [](WGPULoggingType type, char const * message, void * userdata) -> void {
-		LoggingCallback& callback = *reinterpret_cast<LoggingCallback*>(userdata);
-		callback(static_cast<LoggingType>(type), message);
-	};
-	wgpuDeviceSetLoggingCallback(m_raw, cCallback, reinterpret_cast<void*>(handle.get()));
-	return std::move(handle);
+	return handle;
 }
 std::unique_ptr<ErrorCallback> Device::setUncapturedErrorCallback(ErrorCallback&& callback) {
 	auto handle = std::make_unique<ErrorCallback>(callback);
@@ -2153,31 +1804,13 @@ std::unique_ptr<ErrorCallback> Device::setUncapturedErrorCallback(ErrorCallback&
 		callback(static_cast<ErrorType>(type), message);
 	};
 	wgpuDeviceSetUncapturedErrorCallback(m_raw, cCallback, reinterpret_cast<void*>(handle.get()));
-	return std::move(handle);
-}
-void Device::tick() {
-	return wgpuDeviceTick(m_raw);
+	return handle;
 }
 void Device::reference() {
 	return wgpuDeviceReference(m_raw);
 }
 void Device::release() {
 	return wgpuDeviceRelease(m_raw);
-}
-
-
-// Methods of ExternalTexture
-void ExternalTexture::destroy() {
-	return wgpuExternalTextureDestroy(m_raw);
-}
-void ExternalTexture::setLabel(char const * label) {
-	return wgpuExternalTextureSetLabel(m_raw, label);
-}
-void ExternalTexture::reference() {
-	return wgpuExternalTextureReference(m_raw);
-}
-void ExternalTexture::release() {
-	return wgpuExternalTextureRelease(m_raw);
 }
 
 
@@ -2192,7 +1825,7 @@ std::unique_ptr<RequestAdapterCallback> Instance::requestAdapter(const RequestAd
 		callback(static_cast<RequestAdapterStatus>(status), adapter, message);
 	};
 	wgpuInstanceRequestAdapter(m_raw, &options, cCallback, reinterpret_cast<void*>(handle.get()));
-	return std::move(handle);
+	return handle;
 }
 void Instance::reference() {
 	return wgpuInstanceReference(m_raw);
@@ -2227,12 +1860,6 @@ void QuerySet::release() {
 
 
 // Methods of Queue
-void Queue::copyExternalTextureForBrowser(const ImageCopyExternalTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize, const CopyTextureForBrowserOptions& options) {
-	return wgpuQueueCopyExternalTextureForBrowser(m_raw, &source, &destination, &copySize, &options);
-}
-void Queue::copyTextureForBrowser(const ImageCopyTexture& source, const ImageCopyTexture& destination, const Extent3D& copySize, const CopyTextureForBrowserOptions& options) {
-	return wgpuQueueCopyTextureForBrowser(m_raw, &source, &destination, &copySize, &options);
-}
 void Queue::submit(uint32_t commandCount, CommandBuffer const * commands) {
 	return wgpuQueueSubmit(m_raw, commandCount, reinterpret_cast<WGPUCommandBuffer const *>(commands));
 }
@@ -2332,11 +1959,8 @@ void RenderPassEncoder::drawIndirect(Buffer indirectBuffer, uint64_t indirectOff
 void RenderPassEncoder::end() {
 	return wgpuRenderPassEncoderEnd(m_raw);
 }
-void RenderPassEncoder::endPass() {
-	return wgpuRenderPassEncoderEndPass(m_raw);
-}
-void RenderPassEncoder::executeBundles(uint32_t bundleCount, RenderBundle const * bundles) {
-	return wgpuRenderPassEncoderExecuteBundles(m_raw, bundleCount, reinterpret_cast<WGPURenderBundle const *>(bundles));
+void RenderPassEncoder::executeBundles(uint32_t bundlesCount, RenderBundle const * bundles) {
+	return wgpuRenderPassEncoderExecuteBundles(m_raw, bundlesCount, reinterpret_cast<WGPURenderBundle const *>(bundles));
 }
 void RenderPassEncoder::executeBundles(const std::vector<WGPURenderBundle>& bundles) {
 	return wgpuRenderPassEncoderExecuteBundles(m_raw, static_cast<uint32_t>(bundles.size()), bundles.data());
@@ -2425,6 +2049,9 @@ void ShaderModule::release() {
 
 
 // Methods of Surface
+TextureFormat Surface::getPreferredFormat(Adapter adapter) {
+	return static_cast<TextureFormat>(wgpuSurfaceGetPreferredFormat(m_raw, adapter));
+}
 void Surface::reference() {
 	return wgpuSurfaceReference(m_raw);
 }
@@ -2434,9 +2061,6 @@ void Surface::release() {
 
 
 // Methods of SwapChain
-void SwapChain::configure(TextureFormat format, TextureUsageFlags allowedUsage, uint32_t width, uint32_t height) {
-	return wgpuSwapChainConfigure(m_raw, static_cast<WGPUTextureFormat>(format), static_cast<WGPUTextureUsageFlags>(allowedUsage), width, height);
-}
 TextureView SwapChain::getCurrentTextureView() {
 	return wgpuSwapChainGetCurrentTextureView(m_raw);
 }

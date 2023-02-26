@@ -28,7 +28,9 @@
 #include "ResourceManager.h"
 
 #include <GLFW/glfw3.h>
+#ifndef __EMSCRIPTEN__
 #include "glfw3webgpu.h"
+#endif
 
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -39,10 +41,10 @@
 #include <backends/imgui_impl_wgpu.h>
 #include <backends/imgui_impl_glfw.h>
 
-#include <webgpu.hpp>
+#include <webgpu/webgpu.hpp>
 
 #if defined(WEBGPU_BACKEND_WGPU)
-#include <wgpu.h> // wgpuTextureViewDrop
+#include <webgpu/wgpu.h> // wgpuTextureViewDrop
 #endif
 
 #include <iostream>
@@ -112,7 +114,11 @@ bool Application::onInit() {
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
+#ifdef __EMSCRIPTEN__
+	// TODO
+#else
 	m_surface = glfwGetWGPUSurface(m_instance, m_window);
+#endif
 	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = m_surface;
 	Adapter adapter = m_instance.requestAdapter(adapterOpts);
@@ -269,7 +275,7 @@ bool Application::onInit() {
 	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
+	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
 	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
@@ -371,7 +377,6 @@ void Application::buildSwapChain() {
 	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
-	m_swapChainDesc = {};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
 #if defined(WEBGPU_BACKEND_DAWN)
