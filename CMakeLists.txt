@@ -19,6 +19,8 @@ add_subdirectory(imgui)
 add_executable(App
 	Application.h
 	Application.cpp
+	MarchingCubesRenderer.h
+	MarchingCubesRenderer.cpp
 	ResourceManager.h
 	ResourceManager.cpp
 	implementations.cpp

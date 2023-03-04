@@ -35,6 +35,9 @@
 
 #include <array>
 #include <filesystem>
+#include <memory>
+
+class MarchingCubesRenderer;
 
 class Application {
 public:
@@ -154,4 +157,6 @@ private:
 
 	CameraState m_cameraState;
 	DragState m_drag;
+
+	std::shared_ptr<MarchingCubesRenderer> m_marchingCubesRenderer;
 };

@@ -26,6 +26,7 @@
 
 #include "Application.h"
 #include "ResourceManager.h"
+#include "MarchingCubesRenderer.h"
 
 #include <GLFW/glfw3.h>
 #include "glfw3webgpu.h"
@@ -333,6 +334,9 @@ bool Application::onInit() {
 	bindGroupDesc.entries = m_bindings.data();
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
+	InitContext ctx{ m_device, m_swapChainFormat };
+	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 32);
+
 	initGui();
 
 	return true;
@@ -389,6 +393,7 @@ void Application::onFrame() {
 
 	updateLighting();
 	updateDragInertia();
+	m_marchingCubesRenderer->bake();
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
@@ -437,6 +442,9 @@ void Application::onFrame() {
 	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
 	renderPass.draw(m_indexCount, 1, 0, 0);
+
+	DrawingContext ctx{ renderPass };
+	m_marchingCubesRenderer->draw(ctx);
 
 	updateGui(renderPass);
 
