@@ -9,6 +9,7 @@
 struct InitContext {
 	wgpu::Device device;
 	wgpu::TextureFormat swapChainFormat;
+	wgpu::TextureFormat depthTextureFormat;
 };
 
 struct DrawingContext {
@@ -40,7 +41,6 @@ private:
 
 	Uniforms m_uniforms;
 	wgpu::Device m_device = nullptr;
-	wgpu::RenderPipeline m_bakingPipeline = nullptr;
 	wgpu::RenderPipeline m_drawingPipeline = nullptr;
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	wgpu::Buffer m_quadVertexBuffer = nullptr;
@@ -50,4 +50,10 @@ private:
 	wgpu::BindGroup m_bakingBindGroup = nullptr;
 	wgpu::BindGroup m_drawingBindGroup = nullptr;
 	uint32_t m_vertexCount;
+	struct BakingPipelines {
+		wgpu::ComputePipeline eval = nullptr;
+		wgpu::ComputePipeline count = nullptr;
+		wgpu::ComputePipeline fill = nullptr;
+	};
+	BakingPipelines m_bakingPipelines;
 };

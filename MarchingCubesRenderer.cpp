@@ -93,45 +93,27 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	bindGroupDesc.layout = bindGroupLayout;
 	m_bakingBindGroup = device.createBindGroup(bindGroupDesc);
 
-	// 4. Render pipeline
+	// 4. Compute pipelines
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingCubesRenderer.Bake.wgsl", device);
 
-	RenderPipelineDescriptor pipelineDesc = Default;
-	pipelineDesc.label = "MarchingCubes";
-
-	VertexAttribute positionAttr = Default;
-	positionAttr.shaderLocation = 0;
-	positionAttr.format = VertexFormat::Float32x2;
-	positionAttr.offset = 0;
-	VertexBufferLayout vertexBufferLayout = Default;
-	vertexBufferLayout.arrayStride = 2 * sizeof(float);
-	vertexBufferLayout.attributeCount = 1;
-	vertexBufferLayout.attributes = &positionAttr;
-	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
-	pipelineDesc.vertex.bufferCount = 1;
-	pipelineDesc.vertex.buffers = &vertexBufferLayout;
-	pipelineDesc.vertex.module = shaderModule;
-	pipelineDesc.vertex.entryPoint = "vs_main";
-
-	BlendState blend = Default;
-	ColorTargetState colorTarget = Default;
-	colorTarget.blend = &blend;
-	colorTarget.format = textureDesc.format;
-	FragmentState fragment = Default;
-	pipelineDesc.fragment = &fragment;
-	fragment.module = shaderModule;
-	fragment.entryPoint = "fs_main";
-	fragment.targetCount = 1;
-	fragment.targets = &colorTarget;
-
+	ComputePipelineDescriptor pipelineDesc = Default;
+	pipelineDesc.compute.module = shaderModule;
 	PipelineLayoutDescriptor pipelineLayoutDesc = Default;
 	pipelineLayoutDesc.bindGroupLayoutCount = 1;
 	pipelineLayoutDesc.bindGroupLayouts = (const WGPUBindGroupLayout*)&bindGroupLayout;
 	pipelineDesc.layout = device.createPipelineLayout(pipelineLayoutDesc);
 
-	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleStrip;
+	pipelineDesc.label = "MarchingCubes Bake Eval";
+	pipelineDesc.compute.entryPoint = "main_eval";
+	m_bakingPipelines.eval = device.createComputePipeline(pipelineDesc);
 
-	m_bakingPipeline = device.createRenderPipeline(pipelineDesc);
+	pipelineDesc.label = "MarchingCubes Bake Count";
+	pipelineDesc.compute.entryPoint = "main_count";
+	m_bakingPipelines.count = device.createComputePipeline(pipelineDesc);
+
+	pipelineDesc.label = "MarchingCubes Bake Fill";
+	pipelineDesc.compute.entryPoint = "main_fill";
+	m_bakingPipelines.fill = device.createComputePipeline(pipelineDesc);
 }
 
 void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
@@ -193,6 +175,14 @@ void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
 	fragment.targetCount = 1;
 	fragment.targets = &colorTarget;
 
+	DepthStencilState depthStencilState = Default;
+	depthStencilState.depthCompare = CompareFunction::Less;
+	depthStencilState.depthWriteEnabled = true;
+	depthStencilState.format = context.depthTextureFormat;
+	depthStencilState.stencilReadMask = 0;
+	depthStencilState.stencilWriteMask = 0;
+	pipelineDesc.depthStencil = &depthStencilState;
+
 	PipelineLayoutDescriptor pipelineLayoutDesc = Default;
 	pipelineLayoutDesc.bindGroupLayoutCount = 1;
 	pipelineLayoutDesc.bindGroupLayouts = (const WGPUBindGroupLayout*)&bindGroupLayout;
@@ -211,27 +201,16 @@ void MarchingCubesRenderer::bake() {
 	commandEncoderDesc.label = "MarchingCubes Baking";
 	CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
-	RenderPassDescriptor renderPassDesc = Default;
-	RenderPassColorAttachment colorAttachment;
-	colorAttachment.view = m_textureView;
-	colorAttachment.resolveTarget = nullptr;
-	colorAttachment.loadOp = LoadOp::Clear;
-	colorAttachment.storeOp = StoreOp::Store;
-	colorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
-	renderPassDesc.colorAttachmentCount = 1;
-	renderPassDesc.colorAttachments = &colorAttachment;
-	renderPassDesc.depthStencilAttachment = nullptr;
-	renderPassDesc.timestampWriteCount = 0;
-	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+	ComputePassDescriptor computePassDesc = Default;
+	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
-	renderPass.setPipeline(m_bakingPipeline);
+	computePass.setPipeline(m_bakingPipelines.eval);
 
-	renderPass.setVertexBuffer(0, m_quadVertexBuffer, 0, sizeof(quadVertices));
-	renderPass.setBindGroup(0, m_bakingBindGroup, 0, nullptr);
+	computePass.setBindGroup(0, m_bakingBindGroup, 0, nullptr);
 
-	renderPass.draw(4, m_uniforms.resolution, 0, 0);
+	computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
 
-	renderPass.end();
+	computePass.end();
 
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(command);
@@ -262,6 +241,7 @@ void MarchingCubesRenderer::bake() {
 }
 
 void MarchingCubesRenderer::draw(const DrawingContext& context) const {
+	if (true) return;
 	if (!m_vertexBuffer) return;
 	auto renderPass = context.renderPass;
 

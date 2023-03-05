@@ -349,7 +349,7 @@ bool Application::onInit() {
 	bindGroupDesc.entries = m_bindings.data();
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
-	InitContext ctx{ m_device, m_swapChainFormat };
+	InitContext ctx{ m_device, m_swapChainFormat, m_depthTextureFormat };
 	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 32);
 
 	initGui();
@@ -441,8 +441,13 @@ void Application::onFrame() {
 	depthStencilAttachment.depthStoreOp = StoreOp::Store;
 	depthStencilAttachment.depthReadOnly = false;
 	depthStencilAttachment.stencilClearValue = 0;
+#if defined(WEBGPU_BACKEND_WGPU)
 	depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
 	depthStencilAttachment.stencilStoreOp = StoreOp::Store;
+#else
+	depthStencilAttachment.stencilLoadOp = LoadOp::Undefined;
+	depthStencilAttachment.stencilStoreOp = StoreOp::Undefined;
+#endif
 	depthStencilAttachment.stencilReadOnly = true;
 
 	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
