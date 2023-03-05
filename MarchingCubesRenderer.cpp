@@ -1,6 +1,8 @@
 #include "MarchingCubesRenderer.h"
 #include "ResourceManager.h"
 
+#include <GLFW/glfw3.h>
+
 #include <unordered_map>
 #include <algorithm>
 
@@ -488,6 +490,9 @@ void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
 
 void MarchingCubesRenderer::bake() {
 	Queue queue = m_device.getQueue();
+
+	m_uniforms.time = static_cast<float>(glfwGetTime());
+	queue.writeBuffer(m_uniformBuffer, offsetof(Uniforms, time), &m_uniforms.time, sizeof(Uniforms::time));
 
 	// 1. Sample distance function and count vertices
 	{

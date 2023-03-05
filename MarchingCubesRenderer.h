@@ -55,6 +55,7 @@ private:
 private:
 	struct Uniforms {
 		uint32_t resolution;
+		float time;
 	};
 
 	struct VertexAttributes {

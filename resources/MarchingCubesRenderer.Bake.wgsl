@@ -4,6 +4,7 @@ struct ComputeInput {
 
 struct Uniforms {
 	resolution: u32,
+	time: f32,
 }
 
 struct Counts {
@@ -36,11 +37,30 @@ struct ModuleLut {
 @group(1) @binding(0) var<storage,read_write> vertices: array<VertexInput>;
 
 fn evalSdf(pos: vec3<f32>) -> f32 {
-	return length(pos) - 0.5;
+	let offset1 = vec3<f32>(0.0);
+	let radius1 = 0.5 + 0.1 * cos(uniforms.time);
+	let d1 = length(pos - offset1) - radius1;
+
+	let offset2 = vec3<f32>(0.0, 0.6, 0.6);
+	let radius2 = 0.3;
+	let d2 = length(pos - offset2) - radius2;
+	return min(d1, d2);
 }
 
 fn evalNormal(pos: vec3<f32>) -> vec3<f32> {
-	return normalize(pos);
+	let offset1 = vec3<f32>(0.0);
+	let radius1 = 0.5 + 0.1 * cos(uniforms.time);
+	let d1 = length(pos - offset1) - radius1;
+
+	let offset2 = vec3<f32>(0.0, 0.6, 0.6);
+	let radius2 = 0.3;
+	let d2 = length(pos - offset2) - radius2;
+
+	if (d1 < d2) {
+		return normalize(pos - offset1);
+	} else {
+		return normalize(pos - offset2);
+	}
 }
 
 fn allocateVertices(vertex_count: u32) -> u32 {
