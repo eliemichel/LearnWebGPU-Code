@@ -7,6 +7,7 @@
 #include <webgpu/webgpu.hpp>
 
 #include <vector>
+#include <array>
 
 struct InitContext {
 	wgpu::Device device;
@@ -46,6 +47,8 @@ private:
 		const std::vector<wgpu::BindGroupLayout>& extraBindGroupLayouts = {}
 	);
 
+	void initModuleLut(const InitContext& context);
+
 	void initBakingResources(const InitContext& context);
 	void initDrawingResources(const InitContext& context);
 
@@ -63,6 +66,18 @@ private:
 		uint32_t allocatedVertices;
 	};
 
+	struct ModuleLutEntry {
+		// Represent a point on an edge of the unit cube
+		uint32_t edgeStartCorner;
+		uint32_t edgeEndCorner;
+	};
+	struct ModuleLut {
+		// endOffset[i] is the beginning of the i+1 th entry
+		std::array<uint32_t, 256> endOffset;
+		// Each entry represents a point, to be grouped by 3 to form triangles
+		std::vector<ModuleLutEntry> entries;
+	};
+
 	Uniforms m_uniforms;
 	wgpu::Device m_device = nullptr;
 	wgpu::RenderPipeline m_drawingPipeline = nullptr;
@@ -72,6 +87,8 @@ private:
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::Buffer m_countBuffer = nullptr;
 	wgpu::Buffer m_mapBuffer = nullptr;
+	wgpu::Buffer m_moduleLutBuffer = nullptr;
+	uint32_t m_moduleLutBufferSize;
 	wgpu::Texture m_texture = nullptr;
 	wgpu::TextureView m_textureView = nullptr;
 	wgpu::BindGroup m_drawingBindGroup = nullptr;

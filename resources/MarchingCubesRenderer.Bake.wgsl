@@ -15,10 +15,23 @@ struct VertexInput {
 	position: vec4<f32>,
 }
 
+struct ModuleLutEntry {
+	// Represent a point on an edge of the unit cube
+	edge_start_corner: u32,
+	edge_end_corner: u32,
+};
+struct ModuleLut {
+	// end_offset[i] is the beginning of the i+1 th entry
+	end_offset: array<u32, 256>,
+	// Each entry represents a point, to be grouped by 3 to form triangles
+	entries: array<ModuleLutEntry>,
+};
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var distance_grid_write: texture_storage_3d<rgba16float,write>;
 @group(0) @binding(2) var distance_grid_read: texture_3d<f32>;
 @group(0) @binding(3) var<storage,read_write> counts: Counts;
+@group(0) @binding(4) var<storage,read> moduleLut: ModuleLut;
 @group(1) @binding(0) var<storage,read_write> vertices: array<VertexInput>;
 
 fn evalSdf(pos: vec3<f32>) -> f32 {
@@ -30,9 +43,25 @@ fn allocateVertices(vertex_count: u32) -> u32 {
 	return addr;
 }
 
+// Transform a corner index into a grid index offset
+fn cornerOffset(i: u32) -> vec3<u32> {
+	return vec3<u32>(
+		(i & (1u << 0)) >> 0,
+		(i & (1u << 1)) >> 1,
+		(i & (1u << 2)) >> 2,
+	);
+}
+fn cornerOffsetF(i: u32) -> vec3<f32> {
+	return vec3<f32>(cornerOffset(i));
+}
+
+fn positionFromGridCoord(grid_coord: vec3<f32>) -> vec3<f32> {
+	return grid_coord / f32(uniforms.resolution) * 2.0 - 1.0;
+}
+
 @compute @workgroup_size(1)
 fn main_eval(in: ComputeInput) {
-	let position = vec3<f32>(in.id) / f32(uniforms.resolution) * 2.0 - 1.0;
+	let position = positionFromGridCoord(vec3<f32>(in.id));
 	let d = evalSdf(position);
 	textureStore(distance_grid_write, in.id, vec4<f32>(d));
 }
@@ -45,21 +74,49 @@ fn main_reset_count() {
 
 @compute @workgroup_size(1)
 fn main_count(in: ComputeInput) {
-	let depth = textureLoad(distance_grid_read, in.id, 0).r;
-	if (depth < 0) {
-		atomicAdd(&counts.point_count, 3);
+	var cornerDepth: array<f32,8>;
+	var module_code: u32 = 0;
+	for (var i: u32 = 0 ; i < 8 ; i++) {
+		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
+		if (cornerDepth[i] < 0) {
+			module_code += 1u << i;
+		}
 	}
+
+	var begin_offset = 0u;
+	if (module_code > 0) {
+		begin_offset = moduleLut.end_offset[module_code - 1];
+	}
+	let module_point_count = moduleLut.end_offset[module_code] - begin_offset;
+
+	atomicAdd(&counts.point_count, module_point_count);
 }
 
 @compute @workgroup_size(1)
 fn main_fill(in: ComputeInput) {
-	let depth = textureLoad(distance_grid_read, in.id, 0).r;
-	if (depth < 0) {
-		let addr = allocateVertices(3);
-		let position = vec3<f32>(in.id) / f32(uniforms.resolution) * 2.0 - 1.0;
-		let z = f32(in.id.x) * 0.1;
-		vertices[addr + 0].position = vec4<f32>(position + vec3<f32>(1.0, 0.0, 0.0) * 0.05, 1.0);
-		vertices[addr + 1].position = vec4<f32>(position + vec3<f32>(1.0, 1.0, 0.0) * 0.05, 1.0);
-		vertices[addr + 2].position = vec4<f32>(position + vec3<f32>(0.0, 1.0, 0.0) * 0.05, 1.0);
+	var cornerDepth: array<f32,8>;
+	var module_code: u32 = 0;
+	for (var i = 0u ; i < 8 ; i++) {
+		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
+		if (cornerDepth[i] < 0) {
+			module_code += 1u << i;
+		}
+	}
+
+	var begin_offset = 0u;
+	if (module_code > 0) {
+		begin_offset = moduleLut.end_offset[module_code - 1];
+	}
+	let module_point_count = moduleLut.end_offset[module_code] - begin_offset;
+
+	let addr = allocateVertices(module_point_count);
+	for (var i = 0u ; i < module_point_count ; i++) {
+		let entry = moduleLut.entries[begin_offset + i];
+		let edge_start_corner = cornerOffsetF(entry.edge_start_corner);
+		let edge_end_corner = cornerOffsetF(entry.edge_end_corner);
+		let grid_offset = (edge_start_corner + edge_end_corner) / 2.0;
+		
+		var grid_coord = vec3<f32>(in.id) + grid_offset;
+		vertices[addr + i].position = vec4<f32>(positionFromGridCoord(grid_coord), 1.0);
 	}
 }

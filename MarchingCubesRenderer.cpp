@@ -14,6 +14,7 @@ MarchingCubesRenderer::MarchingCubesRenderer(const InitContext& context, uint32_
 	: m_uniforms{ resolution }
 	, m_device(context.device)
 {
+	initModuleLut(context);
 	initBakingResources(context);
 	initDrawingResources(context);
 }
@@ -39,6 +40,10 @@ MarchingCubesRenderer::~MarchingCubesRenderer() {
 	if (m_mapBuffer) {
 		m_mapBuffer.destroy();
 		m_mapBuffer = nullptr;
+	}
+	if (m_moduleLutBuffer) {
+		m_moduleLutBuffer.destroy();
+		m_moduleLutBuffer = nullptr;
 	}
 	if (m_texture) {
 		m_texture.destroy();
@@ -86,6 +91,33 @@ MarchingCubesRenderer::BoundComputePipeline MarchingCubesRenderer::createBoundCo
 	boundPipeline.pipeline = device.createComputePipeline(pipelineDesc);
 
 	return boundPipeline;
+}
+
+void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
+	Device device = context.device;
+	Queue queue = device.getQueue();
+
+	ModuleLut lut;
+	std::fill(lut.endOffset.begin(), lut.endOffset.end(), 0);
+
+	for (int k = 0; k < 256; ++k) {
+		lut.entries.push_back({ 0, 1 });
+		lut.entries.push_back({ 0, 2 });
+		lut.entries.push_back({ 0, 3 });
+		for (int i = k; i < 256; ++i) {
+			lut.endOffset[i] += 3;
+		}
+	}
+
+	m_moduleLutBufferSize = static_cast<uint32_t>(sizeof(ModuleLut::endOffset) + lut.entries.size() * sizeof(ModuleLutEntry));
+
+	BufferDescriptor bufferDesc = Default;
+	bufferDesc.label = "MarchingCubes Module LUT";
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Storage;
+	bufferDesc.size = (m_moduleLutBufferSize + 3) & ~3;
+	m_moduleLutBuffer = device.createBuffer(bufferDesc);
+	queue.writeBuffer(m_moduleLutBuffer, offsetof(ModuleLut, endOffset), &lut.endOffset, sizeof(ModuleLut::endOffset));
+	queue.writeBuffer(m_moduleLutBuffer, offsetof(ModuleLut, entries), lut.entries.data(), lut.entries.size() * sizeof(ModuleLutEntry));
 }
 
 void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
@@ -176,6 +208,17 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	countBinding.offset = 0;
 	countBinding.size = (sizeof(Counts) + 3) & ~3;
 
+	BindGroupLayoutEntry moduleLutBindingLayout = Default;
+	moduleLutBindingLayout.binding = 4;
+	moduleLutBindingLayout.visibility = ShaderStage::Compute;
+	moduleLutBindingLayout.buffer.type = BufferBindingType::ReadOnlyStorage;
+	moduleLutBindingLayout.buffer.minBindingSize = 0;
+	BindGroupEntry moduleLutBinding = Default;
+	moduleLutBinding.binding = 4;
+	moduleLutBinding.buffer = m_moduleLutBuffer;
+	moduleLutBinding.offset = 0;
+	moduleLutBinding.size = (m_moduleLutBufferSize + 3) & ~3;
+
 	BindGroupLayoutEntry vertexStorageBindingLayout = Default;
 	vertexStorageBindingLayout.binding = 0;
 	vertexStorageBindingLayout.visibility = ShaderStage::Compute;
@@ -206,15 +249,6 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 		"main_eval"
 	);
 
-	m_bakingPipelines.count = createBoundComputePipeline(
-		device,
-		"MarchingCubes Bake Count",
-		{ uniformBindingLayout, textureBindingLayout, countBindingLayout },
-		{ uniformBinding, textureBinding, countBinding },
-		shaderModule,
-		"main_count"
-	);
-
 	m_bakingPipelines.resetCount = createBoundComputePipeline(
 		device,
 		"MarchingCubes Bake Reset Count",
@@ -224,11 +258,20 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 		"main_reset_count"
 	);
 
+	m_bakingPipelines.count = createBoundComputePipeline(
+		device,
+		"MarchingCubes Bake Count",
+		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
+		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
+		shaderModule,
+		"main_count"
+	);
+
 	m_bakingPipelines.fill = createBoundComputePipeline(
 		device,
 		"MarchingCubes Bake Fill",
-		{ uniformBindingLayout, textureBindingLayout, countBindingLayout },
-		{ uniformBinding, textureBinding, countBinding },
+		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
+		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
 		shaderModule,
 		"main_fill",
 		{ m_vertexStorageBindGroupLayout }
