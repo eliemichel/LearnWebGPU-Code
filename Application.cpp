@@ -181,7 +181,7 @@ bool Application::onInit() {
 	m_indexCount = static_cast<int>(m_vertexData.size());
 
 	// Create uniform buffer
-	bufferDesc.size = sizeof(MyUniforms);
+	bufferDesc.size = sizeof(CameraUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
 	m_uniformBuffer = m_device.createBuffer(bufferDesc);
@@ -195,7 +195,7 @@ bool Application::onInit() {
 	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 
-	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
+	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(CameraUniforms));
 	updateViewMatrix();
 
 	buildDepthBuffer();
@@ -225,7 +225,7 @@ bool Application::onInit() {
 	bindingLayout.binding = 0;
 	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+	bindingLayout.buffer.minBindingSize = sizeof(CameraUniforms);
 
 	BindGroupLayoutEntry& samplerBindingLayout = m_bindingLayoutEntries[1];
 	samplerBindingLayout.binding = 1;
@@ -238,7 +238,7 @@ bool Application::onInit() {
 	m_bindings[0].binding = 0;
 	m_bindings[0].buffer = m_uniformBuffer;
 	m_bindings[0].offset = 0;
-	m_bindings[0].size = sizeof(MyUniforms);
+	m_bindings[0].size = sizeof(CameraUniforms);
 
 	m_bindings[1].binding = 1;
 	m_bindings[1].sampler = sampler;
@@ -349,7 +349,13 @@ bool Application::onInit() {
 	bindGroupDesc.entries = m_bindings.data();
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
-	InitContext ctx{ m_device, m_swapChainFormat, m_depthTextureFormat };
+	InitContext ctx{
+		m_device,
+		m_swapChainFormat,
+		m_depthTextureFormat,
+		m_uniformBuffer,
+		sizeof(CameraUniforms)
+	};
 	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 32);
 
 	initGui();
@@ -411,7 +417,7 @@ void Application::onFrame() {
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
-	queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
+	queue.writeBuffer(m_uniformBuffer, offsetof(CameraUniforms, time), &m_uniforms.time, sizeof(CameraUniforms::time));
 
 	TextureView nextTexture = m_swapChain.getCurrentTextureView();
 	if (!nextTexture) {
@@ -504,7 +510,7 @@ void Application::onResize() {
 
 	float ratio = m_swapChainDesc.width / (float)m_swapChainDesc.height;
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, projectionMatrix), &m_uniforms.projectionMatrix, sizeof(MyUniforms::projectionMatrix));
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(CameraUniforms, projectionMatrix), &m_uniforms.projectionMatrix, sizeof(CameraUniforms::projectionMatrix));
 }
 
 void Application::onMouseMove(double xpos, double ypos) {
@@ -562,10 +568,10 @@ void Application::updateViewMatrix() {
 	float sy = sin(m_cameraState.angles.y);
 	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_cameraState.zoom);
 	m_uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(CameraUniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(CameraUniforms::viewMatrix));
 
 	m_uniforms.cameraWorldPosition = position;
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(MyUniforms::cameraWorldPosition));
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(CameraUniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(CameraUniforms::cameraWorldPosition));
 }
 
 void Application::updateDragInertia() {

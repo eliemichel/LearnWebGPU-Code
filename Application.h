@@ -81,7 +81,7 @@ private:
 	using vec4 = glm::vec4;
 	using mat4x4 = glm::mat4x4;
 
-	struct MyUniforms {
+	struct CameraUniforms {
 		mat4x4 projectionMatrix;
 		mat4x4 viewMatrix;
 		mat4x4 modelMatrix;
@@ -89,7 +89,7 @@ private:
 		vec3 cameraWorldPosition;
 		float time;
 	};
-	static_assert(sizeof(MyUniforms) % 16 == 0);
+	static_assert(sizeof(CameraUniforms) % 16 == 0);
 
 	// Everything that is initialized in `onInit` and needed in `onFrame`.
 	GLFWwindow* m_window = nullptr;
@@ -107,7 +107,7 @@ private:
 	std::vector<wgpu::Texture> m_textures;
 	wgpu::Texture m_depthTexture = nullptr;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
-	MyUniforms m_uniforms;
+	CameraUniforms m_uniforms;
 	std::vector<ResourceManager::VertexAttributes> m_vertexData;
 	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
