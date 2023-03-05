@@ -12,7 +12,8 @@ struct Counts {
 }
 
 struct VertexInput {
-	position: vec4<f32>,
+	position: vec3<f32>,
+	normal: vec3<f32>,
 }
 
 struct ModuleLutEntry {
@@ -36,6 +37,10 @@ struct ModuleLut {
 
 fn evalSdf(pos: vec3<f32>) -> f32 {
 	return length(pos) - 0.5;
+}
+
+fn evalNormal(pos: vec3<f32>) -> vec3<f32> {
+	return normalize(pos);
 }
 
 fn allocateVertices(vertex_count: u32) -> u32 {
@@ -117,6 +122,8 @@ fn main_fill(in: ComputeInput) {
 		let grid_offset = (edge_start_corner + edge_end_corner) / 2.0;
 		
 		var grid_coord = vec3<f32>(in.id) + grid_offset;
-		vertices[addr + i].position = vec4<f32>(positionFromGridCoord(grid_coord), 1.0);
+		let position = positionFromGridCoord(grid_coord);
+		vertices[addr + i].position = position;
+		vertices[addr + i].normal = evalNormal(position);
 	}
 }

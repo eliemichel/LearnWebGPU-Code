@@ -159,6 +159,7 @@ struct ModuleTransform {
 				forward = side;
 			}
 		}
+		return transforms;
 	}
 };
 
@@ -435,14 +436,19 @@ void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
 
 	RenderPipelineDescriptor pipelineDesc = Default;
 
-	VertexAttribute positionAttr = Default;
+	std::vector<VertexAttribute> attributes(2, Default);
+	VertexAttribute& positionAttr = attributes[0];
 	positionAttr.shaderLocation = 0;
 	positionAttr.format = VertexFormat::Float32x3;
 	positionAttr.offset = 0;
+	VertexAttribute& normalAttr = attributes[1];
+	normalAttr.shaderLocation = 1;
+	normalAttr.format = VertexFormat::Float32x3;
+	normalAttr.offset = 4 * sizeof(float);
 	VertexBufferLayout vertexBufferLayout = Default;
 	vertexBufferLayout.arrayStride = sizeof(VertexAttributes);
-	vertexBufferLayout.attributeCount = 1;
-	vertexBufferLayout.attributes = &positionAttr;
+	vertexBufferLayout.attributeCount = static_cast<uint32_t>(attributes.size());
+	vertexBufferLayout.attributes = attributes.data();
 	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
 	pipelineDesc.vertex.bufferCount = 1;
 	pipelineDesc.vertex.buffers = &vertexBufferLayout;

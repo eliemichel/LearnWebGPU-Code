@@ -59,6 +59,7 @@ private:
 
 	struct VertexAttributes {
 		glm::vec4 position;
+		glm::vec4 normal;
 	};
 
 	struct Counts {
