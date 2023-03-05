@@ -59,7 +59,6 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	m_texture = device.createTexture(textureDesc);
 
 	TextureViewDescriptor textureViewDesc = Default;
-	textureViewDesc.aspect = TextureAspect::DepthOnly;
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = m_uniforms.resolution;
 	textureViewDesc.baseMipLevel = 0;
@@ -98,6 +97,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingCubesRenderer.Bake.wgsl", device);
 
 	RenderPipelineDescriptor pipelineDesc = Default;
+	pipelineDesc.label = "MarchingCubes";
 
 	VertexAttribute positionAttr = Default;
 	positionAttr.shaderLocation = 0;

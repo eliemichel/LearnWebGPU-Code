@@ -34,7 +34,7 @@
 
 #pragma once
 
-#include <webgpu.h>
+#include <webgpu/webgpu.h>
 
 #include <iostream>
 #include <vector>

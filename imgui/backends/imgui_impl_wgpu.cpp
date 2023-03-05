@@ -33,7 +33,7 @@
 
 // These differences of implementation should vanish as soon as WebGPU gets in version 1.0 stable
 #ifdef WEBGPU_BACKEND_WGPU
-#include <wgpu.h>
+#include <webgpu/wgpu.h>
 #define wgpuBindGroupLayoutRelease wgpuBindGroupLayoutDrop
 #define wgpuBindGroupRelease wgpuBindGroupDrop
 #define wgpuRenderPipelineRelease wgpuRenderPipelineDrop
