@@ -47,13 +47,16 @@ private:
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::Texture m_texture = nullptr;
 	wgpu::TextureView m_textureView = nullptr;
-	wgpu::BindGroup m_bakingBindGroup = nullptr;
 	wgpu::BindGroup m_drawingBindGroup = nullptr;
 	uint32_t m_vertexCount;
+	struct BoundComputePipeline {
+		wgpu::ComputePipeline pipeline = nullptr;
+		wgpu::BindGroup bindGroup = nullptr;
+	};
 	struct BakingPipelines {
-		wgpu::ComputePipeline eval = nullptr;
-		wgpu::ComputePipeline count = nullptr;
-		wgpu::ComputePipeline fill = nullptr;
+		BoundComputePipeline eval;
+		BoundComputePipeline count;
+		BoundComputePipeline fill;
 	};
 	BakingPipelines m_bakingPipelines;
 };

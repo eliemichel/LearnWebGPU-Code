@@ -51,19 +51,19 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	// 2. Texture
 	TextureDescriptor textureDesc = Default;
 	textureDesc.label = "MarchingCubes";
-	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.dimension = TextureDimension::_3D;
 	textureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
 	textureDesc.format = TextureFormat::RGBA16Float;
 	textureDesc.mipLevelCount = 1;
-	textureDesc.usage = TextureUsage::RenderAttachment;// | TextureUsage::TextureBinding;
+	textureDesc.usage = TextureUsage::StorageBinding;
 	m_texture = device.createTexture(textureDesc);
 
 	TextureViewDescriptor textureViewDesc = Default;
 	textureViewDesc.baseArrayLayer = 0;
-	textureViewDesc.arrayLayerCount = m_uniforms.resolution;
+	textureViewDesc.arrayLayerCount = 1;
 	textureViewDesc.baseMipLevel = 0;
 	textureViewDesc.mipLevelCount = 1;
-	textureViewDesc.dimension = TextureViewDimension::_2DArray;
+	textureViewDesc.dimension = TextureViewDimension::_3D;
 	textureViewDesc.format = textureDesc.format;
 	m_textureView = m_texture.createView(textureViewDesc);
 
@@ -91,7 +91,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	bindGroupDesc.entries = bindings.data();
 	bindGroupDesc.entryCount = static_cast<uint32_t>(bindings.size());
 	bindGroupDesc.layout = bindGroupLayout;
-	m_bakingBindGroup = device.createBindGroup(bindGroupDesc);
+	BindGroup bakingBindGroup = device.createBindGroup(bindGroupDesc);
 
 	// 4. Compute pipelines
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingCubesRenderer.Bake.wgsl", device);
@@ -105,15 +105,18 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 
 	pipelineDesc.label = "MarchingCubes Bake Eval";
 	pipelineDesc.compute.entryPoint = "main_eval";
-	m_bakingPipelines.eval = device.createComputePipeline(pipelineDesc);
+	m_bakingPipelines.eval.pipeline = device.createComputePipeline(pipelineDesc);
+	m_bakingPipelines.eval.bindGroup = bakingBindGroup;
 
 	pipelineDesc.label = "MarchingCubes Bake Count";
 	pipelineDesc.compute.entryPoint = "main_count";
-	m_bakingPipelines.count = device.createComputePipeline(pipelineDesc);
+	m_bakingPipelines.eval.pipeline = device.createComputePipeline(pipelineDesc);
+	m_bakingPipelines.eval.bindGroup = bakingBindGroup;
 
 	pipelineDesc.label = "MarchingCubes Bake Fill";
 	pipelineDesc.compute.entryPoint = "main_fill";
-	m_bakingPipelines.fill = device.createComputePipeline(pipelineDesc);
+	m_bakingPipelines.eval.pipeline = device.createComputePipeline(pipelineDesc);
+	m_bakingPipelines.eval.bindGroup = bakingBindGroup;
 }
 
 void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
@@ -204,9 +207,9 @@ void MarchingCubesRenderer::bake() {
 	ComputePassDescriptor computePassDesc = Default;
 	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
-	computePass.setPipeline(m_bakingPipelines.eval);
+	computePass.setPipeline(m_bakingPipelines.eval.pipeline);
 
-	computePass.setBindGroup(0, m_bakingBindGroup, 0, nullptr);
+	computePass.setBindGroup(0, m_bakingPipelines.eval.bindGroup, 0, nullptr);
 
 	computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
 
@@ -241,7 +244,6 @@ void MarchingCubesRenderer::bake() {
 }
 
 void MarchingCubesRenderer::draw(const DrawingContext& context) const {
-	if (true) return;
 	if (!m_vertexBuffer) return;
 	auto renderPass = context.renderPass;
 
