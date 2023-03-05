@@ -29,7 +29,10 @@
 #include "MarchingCubesRenderer.h"
 
 #include <GLFW/glfw3.h>
+
+#ifndef __EMSCRIPTEN__
 #include "glfw3webgpu.h"
+#endif
 
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -41,8 +44,10 @@
 #include <backends/imgui_impl_wgpu.h>
 #include <backends/imgui_impl_glfw.h>
 
-#include <webgpu.hpp>
-#include <wgpu.h> // wgpuTextureViewDrop
+#include <webgpu/webgpu.hpp>
+#if defined(WEBGPU_BACKEND_WGPU)
+#include <webgpu/wgpu.h> // wgpuTextureViewDrop
+#endif
 
 #include <iostream>
 #include <cassert>
@@ -111,7 +116,9 @@ bool Application::onInit() {
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
+#if !defined(WEBGPU_BACKEND_EMSCRIPTEN)
 	m_surface = glfwGetWGPUSurface(m_instance, m_window);
+#endif
 	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = m_surface;
 	Adapter adapter = m_instance.requestAdapter(adapterOpts);
@@ -146,7 +153,11 @@ bool Application::onInit() {
 	Queue queue = m_device.getQueue();
 
 	// Create swapchain
+#if defined(WEBGPU_BACKEND_WGPU)
 	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#else
+	m_swapChainFormat = TextureFormat::BGRA8Unorm;
+#endif
 	buildSwapChain();
 
 	std::cout << "Creating shader module..." << std::endl;
@@ -196,7 +207,11 @@ bool Application::onInit() {
 	samplerDesc.addressModeW = AddressMode::Repeat;
 	samplerDesc.magFilter = FilterMode::Linear;
 	samplerDesc.minFilter = FilterMode::Linear;
+#if defined(WEBGPU_BACKEND_WGPU)
 	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+#else
+	samplerDesc.mipmapFilter = FilterMode::Linear;
+#endif
 	samplerDesc.lodMinClamp = 0.0f;
 	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
@@ -320,7 +335,7 @@ bool Application::onInit() {
 	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
+	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
 	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
@@ -347,7 +362,6 @@ void Application::buildSwapChain() {
 	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
-	m_swapChainDesc = {};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
 	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
@@ -453,7 +467,9 @@ void Application::onFrame() {
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(command);
 
+#if defined(WEBGPU_BACKEND_WGPU)
 	wgpuTextureViewDrop(nextTexture);
+#endif
 	m_swapChain.present();
 }
 

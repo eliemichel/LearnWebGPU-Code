@@ -3,7 +3,7 @@
 
 using namespace wgpu;
 
-const static float quadVertices[] = {
+float quadVertices[] = {
 	0.0, 0.0,
 	0.0, 1.0,
 	1.0, 1.0,
