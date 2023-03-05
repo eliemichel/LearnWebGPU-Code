@@ -38,7 +38,7 @@ struct ModuleLut {
 
 fn evalSdf(pos: vec3<f32>) -> f32 {
 	let offset1 = vec3<f32>(0.0);
-	let radius1 = 0.5 + 0.1 * cos(uniforms.time);
+	let radius1 = 0.55 + 0.1 * cos(3.0 * uniforms.time);
 	let d1 = length(pos - offset1) - radius1;
 
 	let offset2 = vec3<f32>(0.0, 0.6, 0.6);
@@ -49,7 +49,7 @@ fn evalSdf(pos: vec3<f32>) -> f32 {
 
 fn evalNormal(pos: vec3<f32>) -> vec3<f32> {
 	let offset1 = vec3<f32>(0.0);
-	let radius1 = 0.5 + 0.1 * cos(uniforms.time);
+	let radius1 = 0.55 + 0.1 * cos(3.0 * uniforms.time);
 	let d1 = length(pos - offset1) - radius1;
 
 	let offset2 = vec3<f32>(0.0, 0.6, 0.6);
@@ -139,7 +139,11 @@ fn main_fill(in: ComputeInput) {
 		let entry = moduleLut.entries[begin_offset + i];
 		let edge_start_corner = cornerOffsetF(entry.edge_start_corner);
 		let edge_end_corner = cornerOffsetF(entry.edge_end_corner);
-		let grid_offset = (edge_start_corner + edge_end_corner) / 2.0;
+		let start_depth = cornerDepth[entry.edge_start_corner];
+		let end_depth = cornerDepth[entry.edge_end_corner];
+
+		let fac = -start_depth / (end_depth - start_depth);
+		let grid_offset = edge_start_corner * (1 - fac) + edge_end_corner * fac;
 		
 		var grid_coord = vec3<f32>(in.id) + grid_offset;
 		let position = positionFromGridCoord(grid_coord);

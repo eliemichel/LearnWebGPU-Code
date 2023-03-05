@@ -138,7 +138,7 @@ struct ModuleTransform {
 		return (offset.x << 0) + (offset.y << 1) + (offset.z << 2);
 	}
 
-	static std::vector<ModuleTransform> ComputeAllRotations() {
+	static std::vector<ModuleTransform> ComputeAllTransforms() {
 		std::vector<glm::vec3> axes = {
 			{1,0,0},
 			{0,1,0},
@@ -147,7 +147,7 @@ struct ModuleTransform {
 		std::vector<ModuleTransform> transforms;
 		// for each up axis
 		for (int i = 0; i < 2 * axes.size(); ++i) {
-			glm::vec3 up = axes[i % axes.size()] * (i > axes.size() ? 1.0f : -1.0f);
+			glm::vec3 up = axes[i % axes.size()] * (i >= axes.size() ? -1.0f : 1.0f);
 			glm::vec3 forward = axes[(i + 1) % axes.size()];
 			// for each side face
 			for (int j = 0; j < 4; ++j) {
@@ -169,45 +169,238 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 	Device device = context.device;
 	Queue queue = device.getQueue();
 
-	std::vector<ModuleTransform> transforms = ModuleTransform::ComputeAllRotations();
-
 	// 15 base cubes that we then flip/rotate
+	// (in the order listed on Wikipedia, X is horizontal to the right, Y is to the background and Z is up)
 	std::unordered_map<uint32_t,std::vector<ModuleLutEntry>> baseModules;
+	uint32_t i000 = ModuleTransform::CornerIndex({ 0, 0, 0 });
+	uint32_t i100 = ModuleTransform::CornerIndex({ 1, 0, 0 });
+	uint32_t i010 = ModuleTransform::CornerIndex({ 0, 1, 0 });
+	uint32_t i110 = ModuleTransform::CornerIndex({ 1, 1, 0 });
+	uint32_t i001 = ModuleTransform::CornerIndex({ 0, 0, 1 });
+	uint32_t i101 = ModuleTransform::CornerIndex({ 1, 0, 1 });
+	uint32_t i011 = ModuleTransform::CornerIndex({ 0, 1, 1 });
+	uint32_t i111 = ModuleTransform::CornerIndex({ 1, 1, 1 });
 	{
-		uint32_t c0 = ModuleTransform::CornerIndex({ 0, 0, 0 });
-		uint32_t c1 = ModuleTransform::CornerIndex({ 1, 0, 0 });
-		uint32_t c2 = ModuleTransform::CornerIndex({ 0, 1, 0 });
-		uint32_t c3 = ModuleTransform::CornerIndex({ 0, 0, 1 });
-		uint32_t moduleCode = 1u << c0;
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ c0, c1 });
-		entries.push_back({ c0, c2 });
-		entries.push_back({ c0, c3 });
+		baseModules[0] = {};
 	}
 	{
-		uint32_t c00 = ModuleTransform::CornerIndex({ 0, 0, 0 });
-		uint32_t c01 = ModuleTransform::CornerIndex({ 0, 1, 0 });
-		uint32_t c02 = ModuleTransform::CornerIndex({ 0, 0, 1 });
-		uint32_t c10 = ModuleTransform::CornerIndex({ 1, 0, 0 });
-		uint32_t c11 = ModuleTransform::CornerIndex({ 1, 1, 0 });
-		uint32_t c12 = ModuleTransform::CornerIndex({ 1, 0, 1 });
-		uint32_t moduleCode = (1u << c00) + (1u << c10);
+		uint32_t moduleCode = 1u << i000;
 		auto& entries = baseModules[moduleCode];
-		entries.push_back({ c00, c01 });
-		entries.push_back({ c10, c11 });
-		entries.push_back({ c00, c02 });
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i000, i010 });
+		entries.push_back({ i000, i001 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i100);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i010 });
+		entries.push_back({ i100, i110 });
+		entries.push_back({ i000, i001 });
 		
-		entries.push_back({ c00, c02 });
-		entries.push_back({ c10, c11 });
-		entries.push_back({ c10, c12 });
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i100, i110 });
+		entries.push_back({ i100, i101 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i101);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i000, i010 });
+		entries.push_back({ i000, i100 });
+
+		entries.push_back({ i101, i100 });
+		entries.push_back({ i101, i111 });
+		entries.push_back({ i101, i001 });
+	}
+	{
+		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i100, i000 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i010, i000 });
+
+		entries.push_back({ i010, i000 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i010, i011 });
+
+		entries.push_back({ i010, i011 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i110, i111 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i100) + (1u << i110) + (1u << i010);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i110, i111 });
+
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i110, i111 });
+		entries.push_back({ i010, i011 });
+	}
+	{
+		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010) + (1u << i001);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i100, i000 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i010, i000 });
+		entries.push_back({ i010, i000 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i010, i011 });
+		entries.push_back({ i010, i011 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i110, i111 });
+
+		entries.push_back({ i001, i000 });
+		entries.push_back({ i001, i101 });
+		entries.push_back({ i001, i011 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i011) + (1u << i101);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i000, i010 });
+		entries.push_back({ i000, i100 });
+
+		entries.push_back({ i110, i111 });
+		entries.push_back({ i110, i100 });
+		entries.push_back({ i110, i010 });
+
+		entries.push_back({ i011, i010 });
+		entries.push_back({ i011, i001 });
+		entries.push_back({ i011, i111 });
+
+		entries.push_back({ i101, i100 });
+		entries.push_back({ i101, i111 });
+		entries.push_back({ i101, i001 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i010) + (1u << i011);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i110, i100 });
+		entries.push_back({ i110, i111 });
+
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i110, i111 });
+		entries.push_back({ i011, i111 });
+
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i011, i111 });
+		entries.push_back({ i000, i001 });
+
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i011, i111 });
+		entries.push_back({ i011, i001 });
+	}
+	{
+		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010) + (1u << i011);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i110, i111 });
+		entries.push_back({ i100, i000 });
+
+		entries.push_back({ i100, i000 });
+		entries.push_back({ i110, i111 });
+		entries.push_back({ i011, i001 });
+
+		entries.push_back({ i100, i000 });
+		entries.push_back({ i011, i001 });
+		entries.push_back({ i010, i000 });
+
+		entries.push_back({ i011, i001 });
+		entries.push_back({ i011, i111 });
+		entries.push_back({ i110, i111 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i111);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i000, i010 });
+		entries.push_back({ i000, i100 });
+
+		entries.push_back({ i111, i110 });
+		entries.push_back({ i111, i101 });
+		entries.push_back({ i111, i011 });
+	}
+	{ // issue
+		uint32_t moduleCode = (1u << i000) + (1u << i100) + (1u << i111);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i000, i010 });
+		entries.push_back({ i100, i110 });
+
+		entries.push_back({ i100, i110 });
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i000, i001 });
+
+		entries.push_back({ i111, i110 });
+		entries.push_back({ i111, i101 });
+		entries.push_back({ i111, i011 });
+	}
+	{
+		uint32_t moduleCode = (1u << i100) + (1u << i001) + (1u << i111);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i100, i101 });
+		entries.push_back({ i100, i110 });
+		entries.push_back({ i100, i000 });
+
+		entries.push_back({ i001, i000 });
+		entries.push_back({ i001, i011 });
+		entries.push_back({ i001, i101 });
+
+		entries.push_back({ i111, i110 });
+		entries.push_back({ i111, i101 });
+		entries.push_back({ i111, i011 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i001) + (1u << i110) + (1u << i111);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i000, i010 });
+		entries.push_back({ i001, i011 });
+
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i001, i011 });
+		entries.push_back({ i001, i101 });
+		
+		entries.push_back({ i110, i100 });
+		entries.push_back({ i110, i010 });
+		entries.push_back({ i111, i011 });
+
+		entries.push_back({ i111, i011 });
+		entries.push_back({ i111, i101 });
+		entries.push_back({ i110, i100 });
+	}
+	{
+		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i010) + (1u << i111);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ i110, i100 });
+		entries.push_back({ i111, i101 });
+		entries.push_back({ i000, i100 });
+
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i111, i101 });
+		entries.push_back({ i010, i011 });
+
+		entries.push_back({ i010, i011 });
+		entries.push_back({ i111, i101 });
+		entries.push_back({ i111, i011 });
+
+		entries.push_back({ i000, i001 });
+		entries.push_back({ i000, i100 });
+		entries.push_back({ i010, i011 });
 	}
 
+	std::vector<ModuleTransform> transforms = ModuleTransform::ComputeAllTransforms();
 	std::unordered_map<uint32_t, std::vector<ModuleLutEntry>> modules;
 	for (const auto& cube : baseModules) {
 		uint32_t moduleCode = cube.first;
+		uint32_t complementaryModuleCode = ~moduleCode & 255;
 		const auto& entries = cube.second;
 		for (const auto& tr : transforms) {
 			modules[tr(moduleCode)] = tr(entries);
+			modules[tr(complementaryModuleCode)] = tr(entries);
 		}
 	}
 
