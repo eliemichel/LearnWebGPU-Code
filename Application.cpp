@@ -26,23 +26,27 @@
 
 #include "Application.h"
 #include "ResourceManager.h"
+#include "MarchingCubesRenderer.h"
 
 #include <GLFW/glfw3.h>
+
+#ifndef __EMSCRIPTEN__
 #include "glfw3webgpu.h"
+#endif
 
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#include <glm/gtx/polar_coordinates.hpp>
 
 #include <imgui.h>
 #include <backends/imgui_impl_wgpu.h>
 #include <backends/imgui_impl_glfw.h>
 
-#include <webgpu.hpp>
-
+#include <webgpu/webgpu.hpp>
 #if defined(WEBGPU_BACKEND_WGPU)
-#include <wgpu.h> // wgpuTextureViewDrop
+#include <webgpu/wgpu.h> // wgpuTextureViewDrop
 #endif
 
 #include <iostream>
@@ -112,7 +116,9 @@ bool Application::onInit() {
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
+#if !defined(WEBGPU_BACKEND_EMSCRIPTEN)
 	m_surface = glfwGetWGPUSurface(m_instance, m_window);
+#endif
 	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = m_surface;
 	Adapter adapter = m_instance.requestAdapter(adapterOpts);
@@ -125,7 +131,7 @@ bool Application::onInit() {
 	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBindGroups = 2;
-	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 
 	// Create device
@@ -147,16 +153,98 @@ bool Application::onInit() {
 	Queue queue = m_device.getQueue();
 
 	// Create swapchain
-#if defined(WEBGPU_BACKEND_DAWN)
-	m_swapChainFormat = WGPUTextureFormat_BGRA8Unorm;
-#else
+#if defined(WEBGPU_BACKEND_WGPU)
 	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#else
+	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #endif
 	buildSwapChain();
 
 	std::cout << "Creating shader module..." << std::endl;
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
+
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
+	if (!success) {
+		std::cerr << "Could not load geometry!" << std::endl;
+		return 1;
+	}
+
+	// Create vertex buffer
+	BufferDescriptor bufferDesc;
+	bufferDesc.size = m_vertexData.size() * sizeof(VertexAttributes);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
+	bufferDesc.mappedAtCreation = false;
+	m_vertexBuffer = m_device.createBuffer(bufferDesc);
+	queue.writeBuffer(m_vertexBuffer, 0, m_vertexData.data(), bufferDesc.size);
+
+	m_indexCount = static_cast<int>(m_vertexData.size());
+
+	// Create uniform buffer
+	bufferDesc.size = sizeof(MyUniforms);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	bufferDesc.mappedAtCreation = false;
+	m_uniformBuffer = m_device.createBuffer(bufferDesc);
+
+	// Upload the initial value of the uniforms
+	m_uniforms.time = 1.0f;
+	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+
+	// Matrices
+	m_uniforms.modelMatrix = mat4x4(1.0);
+	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
+
+	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
+	updateViewMatrix();
+
+	buildDepthBuffer();
+
+	// Create a sampler
+	SamplerDescriptor samplerDesc;
+	samplerDesc.addressModeU = AddressMode::Repeat;
+	samplerDesc.addressModeV = AddressMode::Repeat;
+	samplerDesc.addressModeW = AddressMode::Repeat;
+	samplerDesc.magFilter = FilterMode::Linear;
+	samplerDesc.minFilter = FilterMode::Linear;
+#if defined(WEBGPU_BACKEND_WGPU)
+	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+#else
+	samplerDesc.mipmapFilter = FilterMode::Linear;
+#endif
+	samplerDesc.lodMinClamp = 0.0f;
+	samplerDesc.lodMaxClamp = 32.0f;
+	samplerDesc.compare = CompareFunction::Undefined;
+	samplerDesc.maxAnisotropy = 1;
+	Sampler sampler = m_device.createSampler(samplerDesc);
+
+	// Create binding layout
+	m_bindingLayoutEntries.resize(2, Default);
+
+	BindGroupLayoutEntry& bindingLayout = m_bindingLayoutEntries[0];
+	bindingLayout.binding = 0;
+	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
+	bindingLayout.buffer.type = BufferBindingType::Uniform;
+	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+
+	BindGroupLayoutEntry& samplerBindingLayout = m_bindingLayoutEntries[1];
+	samplerBindingLayout.binding = 1;
+	samplerBindingLayout.visibility = ShaderStage::Fragment;
+	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
+
+	// Create bindings
+	m_bindings.resize(2);
+
+	m_bindings[0].binding = 0;
+	m_bindings[0].buffer = m_uniformBuffer;
+	m_bindings[0].offset = 0;
+	m_bindings[0].size = sizeof(MyUniforms);
+
+	m_bindings[1].binding = 1;
+	m_bindings[1].sampler = sampler;
+
+	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
+	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
 	RenderPipelineDescriptor pipelineDesc{};
@@ -238,128 +326,31 @@ bool Application::onInit() {
 	pipelineDesc.multisample.mask = ~0u;
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-	// Create binding layout
-	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(3, Default);
-	//                                                     ^ This was a 2
-
-	BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
-	bindingLayout.binding = 0;
-	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
-	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
-
-	BindGroupLayoutEntry& textureBindingLayout = bindingLayoutEntries[1];
-	textureBindingLayout.binding = 1;
-	textureBindingLayout.visibility = ShaderStage::Fragment;
-	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
-	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
-
-	// The new binding layout, for the sampler
-	BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
-	samplerBindingLayout.binding = 2;
-	samplerBindingLayout.visibility = ShaderStage::Fragment;
-	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
-
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
-	bindGroupLayoutDesc.entryCount = (uint32_t)bindingLayoutEntries.size();
-	bindGroupLayoutDesc.entries = bindingLayoutEntries.data();
+	bindGroupLayoutDesc.entryCount = (uint32_t)m_bindingLayoutEntries.size();
+	bindGroupLayoutDesc.entries = m_bindingLayoutEntries.data();
 	BindGroupLayout bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
 
 	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
+	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
 	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
 	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << m_pipeline << std::endl;
 
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
-	if (!success) {
-		std::cerr << "Could not load geometry!" << std::endl;
-		return 1;
-	}
-
-	// Create vertex buffer
-	BufferDescriptor bufferDesc;
-	bufferDesc.size = m_vertexData.size() * sizeof(VertexAttributes);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
-	bufferDesc.mappedAtCreation = false;
-	m_vertexBuffer = m_device.createBuffer(bufferDesc);
-	queue.writeBuffer(m_vertexBuffer, 0, m_vertexData.data(), bufferDesc.size);
-
-	m_indexCount = static_cast<int>(m_vertexData.size());
-
-	// Create uniform buffer
-	bufferDesc.size = sizeof(MyUniforms);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
-	bufferDesc.mappedAtCreation = false;
-	m_uniformBuffer = m_device.createBuffer(bufferDesc);
-
-	// Upload the initial value of the uniforms
-	m_uniforms.time = 1.0f;
-	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
-
-	// Matrices
-	m_uniforms.modelMatrix = mat4x4(1.0);
-	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
-	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
-
-	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
-	updateViewMatrix();
-
-	buildDepthBuffer();
-
-	// Create a texture
-	TextureView textureView = nullptr;
-	m_texture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", m_device, &textureView);
-	if (!m_texture) {
-		std::cerr << "Could not load texture!" << std::endl;
-		return 1;
-	}
-
-	// Create a sampler
-	SamplerDescriptor samplerDesc;
-	samplerDesc.addressModeU = AddressMode::Repeat;
-	samplerDesc.addressModeV = AddressMode::Repeat;
-	samplerDesc.addressModeW = AddressMode::Repeat;
-	samplerDesc.magFilter = FilterMode::Linear;
-	samplerDesc.minFilter = FilterMode::Linear;
-#if defined(WEBGPU_BACKEND_WGPU)
-	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
-#else
-	samplerDesc.mipmapFilter = FilterMode::Linear;
-#endif
-	samplerDesc.lodMinClamp = 0.0f;
-	samplerDesc.lodMaxClamp = 32.0f;
-	samplerDesc.compare = CompareFunction::Undefined;
-	samplerDesc.maxAnisotropy = 1;
-	Sampler sampler = m_device.createSampler(samplerDesc);
-
-	// Create a binding
-	std::vector<BindGroupEntry> bindings(3);
-	//                                   ^ This was a 2
-
-	bindings[0].binding = 0;
-	bindings[0].buffer = m_uniformBuffer;
-	bindings[0].offset = 0;
-	bindings[0].size = sizeof(MyUniforms);
-
-	bindings[1].binding = 1;
-	bindings[1].textureView = textureView;
-
-	// A new binding for the sampler
-	bindings[2].binding = 2;
-	bindings[2].sampler = sampler;
-
 	// Create bind group
 	BindGroupDescriptor bindGroupDesc{};
 	bindGroupDesc.layout = bindGroupLayout;
-	bindGroupDesc.entryCount = (uint32_t)bindings.size();
-	bindGroupDesc.entries = bindings.data();
+	bindGroupDesc.entryCount = (uint32_t)m_bindings.size();
+	bindGroupDesc.entries = m_bindings.data();
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
+
+	InitContext ctx{ m_device, m_swapChainFormat };
+	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 32);
 
 	initGui();
 
@@ -371,14 +362,9 @@ void Application::buildSwapChain() {
 	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
-	m_swapChainDesc = {};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
-#if defined(WEBGPU_BACKEND_DAWN)
 	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
-#else
-	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
-#endif
 	m_swapChainDesc.format = m_swapChainFormat;
 	m_swapChainDesc.presentMode = PresentMode::Fifo;
 	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
@@ -419,7 +405,9 @@ void Application::onFrame() {
 	glfwPollEvents();
 	Queue queue = m_device.getQueue();
 
+	updateLighting();
 	updateDragInertia();
+	m_marchingCubesRenderer->bake();
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
@@ -442,34 +430,19 @@ void Application::onFrame() {
 	colorAttachment.resolveTarget = nullptr;
 	colorAttachment.loadOp = LoadOp::Clear;
 	colorAttachment.storeOp = StoreOp::Store;
-#if defined(WEBGPU_BACKEND_DAWN)
-	constexpr auto NaN = std::numeric_limits<double>::quiet_NaN();
-	colorAttachment.clearColor = Color{ NaN, NaN, NaN, NaN };
-	colorAttachment.clearValue = Color{ 0.256, 0.256, 0.256, 1.0 };
-#else
 	colorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
-#endif
 	renderPassDesc.colorAttachmentCount = 1;
 	renderPassDesc.colorAttachments = &colorAttachment;
 
 	RenderPassDepthStencilAttachment depthStencilAttachment;
 	depthStencilAttachment.view = m_depthTextureView;
-	depthStencilAttachment.depthClearValue = 1.0f;
-#if defined(WEBGPU_BACKEND_DAWN)
-	constexpr auto NaNf = std::numeric_limits<float>::quiet_NaN();
-	depthStencilAttachment.clearDepth = NaNf;
-#endif
+	depthStencilAttachment.depthClearValue = 100.0f;
 	depthStencilAttachment.depthLoadOp = LoadOp::Clear;
 	depthStencilAttachment.depthStoreOp = StoreOp::Store;
 	depthStencilAttachment.depthReadOnly = false;
 	depthStencilAttachment.stencilClearValue = 0;
-#if defined(WEBGPU_BACKEND_DAWN)
-	depthStencilAttachment.stencilLoadOp = LoadOp::Undefined;
-	depthStencilAttachment.stencilStoreOp = StoreOp::Undefined;
-#else
 	depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
 	depthStencilAttachment.stencilStoreOp = StoreOp::Store;
-#endif
 	depthStencilAttachment.stencilReadOnly = true;
 
 	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
@@ -483,6 +456,9 @@ void Application::onFrame() {
 	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
 	renderPass.draw(m_indexCount, 1, 0, 0);
+
+	DrawingContext ctx{ renderPass };
+	m_marchingCubesRenderer->draw(ctx);
 
 	updateGui(renderPass);
 
@@ -498,7 +474,9 @@ void Application::onFrame() {
 }
 
 void Application::onFinish() {
-	m_texture.destroy();
+	for (auto texture : m_textures) {
+		texture.destroy();
+	}
 	m_depthTexture.destroy();
 
 	glfwDestroyWindow(m_window);
@@ -570,6 +548,9 @@ void Application::updateViewMatrix() {
 	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_cameraState.zoom);
 	m_uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
 	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
+
+	m_uniforms.cameraWorldPosition = position;
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(MyUniforms::cameraWorldPosition));
 }
 
 void Application::updateDragInertia() {
@@ -596,37 +577,109 @@ void Application::initGui() {
 	ImGui_ImplWGPU_Init(m_device, 3, m_swapChainFormat, m_depthTextureFormat);
 }
 
+namespace ImGui {
+bool DragDirection(const char *label, vec4& direction) {
+	vec2 angles = glm::degrees(glm::polar(vec3(direction)));
+	bool changed = ImGui::DragFloat2(label, glm::value_ptr(angles));
+	direction = vec4(glm::euclidean(glm::radians(angles)), direction.w);
+	return changed;
+}
+} // namespace ImGui
+
 void Application::updateGui(RenderPassEncoder renderPass) {
 	// Start the Dear ImGui frame
 	ImGui_ImplWGPU_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	{
-		static float f = 0.0f;
-		static int counter = 0;
-		static bool show_demo_window = true;
-		static bool show_another_window = false;
-		static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
-		ImGui::Begin("Hello, world!");                                // Create a window called "Hello, world!" and append into it.
-
-		ImGui::Text("This is some useful text.");                     // Display some text (you can use a format strings too)
-		ImGui::Checkbox("Demo Window", &show_demo_window);            // Edit bools storing our window open/close state
-		ImGui::Checkbox("Another Window", &show_another_window);
-
-		ImGui::SliderFloat("float", &f, 0.0f, 1.0f);                  // Edit 1 float using a slider from 0.0f to 1.0f
-		ImGui::ColorEdit3("clear color", (float*)&clear_color);       // Edit 3 floats representing a color
-
-		if (ImGui::Button("Button"))                                  // Buttons return true when clicked (most widgets return true when edited/activated)
-			counter++;
-		ImGui::SameLine();
-		ImGui::Text("counter = %d", counter);
-
-		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-		ImGui::End();
-	}
+	bool changed = false;
+	ImGui::Begin("Lighting");
+	changed = ImGui::ColorEdit3("Color #0", glm::value_ptr(m_lightingUniforms.colors[0])) || changed;
+	changed = ImGui::DragDirection("Direction #0", m_lightingUniforms.directions[0]) || changed;
+	changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1])) || changed;
+	changed = ImGui::DragDirection("Direction #1", m_lightingUniforms.directions[1]) || changed;
+	changed = ImGui::SliderFloat("Hardness", &m_lightingUniforms.hardness, 0.01f, 128.0f) || changed;
+	changed = ImGui::SliderFloat("K Diffuse", &m_lightingUniforms.kd, 0.0f, 2.0f) || changed;
+	changed = ImGui::SliderFloat("K Specular", &m_lightingUniforms.ks, 0.0f, 2.0f) || changed;
+	ImGui::End();
+	m_lightingUniformsChanged = changed;
 
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
+}
+
+bool Application::initTexture(const std::filesystem::path &path) {
+	// Create a texture
+	TextureView textureView = nullptr;
+	Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
+	if (!texture) {
+		std::cerr << "Could not load texture!" << std::endl;
+		return false;
+	}
+	m_textures.push_back(texture);
+
+	// Setup binding
+	uint32_t bindingIndex = (uint32_t)m_bindingLayoutEntries.size();
+	BindGroupLayoutEntry bindingLayout = Default;
+	bindingLayout.binding = bindingIndex;
+	bindingLayout.visibility = ShaderStage::Fragment;
+	bindingLayout.texture.sampleType = TextureSampleType::Float;
+	bindingLayout.texture.viewDimension = TextureViewDimension::_2D;
+	m_bindingLayoutEntries.push_back(bindingLayout);
+
+	BindGroupEntry binding = Default;
+	binding.binding = bindingIndex;
+	binding.textureView = textureView;
+	m_bindings.push_back(binding);
+
+	return true;
+}
+
+void Application::initLighting() {
+	Queue queue = m_device.getQueue();
+
+	// Create uniform buffer
+	BufferDescriptor bufferDesc;
+	bufferDesc.size = sizeof(LightingUniforms);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	bufferDesc.mappedAtCreation = false;
+	m_lightingUniformBuffer = m_device.createBuffer(bufferDesc);
+
+	// Upload the initial value of the uniforms
+	m_lightingUniforms.directions = {
+		vec4{0.5, -0.9, 0.1, 0.0},
+		vec4{0.2, 0.4, 0.3, 0.0}
+	};
+	m_lightingUniforms.colors = {
+		vec4{1.0, 0.9, 0.6, 1.0},
+		vec4{0.6, 0.9, 1.0, 1.0}
+	};
+	m_lightingUniforms.hardness = 16.0f;
+	m_lightingUniforms.kd = 1.0f;
+	m_lightingUniforms.ks = 0.5f;
+
+	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
+
+	// Setup binding
+	uint32_t bindingIndex = (uint32_t)m_bindingLayoutEntries.size();
+	BindGroupLayoutEntry bindingLayout = Default;
+	bindingLayout.binding = bindingIndex;
+	bindingLayout.visibility = ShaderStage::Fragment;
+	bindingLayout.buffer.type = BufferBindingType::Uniform;
+	bindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
+	m_bindingLayoutEntries.push_back(bindingLayout);
+
+	BindGroupEntry binding = Default;
+	binding.binding = bindingIndex;
+	binding.buffer = m_lightingUniformBuffer;
+	binding.offset = 0;
+	binding.size = sizeof(LightingUniforms);
+	m_bindings.push_back(binding);
+}
+
+void Application::updateLighting() {
+	if (m_lightingUniformsChanged) {
+		Queue queue = m_device.getQueue();
+		queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
+	}
 }

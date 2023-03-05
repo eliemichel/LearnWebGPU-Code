@@ -28,10 +28,16 @@
 
 #include "ResourceManager.h"
 
-#include <webgpu.hpp>
+#include <webgpu/webgpu.hpp>
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
+
+#include <array>
+#include <filesystem>
+#include <memory>
+
+class MarchingCubesRenderer;
 
 class Application {
 public:
@@ -64,8 +70,14 @@ private:
 	void initGui(); // called in onInit
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
 
+	bool initTexture(const std::filesystem::path& path);
+
+	void initLighting();
+	void updateLighting();
+
 private:
 	using vec2 = glm::vec2;
+	using vec3 = glm::vec3;
 	using vec4 = glm::vec4;
 	using mat4x4 = glm::mat4x4;
 
@@ -74,8 +86,8 @@ private:
 		mat4x4 viewMatrix;
 		mat4x4 modelMatrix;
 		vec4 color;
+		vec3 cameraWorldPosition;
 		float time;
-		float _pad[3];
 	};
 	static_assert(sizeof(MyUniforms) % 16 == 0);
 
@@ -92,13 +104,30 @@ private:
 	wgpu::RenderPipeline m_pipeline = nullptr;
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
-	wgpu::Texture m_texture = nullptr;
+	std::vector<wgpu::Texture> m_textures;
 	wgpu::Texture m_depthTexture = nullptr;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
 	MyUniforms m_uniforms;
 	std::vector<ResourceManager::VertexAttributes> m_vertexData;
 	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
+
+	std::vector<wgpu::BindGroupLayoutEntry> m_bindingLayoutEntries;
+	std::vector<wgpu::BindGroupEntry> m_bindings;
+
+	// Lighting
+	struct LightingUniforms {
+		std::array<vec4, 2> directions;
+		std::array<vec4, 2> colors;
+		float hardness;
+		float kd;
+		float ks;
+		float _pad;
+	};
+	static_assert(sizeof(LightingUniforms) % 16 == 0);
+	wgpu::Buffer m_lightingUniformBuffer = nullptr;
+	LightingUniforms m_lightingUniforms;
+	bool m_lightingUniformsChanged = false;
 
 	struct CameraState {
 		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x
@@ -128,4 +157,6 @@ private:
 
 	CameraState m_cameraState;
 	DragState m_drag;
+
+	std::shared_ptr<MarchingCubesRenderer> m_marchingCubesRenderer;
 };

@@ -44,19 +44,16 @@ ShaderModule ResourceManager::loadShaderModule(const path& path, Device device) 
 	file.seekg(0);
 	file.read(shaderSource.data(), size);
 
+	ShaderModuleDescriptor shaderDesc{};
 	ShaderModuleWGSLDescriptor shaderCodeDesc{};
 	shaderCodeDesc.chain.next = nullptr;
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
-#if defined(WEBGPU_BACKEND_DAWN)
-	shaderCodeDesc.source = shaderSource.c_str();
-#else
+#if defined(WEBGPU_BACKEND_WGPU)
 	shaderCodeDesc.code = shaderSource.c_str();
-#endif
-
-	ShaderModuleDescriptor shaderDesc{};
-#if !defined(WEBGPU_BACKEND_DAWN)
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
+#else
+	shaderCodeDesc.source = shaderSource.c_str();
 #endif
 	shaderDesc.nextInChain = &shaderCodeDesc.chain;
 	return device.createShaderModule(shaderDesc);
@@ -90,7 +87,7 @@ bool ResourceManager::loadGeometryFromObj(const path& path, std::vector<VertexAt
 		size_t offset = vertexData.size();
 		vertexData.resize(offset + shape.mesh.indices.size());
 
-		for (int i = 0; i < vertexData.size(); ++i) {
+		for (size_t i = 0; i < vertexData.size(); ++i) {
 			const tinyobj::index_t& idx = shape.mesh.indices[i];
 
 			vertexData[offset + i].position = {

@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include <webgpu.hpp>
+#include <webgpu/webgpu.hpp>
 
 #include <glm/glm.hpp>
 
