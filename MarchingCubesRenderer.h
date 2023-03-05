@@ -77,6 +77,7 @@ private:
 		// Each entry represents a point, to be grouped by 3 to form triangles
 		std::vector<ModuleLutEntry> entries;
 	};
+	friend struct ModuleTransform;
 
 	Uniforms m_uniforms;
 	wgpu::Device m_device = nullptr;

@@ -1,6 +1,9 @@
 #include "MarchingCubesRenderer.h"
 #include "ResourceManager.h"
 
+#include <unordered_map>
+#include <algorithm>
+
 using namespace wgpu;
 
 float quadVertices[] = {
@@ -93,31 +96,141 @@ MarchingCubesRenderer::BoundComputePipeline MarchingCubesRenderer::createBoundCo
 	return boundPipeline;
 }
 
+struct ModuleTransform {
+	using ModuleLutEntry = MarchingCubesRenderer::ModuleLutEntry;
+
+	std::array<uint32_t, 8> permutation; // corner index -> transformed corner index
+
+	uint32_t operator() (uint32_t moduleCode) const {
+		uint32_t transformedModuleCode = 0;
+		for (int i = 0; i < 8; ++i) {
+			if (moduleCode & (1 << i)) {
+				transformedModuleCode += 1 << permutation[i];
+			}
+		}
+		return transformedModuleCode;
+	}
+	ModuleLutEntry operator() (const ModuleLutEntry& entry) const {
+		return {
+			permutation[entry.edgeStartCorner],
+			permutation[entry.edgeEndCorner]
+		};
+	}
+	std::vector<ModuleLutEntry> operator() (const std::vector<ModuleLutEntry>&entries) const {
+		const auto& tr = *this;
+		std::vector<ModuleLutEntry> transformedEntries;
+		for (const auto& entry : entries) {
+			transformedEntries.push_back(tr(entry));
+		}
+		return transformedEntries;
+	}
+
+	static glm::uvec3 CornerOffset(uint32_t i) {
+		return glm::uvec3(
+			(i & (1u << 0)) >> 0,
+			(i & (1u << 1)) >> 1,
+			(i & (1u << 2)) >> 2
+		);
+	}
+	static uint32_t CornerIndex(const glm::uvec3& offset) {
+		return (offset.x << 0) + (offset.y << 1) + (offset.z << 2);
+	}
+
+	static std::vector<ModuleTransform> ComputeAllRotations() {
+		std::vector<glm::vec3> axes = {
+			{1,0,0},
+			{0,1,0},
+			{0,0,1}
+		};
+		std::vector<ModuleTransform> transforms;
+		// for each up axis
+		for (int i = 0; i < 2 * axes.size(); ++i) {
+			glm::vec3 up = axes[i % axes.size()] * (i > axes.size() ? 1.0f : -1.0f);
+			glm::vec3 forward = axes[(i + 1) % axes.size()];
+			// for each side face
+			for (int j = 0; j < 4; ++j) {
+				glm::vec3 side = cross(up, forward);
+				glm::mat3 localToWorld = { forward, side, up };
+				ModuleTransform tr;
+				for (uint32_t k = 0; k < 8; ++k) {
+					tr.permutation[k] = ModuleTransform::CornerIndex(glm::uvec3((localToWorld * (glm::vec3(ModuleTransform::CornerOffset(k)) - 0.5f)) + 0.5f));
+				}
+				transforms.push_back(tr);
+				forward = side;
+			}
+		}
+	}
+};
+
 void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 	Device device = context.device;
 	Queue queue = device.getQueue();
 
-	ModuleLut lut;
-	std::fill(lut.endOffset.begin(), lut.endOffset.end(), 0);
+	std::vector<ModuleTransform> transforms = ModuleTransform::ComputeAllRotations();
 
-	for (int k = 0; k < 256; ++k) {
-		lut.entries.push_back({ 0, 1 });
-		lut.entries.push_back({ 0, 2 });
-		lut.entries.push_back({ 0, 3 });
-		for (int i = k; i < 256; ++i) {
-			lut.endOffset[i] += 3;
+	// 15 base cubes that we then flip/rotate
+	std::unordered_map<uint32_t,std::vector<ModuleLutEntry>> baseModules;
+	{
+		uint32_t c0 = ModuleTransform::CornerIndex({ 0, 0, 0 });
+		uint32_t c1 = ModuleTransform::CornerIndex({ 1, 0, 0 });
+		uint32_t c2 = ModuleTransform::CornerIndex({ 0, 1, 0 });
+		uint32_t c3 = ModuleTransform::CornerIndex({ 0, 0, 1 });
+		uint32_t moduleCode = 1u << c0;
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ c0, c1 });
+		entries.push_back({ c0, c2 });
+		entries.push_back({ c0, c3 });
+	}
+	{
+		uint32_t c00 = ModuleTransform::CornerIndex({ 0, 0, 0 });
+		uint32_t c01 = ModuleTransform::CornerIndex({ 0, 1, 0 });
+		uint32_t c02 = ModuleTransform::CornerIndex({ 0, 0, 1 });
+		uint32_t c10 = ModuleTransform::CornerIndex({ 1, 0, 0 });
+		uint32_t c11 = ModuleTransform::CornerIndex({ 1, 1, 0 });
+		uint32_t c12 = ModuleTransform::CornerIndex({ 1, 0, 1 });
+		uint32_t moduleCode = (1u << c00) + (1u << c10);
+		auto& entries = baseModules[moduleCode];
+		entries.push_back({ c00, c01 });
+		entries.push_back({ c10, c11 });
+		entries.push_back({ c00, c02 });
+		
+		entries.push_back({ c00, c02 });
+		entries.push_back({ c10, c11 });
+		entries.push_back({ c10, c12 });
+	}
+
+	std::unordered_map<uint32_t, std::vector<ModuleLutEntry>> modules;
+	for (const auto& cube : baseModules) {
+		uint32_t moduleCode = cube.first;
+		const auto& entries = cube.second;
+		for (const auto& tr : transforms) {
+			modules[tr(moduleCode)] = tr(entries);
 		}
 	}
 
-	m_moduleLutBufferSize = static_cast<uint32_t>(sizeof(ModuleLut::endOffset) + lut.entries.size() * sizeof(ModuleLutEntry));
+	ModuleLut lut;
+	std::fill(lut.endOffset.begin(), lut.endOffset.end(), 0);
+	uint32_t offset = 0;
+	for (int k = 0; k < 256; ++k) {
+		auto it = modules.find(k);
+		if (it != modules.end()) {
+			for (auto& entry : it->second) {
+				lut.entries.push_back(entry);
+				++offset;
+			}
+		}
+		lut.endOffset[k] = offset;
+	}
+
+	m_moduleLutBufferSize = static_cast<uint32_t>(256 * sizeof(uint32_t) + std::max(lut.entries.size(), (size_t)1) * sizeof(ModuleLutEntry));
 
 	BufferDescriptor bufferDesc = Default;
 	bufferDesc.label = "MarchingCubes Module LUT";
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Storage;
 	bufferDesc.size = (m_moduleLutBufferSize + 3) & ~3;
 	m_moduleLutBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(m_moduleLutBuffer, offsetof(ModuleLut, endOffset), &lut.endOffset, sizeof(ModuleLut::endOffset));
-	queue.writeBuffer(m_moduleLutBuffer, offsetof(ModuleLut, entries), lut.entries.data(), lut.entries.size() * sizeof(ModuleLutEntry));
+	queue.writeBuffer(m_moduleLutBuffer, 0, &lut.endOffset, 256 * sizeof(uint32_t));
+	queue.writeBuffer(m_moduleLutBuffer, 256 * sizeof(uint32_t), lut.entries.data(), lut.entries.size() * sizeof(ModuleLutEntry));
 }
 
 void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
