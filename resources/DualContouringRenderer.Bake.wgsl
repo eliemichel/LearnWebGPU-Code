@@ -99,55 +99,54 @@ fn main_reset_count() {
 
 @compute @workgroup_size(1)
 fn main_count(in: ComputeInput) {
-	var cornerDepth: array<f32,8>;
-	var module_code: u32 = 0;
-	for (var i: u32 = 0 ; i < 8 ; i++) {
-		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
-		if (cornerDepth[i] < 0) {
-			module_code += 1u << i;
+	let d = textureLoad(distance_grid_read, in.id, 0).r;
+
+	var local_point_count = 0u;
+
+	for (var dim = 0u ; dim < 3u ; dim++) {
+		if (in.id[dim] < uniforms.resolution - 1) {
+			var neighborId = in.id;
+			neighborId[dim]++;
+			let neighborD = textureLoad(distance_grid_read, neighborId, 0).r;
+			if ((d < 0) != (neighborD < 0)) {
+				local_point_count++;
+			}
 		}
 	}
 
-	var begin_offset = 0u;
-	if (module_code > 0) {
-		begin_offset = moduleLut.end_offset[module_code - 1];
-	}
-	let module_point_count = moduleLut.end_offset[module_code] - begin_offset;
-
-	atomicAdd(&counts.point_count, module_point_count);
+	atomicAdd(&counts.point_count, 6 * local_point_count);
 }
 
 @compute @workgroup_size(1)
 fn main_fill(in: ComputeInput) {
-	var cornerDepth: array<f32,8>;
-	var module_code: u32 = 0;
-	for (var i = 0u ; i < 8 ; i++) {
-		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
-		if (cornerDepth[i] < 0) {
-			module_code += 1u << i;
+	let d = textureLoad(distance_grid_read, in.id, 0).r;
+
+	var local_point_count = 0u;
+
+	for (var dim = 0u ; dim < 3u ; dim++) {
+		if (in.id[dim] < uniforms.resolution - 1) {
+			var neighborId = in.id;
+			neighborId[dim]++;
+			var right = vec3<f32>(0.0, 0.0, 0.0);
+			right[(dim + 1) % 3] = 1.0;
+			var up = vec3<f32>(0.0, 0.0, 0.0);
+			up[(dim + 2) % 3] = 1.0;
+			let neighborD = textureLoad(distance_grid_read, neighborId, 0).r;
+			if ((d < 0) != (neighborD < 0)) {
+				let addr = allocateVertices(6);
+				let grid_coord = (vec3<f32>(in.id) + vec3<f32>(neighborId)) / 2.0;
+				let position = positionFromGridCoord(grid_coord);
+				let size = 1.0 / f32(uniforms.resolution);
+				vertices[addr + 0].position = position + (-right - up) * size;
+				vertices[addr + 1].position = position + ( right - up) * size;
+				vertices[addr + 2].position = position + ( right + up) * size;
+				vertices[addr + 3].position = position + (-right - up) * size;
+				vertices[addr + 4].position = position + ( right + up) * size;
+				vertices[addr + 5].position = position + (-right + up) * size;
+				for (var i = 0u ; i < 6u ; i++) {
+					vertices[addr + i].normal = evalNormal(vertices[addr + i].position);
+				}
+			}
 		}
-	}
-
-	var begin_offset = 0u;
-	if (module_code > 0) {
-		begin_offset = moduleLut.end_offset[module_code - 1];
-	}
-	let module_point_count = moduleLut.end_offset[module_code] - begin_offset;
-
-	let addr = allocateVertices(module_point_count);
-	for (var i = 0u ; i < module_point_count ; i++) {
-		let entry = moduleLut.entries[begin_offset + i];
-		let edge_start_corner = cornerOffsetF(entry.edge_start_corner);
-		let edge_end_corner = cornerOffsetF(entry.edge_end_corner);
-		let start_depth = cornerDepth[entry.edge_start_corner];
-		let end_depth = cornerDepth[entry.edge_end_corner];
-
-		let fac = -start_depth / (end_depth - start_depth);
-		let grid_offset = edge_start_corner * (1 - fac) + edge_end_corner * fac;
-		
-		var grid_coord = vec3<f32>(in.id) + grid_offset;
-		let position = positionFromGridCoord(grid_coord);
-		vertices[addr + i].position = position;
-		vertices[addr + i].normal = evalNormal(position);
 	}
 }
