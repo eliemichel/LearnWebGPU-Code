@@ -27,6 +27,7 @@
 #include "Application.h"
 #include "ResourceManager.h"
 #include "MarchingCubesRenderer.h"
+#include "DualContouringRenderer.h"
 
 #include <GLFW/glfw3.h>
 
@@ -349,7 +350,7 @@ bool Application::onInit() {
 	bindGroupDesc.entries = m_bindings.data();
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
-	InitContext ctx{
+	AbstractRenderer::InitContext ctx{
 		m_device,
 		m_swapChainFormat,
 		m_depthTextureFormat,
@@ -357,6 +358,7 @@ bool Application::onInit() {
 		sizeof(CameraUniforms)
 	};
 	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 128);
+	m_dualContouringRenderer = std::make_shared<DualContouringRenderer>(ctx, 128);
 
 	initGui();
 
@@ -414,6 +416,7 @@ void Application::onFrame() {
 	updateLighting();
 	updateDragInertia();
 	m_marchingCubesRenderer->bake();
+	m_dualContouringRenderer->bake();
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
@@ -478,8 +481,9 @@ void Application::onFrame() {
 
 	renderPass.draw(m_indexCount, 1, 0, 0);
 
-	DrawingContext ctx{ renderPass };
+	AbstractRenderer::DrawingContext ctx{ renderPass };
 	m_marchingCubesRenderer->draw(ctx);
+	m_dualContouringRenderer->draw(ctx);
 
 	updateGui(renderPass);
 

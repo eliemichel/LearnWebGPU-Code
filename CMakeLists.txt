@@ -17,8 +17,11 @@ add_subdirectory(glfw3webgpu)
 add_subdirectory(imgui)
 
 add_executable(App
+	AbstractRenderer.h
 	Application.h
 	Application.cpp
+	DualContouringRenderer.h
+	DualContouringRenderer.cpp
 	MarchingCubesRenderer.h
 	MarchingCubesRenderer.cpp
 	ResourceManager.h

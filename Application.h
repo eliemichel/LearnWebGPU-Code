@@ -38,6 +38,7 @@
 #include <memory>
 
 class MarchingCubesRenderer;
+class DualContouringRenderer;
 
 class Application {
 public:
@@ -159,4 +160,5 @@ private:
 	DragState m_drag;
 
 	std::shared_ptr<MarchingCubesRenderer> m_marchingCubesRenderer;
+	std::shared_ptr<DualContouringRenderer> m_dualContouringRenderer;
 };

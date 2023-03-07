@@ -10,12 +10,12 @@
 #include <vector>
 #include <array>
 
-class MarchingCubesRenderer : public AbstractRenderer {
+class DualContouringRenderer : public AbstractRenderer {
 public:
-	MOVE_ONLY(MarchingCubesRenderer)
+	MOVE_ONLY(DualContouringRenderer)
 
-	MarchingCubesRenderer(const InitContext& context, uint32_t resolution);
-	~MarchingCubesRenderer();
+	DualContouringRenderer(const InitContext& context, uint32_t resolution);
+	~DualContouringRenderer();
 	
 	void bake();
 	void draw(const DrawingContext& context) const override;
