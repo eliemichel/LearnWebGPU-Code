@@ -34,7 +34,26 @@ struct ModuleLut {
 @group(0) @binding(2) var distance_grid_read: texture_3d<f32>;
 @group(0) @binding(3) var<storage,read_write> counts: Counts;
 @group(0) @binding(4) var<storage,read> moduleLut: ModuleLut;
+@group(0) @binding(5) var position_grid_write: texture_storage_3d<rgba16float,write>;
+@group(0) @binding(6) var position_grid_read: texture_3d<f32>;
 @group(1) @binding(0) var<storage,read_write> vertices: array<VertexInput>;
+
+const edge_lut = array<vec2<u32>,12>(
+	vec2<u32>(0, 1), // (000, 001)
+	vec2<u32>(1, 3), // (001, 011)
+	vec2<u32>(3, 2), // (011, 010)
+	vec2<u32>(2, 0), // (010, 000)
+
+	vec2<u32>(4, 5), // (100, 101)
+	vec2<u32>(5, 7), // (101, 111)
+	vec2<u32>(7, 6), // (111, 110)
+	vec2<u32>(6, 4), // (110, 100)
+
+	vec2<u32>(0, 4), // (000, 100)
+	vec2<u32>(1, 5), // (001, 101)
+	vec2<u32>(3, 7), // (011, 111)
+	vec2<u32>(2, 6), // (010, 110)
+);
 
 fn evalSdf(pos: vec3<f32>) -> f32 {
 	let offset1 = vec3<f32>(0.0);
@@ -84,6 +103,24 @@ fn positionFromGridCoord(grid_coord: vec3<f32>) -> vec3<f32> {
 	return grid_coord / f32(uniforms.resolution) * 2.0 - 1.0;
 }
 
+/*
+fn computeQef(position: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+	// TODO: put in a filterable form
+	// qef(X) = pow(dot(X - position, normal), 2);
+
+	= dot(X, normal)^2 - 2 * dot(X, normal) * dot(position, normal) + dot(position, normal)^2
+	= dot(X, normal)^2 - 2 * dot(X, normal) * dot(position, normal) + dot(position, normal)^2
+
+	return vec3<f32>(0.0, 0.0, 0.0);
+}
+
+fn accumulateQef(cell_id, qef) {
+	// TODO: atomic
+	let d = textureLoad(distance_grid_read, cell_id, 0).r;
+	textureStore(distance_grid_write, cell_id, vec4<f32>(d, qef));
+}
+*/
+
 @compute @workgroup_size(1)
 fn main_eval(in: ComputeInput) {
 	let position = positionFromGridCoord(vec3<f32>(in.id));
@@ -101,49 +138,89 @@ fn main_reset_count() {
 fn main_count(in: ComputeInput) {
 	let d = textureLoad(distance_grid_read, in.id, 0).r;
 
-	var local_point_count = 0u;
+	var local_vertex_count = 0u;
 
-	for (var dim = 0u ; dim < 3u ; dim++) {
+	for (var dim = 0u ; dim < 3 ; dim++) {
 		if (in.id[dim] < uniforms.resolution - 1) {
 			var neighborId = in.id;
 			neighborId[dim]++;
 			let neighborD = textureLoad(distance_grid_read, neighborId, 0).r;
 			if ((d < 0) != (neighborD < 0)) {
-				local_point_count++;
+				local_vertex_count++;
 			}
 		}
 	}
 
-	atomicAdd(&counts.point_count, 6 * local_point_count);
+	atomicAdd(&counts.point_count, 6 * local_vertex_count);
+
+	// Compute the position of the center cell by solving QEF
+	// This sums the contributions of the 12 edges of the cube
+	var cornerDepth: array<f32,8>;
+	for (var i = 0u ; i < 8 ; i++) {
+		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
+	}
+	var qef = 0.0;
+	let X = vec3<f32>(0.5, 0.5, 0.5);
+	var sum = vec3<f32>(0.0);
+	var samples = 0u;
+	for (var k = 0u ; k < 12 ; k++) {
+		let iA = edge_lut[k].x;
+		let iB = edge_lut[k].y;
+		let dA = cornerDepth[iA];
+		let dB = cornerDepth[iB];
+		let position = (vec3<f32>(cornerOffset(iA)) + vec3<f32>(cornerOffset(iB))) / 2.0;
+		let normal = evalNormal(positionFromGridCoord(vec3<f32>(in.id) + position));
+		if ((dA < 0) != (dB < 0)) {
+			let err = dot(X - position, normal);
+			qef += err * err;
+			sum += position;
+		}
+	}
+	let center = sum / f32(samples);
+	textureStore(position_grid_write, in.id, vec4<f32>(center, 1.0));
 }
 
 @compute @workgroup_size(1)
 fn main_fill(in: ComputeInput) {
 	let d = textureLoad(distance_grid_read, in.id, 0).r;
 
-	var local_point_count = 0u;
-
-	for (var dim = 0u ; dim < 3u ; dim++) {
+	for (var dim = 0u ; dim < 3 ; dim++) {
 		if (in.id[dim] < uniforms.resolution - 1) {
 			var neighborId = in.id;
 			neighborId[dim]++;
-			var right = vec3<f32>(0.0, 0.0, 0.0);
-			right[(dim + 1) % 3] = 1.0;
-			var up = vec3<f32>(0.0, 0.0, 0.0);
-			up[(dim + 2) % 3] = 1.0;
+			var rightId = vec3<u32>(0, 0, 0);
+			rightId[(dim + 1) % 3] = 1;
+			var upId = vec3<u32>(0, 0, 0);
+			upId[(dim + 2) % 3] = 1;
+			let right = vec3<f32>(rightId);
+			let up = vec3<f32>(upId);
 			let neighborD = textureLoad(distance_grid_read, neighborId, 0).r;
 			if ((d < 0) != (neighborD < 0)) {
 				let addr = allocateVertices(6);
 				let grid_coord = (vec3<f32>(in.id) + vec3<f32>(neighborId)) / 2.0;
 				let position = positionFromGridCoord(grid_coord);
 				let size = 1.0 / f32(uniforms.resolution);
+
+				let center11 = textureLoad(position_grid_read, in.id, 0).xyz;
+				let center01 = textureLoad(position_grid_read, in.id - rightId, 0).xyz;
+				let center10 = textureLoad(position_grid_read, in.id - upId, 0).xyz;
+				let center00 = textureLoad(position_grid_read, in.id - rightId - upId, 0).xyz;
+
+				/*
 				vertices[addr + 0].position = position + (-right - up) * size;
 				vertices[addr + 1].position = position + ( right - up) * size;
 				vertices[addr + 2].position = position + ( right + up) * size;
 				vertices[addr + 3].position = position + (-right - up) * size;
 				vertices[addr + 4].position = position + ( right + up) * size;
 				vertices[addr + 5].position = position + (-right + up) * size;
-				for (var i = 0u ; i < 6u ; i++) {
+				*/
+				vertices[addr + 0].position = position + center00 * size;
+				vertices[addr + 1].position = position + center10 * size;
+				vertices[addr + 2].position = position + center11 * size;
+				vertices[addr + 3].position = position + center00 * size;
+				vertices[addr + 4].position = position + center11 * size;
+				vertices[addr + 5].position = position + center01 * size;
+				for (var i = 0u ; i < 6 ; i++) {
 					vertices[addr + i].normal = evalNormal(vertices[addr + i].position);
 				}
 			}

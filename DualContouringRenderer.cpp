@@ -54,6 +54,10 @@ DualContouringRenderer::~DualContouringRenderer() {
 		m_texture.destroy();
 		m_texture = nullptr;
 	}
+	if (m_positionTexture) {
+		m_positionTexture.destroy();
+		m_positionTexture = nullptr;
+	}
 }
 
 DualContouringRenderer::BoundComputePipeline DualContouringRenderer::createBoundComputePipeline(
@@ -456,9 +460,9 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	bufferDesc.size = (sizeof(Counts) + 3) & ~3;
 	m_mapBuffer = device.createBuffer(bufferDesc);
 
-	// 2. Texture
+	// 2. Textures
 	TextureDescriptor textureDesc = Default;
-	textureDesc.label = "DualContouring";
+	textureDesc.label = "DualContouring SDF";
 	textureDesc.dimension = TextureDimension::_3D;
 	textureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
 	textureDesc.format = TextureFormat::RGBA16Float;
@@ -474,6 +478,24 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	textureViewDesc.dimension = TextureViewDimension::_3D;
 	textureViewDesc.format = textureDesc.format;
 	m_textureView = m_texture.createView(textureViewDesc);
+
+	TextureDescriptor positionTextureDesc = Default;
+	positionTextureDesc.label = "DualContouring Position";
+	positionTextureDesc.dimension = TextureDimension::_3D;
+	positionTextureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
+	positionTextureDesc.format = TextureFormat::RGBA16Float;
+	positionTextureDesc.mipLevelCount = 1;
+	positionTextureDesc.usage = TextureUsage::StorageBinding | TextureUsage::TextureBinding;
+	m_positionTexture = device.createTexture(positionTextureDesc);
+
+	TextureViewDescriptor positionTextureViewDesc = Default;
+	positionTextureViewDesc.baseArrayLayer = 0;
+	positionTextureViewDesc.arrayLayerCount = 1;
+	positionTextureViewDesc.baseMipLevel = 0;
+	positionTextureViewDesc.mipLevelCount = 1;
+	positionTextureViewDesc.dimension = TextureViewDimension::_3D;
+	positionTextureViewDesc.format = textureDesc.format;
+	m_positionTextureView = m_positionTexture.createView(positionTextureViewDesc);
 
 	// 3. Bind Group Entries
 	BindGroupLayoutEntry uniformBindingLayout = Default;
@@ -528,6 +550,25 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	moduleLutBinding.offset = 0;
 	moduleLutBinding.size = (m_moduleLutBufferSize + 3) & ~3;
 
+	BindGroupLayoutEntry storagePositionTextureBindingLayout = Default;
+	storagePositionTextureBindingLayout.binding = 5;
+	storagePositionTextureBindingLayout.visibility = ShaderStage::Compute;
+	storagePositionTextureBindingLayout.storageTexture.access = StorageTextureAccess::WriteOnly;
+	storagePositionTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_3D;
+	storagePositionTextureBindingLayout.storageTexture.format = positionTextureDesc.format;
+	BindGroupEntry storagePositionTextureBinding = Default;
+	storagePositionTextureBinding.binding = 5;
+	storagePositionTextureBinding.textureView = m_positionTextureView;
+
+	BindGroupLayoutEntry positionTextureBindingLayout = Default;
+	positionTextureBindingLayout.binding = 6;
+	positionTextureBindingLayout.visibility = ShaderStage::Compute;
+	positionTextureBindingLayout.texture.sampleType = TextureSampleType::Float;
+	positionTextureBindingLayout.texture.viewDimension = TextureViewDimension::_3D;
+	BindGroupEntry positionTextureBinding = Default;
+	positionTextureBinding.binding = 6;
+	positionTextureBinding.textureView = m_positionTextureView;
+
 	BindGroupLayoutEntry vertexStorageBindingLayout = Default;
 	vertexStorageBindingLayout.binding = 0;
 	vertexStorageBindingLayout.visibility = ShaderStage::Compute;
@@ -570,8 +611,8 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	m_bakingPipelines.count = createBoundComputePipeline(
 		device,
 		"DualContouring Bake Count",
-		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
-		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
+		{ uniformBindingLayout, textureBindingLayout, storagePositionTextureBindingLayout, countBindingLayout, moduleLutBindingLayout },
+		{ uniformBinding, textureBinding, storagePositionTextureBinding, countBinding, moduleLutBinding },
 		shaderModule,
 		"main_count"
 	);
@@ -579,8 +620,8 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	m_bakingPipelines.fill = createBoundComputePipeline(
 		device,
 		"DualContouring Bake Fill",
-		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
-		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
+		{ uniformBindingLayout, textureBindingLayout, positionTextureBindingLayout, countBindingLayout, moduleLutBindingLayout },
+		{ uniformBinding, textureBinding, positionTextureBinding, countBinding, moduleLutBinding },
 		shaderModule,
 		"main_fill",
 		{ m_vertexStorageBindGroupLayout }

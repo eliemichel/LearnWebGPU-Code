@@ -83,6 +83,8 @@ private:
 	uint32_t m_moduleLutBufferSize;
 	wgpu::Texture m_texture = nullptr;
 	wgpu::TextureView m_textureView = nullptr;
+	wgpu::Texture m_positionTexture = nullptr;
+	wgpu::TextureView m_positionTextureView = nullptr;
 	wgpu::BindGroup m_drawingBindGroup = nullptr;
 	wgpu::BindGroupLayout m_vertexStorageBindGroupLayout = nullptr;
 	wgpu::BindGroup m_vertexStorageBindGroup = nullptr;
