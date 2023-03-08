@@ -145,6 +145,11 @@ fn main_count(in: ComputeInput) {
 
 	atomicAdd(&counts.point_count, 6 * local_vertex_count);
 
+	// Compute the position of the vertex created for the grid cell (if any)
+	// Option A: "Bloxel"
+	//textureStore(position_grid_write, in.id, vec4<f32>(0.5, 0.5, 0.5, 1.0));
+	//return;
+
 	// Compute the position of the center cell by solving QEF
 	// This sums the contributions of the 12 edges of the cube
 	var cornerDepth: array<f32,8>;
@@ -160,17 +165,20 @@ fn main_count(in: ComputeInput) {
 		let iB = edge_lut[k].y;
 		let dA = cornerDepth[iA];
 		let dB = cornerDepth[iB];
-		let position = (vec3<f32>(cornerOffset(iA)) + vec3<f32>(cornerOffset(iB))) / 2.0;
-		//let normal = evalNormal(positionFromGridCoord(vec3<f32>(in.id) + position));
+		let offset = (vec3<f32>(cornerOffset(iA)) + vec3<f32>(cornerOffset(iB))) / 2.0;
 		if ((dA < 0) != (dB < 0)) {
+			// Option B: Simple average
+			sample_sum += offset;
+			sample_count++;
+
+			// Option C: ?
+			//let normal = evalNormal(positionFromGridCoord(vec3<f32>(in.id) + offset));
 			//let err = dot(X - position, normal);
 			//qef += err * err;
-			sample_sum += position;
-			sample_count++;
 		}
 	}
-	let center = sample_sum / f32(sample_count);
-	textureStore(position_grid_write, in.id, vec4<f32>(center, 1.0));
+	let vertex = sample_sum / f32(sample_count);
+	textureStore(position_grid_write, in.id, vec4<f32>(vertex, 1.0));
 }
 
 @compute @workgroup_size(1)
@@ -206,6 +214,7 @@ fn main_fill(in: ComputeInput) {
 				vertices[addr + 5].position = vertex01;
 				for (var i = 0u ; i < 6 ; i++) {
 					vertices[addr + i].normal = evalNormal(vertices[addr + i].position);
+					vertices[addr + i].position += vec3<f32>(2.0, 0.0, 0.0); // global offset
 				}
 			}
 		}
