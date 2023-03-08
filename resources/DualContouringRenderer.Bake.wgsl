@@ -17,23 +17,10 @@ struct VertexInput {
 	normal: vec3<f32>,
 }
 
-struct ModuleLutEntry {
-	// Represent a point on an edge of the unit cube
-	edge_start_corner: u32,
-	edge_end_corner: u32,
-};
-struct ModuleLut {
-	// end_offset[i] is the beginning of the i+1 th entry
-	end_offset: array<u32, 256>,
-	// Each entry represents a point, to be grouped by 3 to form triangles
-	entries: array<ModuleLutEntry>,
-};
-
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var distance_grid_write: texture_storage_3d<rgba16float,write>;
 @group(0) @binding(2) var distance_grid_read: texture_3d<f32>;
 @group(0) @binding(3) var<storage,read_write> counts: Counts;
-@group(0) @binding(4) var<storage,read> moduleLut: ModuleLut;
 @group(0) @binding(5) var position_grid_write: texture_storage_3d<rgba16float,write>;
 @group(0) @binding(6) var position_grid_read: texture_3d<f32>;
 @group(1) @binding(0) var<storage,read_write> vertices: array<VertexInput>;
@@ -121,6 +108,11 @@ fn accumulateQef(cell_id, qef) {
 }
 */
 
+fn loadVertexPosition(cell_coord: vec3<u32>) -> vec3<f32> {
+	let offset = textureLoad(position_grid_read, cell_coord, 0).xyz;
+	return positionFromGridCoord(vec3<f32>(cell_coord) + offset);
+}
+
 @compute @workgroup_size(1)
 fn main_eval(in: ComputeInput) {
 	let position = positionFromGridCoord(vec3<f32>(in.id));
@@ -159,24 +151,25 @@ fn main_count(in: ComputeInput) {
 	for (var i = 0u ; i < 8 ; i++) {
 		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
 	}
-	var qef = 0.0;
+	//var qef = 0.0;
 	let X = vec3<f32>(0.5, 0.5, 0.5);
-	var sum = vec3<f32>(0.0);
-	var samples = 0u;
+	var sample_sum = vec3<f32>(0.0);
+	var sample_count = 0u;
 	for (var k = 0u ; k < 12 ; k++) {
 		let iA = edge_lut[k].x;
 		let iB = edge_lut[k].y;
 		let dA = cornerDepth[iA];
 		let dB = cornerDepth[iB];
 		let position = (vec3<f32>(cornerOffset(iA)) + vec3<f32>(cornerOffset(iB))) / 2.0;
-		let normal = evalNormal(positionFromGridCoord(vec3<f32>(in.id) + position));
+		//let normal = evalNormal(positionFromGridCoord(vec3<f32>(in.id) + position));
 		if ((dA < 0) != (dB < 0)) {
-			let err = dot(X - position, normal);
-			qef += err * err;
-			sum += position;
+			//let err = dot(X - position, normal);
+			//qef += err * err;
+			sample_sum += position;
+			sample_count++;
 		}
 	}
-	let center = sum / f32(samples);
+	let center = sample_sum / f32(sample_count);
 	textureStore(position_grid_write, in.id, vec4<f32>(center, 1.0));
 }
 
@@ -192,8 +185,7 @@ fn main_fill(in: ComputeInput) {
 			rightId[(dim + 1) % 3] = 1;
 			var upId = vec3<u32>(0, 0, 0);
 			upId[(dim + 2) % 3] = 1;
-			let right = vec3<f32>(rightId);
-			let up = vec3<f32>(upId);
+
 			let neighborD = textureLoad(distance_grid_read, neighborId, 0).r;
 			if ((d < 0) != (neighborD < 0)) {
 				let addr = allocateVertices(6);
@@ -201,25 +193,17 @@ fn main_fill(in: ComputeInput) {
 				let position = positionFromGridCoord(grid_coord);
 				let size = 1.0 / f32(uniforms.resolution);
 
-				let center11 = textureLoad(position_grid_read, in.id, 0).xyz;
-				let center01 = textureLoad(position_grid_read, in.id - rightId, 0).xyz;
-				let center10 = textureLoad(position_grid_read, in.id - upId, 0).xyz;
-				let center00 = textureLoad(position_grid_read, in.id - rightId - upId, 0).xyz;
+				let vertex11 = loadVertexPosition(in.id);
+				let vertex01 = loadVertexPosition(in.id - rightId);
+				let vertex10 = loadVertexPosition(in.id - upId);
+				let vertex00 = loadVertexPosition(in.id - rightId - upId);
 
-				/*
-				vertices[addr + 0].position = position + (-right - up) * size;
-				vertices[addr + 1].position = position + ( right - up) * size;
-				vertices[addr + 2].position = position + ( right + up) * size;
-				vertices[addr + 3].position = position + (-right - up) * size;
-				vertices[addr + 4].position = position + ( right + up) * size;
-				vertices[addr + 5].position = position + (-right + up) * size;
-				*/
-				vertices[addr + 0].position = position + center00 * size;
-				vertices[addr + 1].position = position + center10 * size;
-				vertices[addr + 2].position = position + center11 * size;
-				vertices[addr + 3].position = position + center00 * size;
-				vertices[addr + 4].position = position + center11 * size;
-				vertices[addr + 5].position = position + center01 * size;
+				vertices[addr + 0].position = vertex00;
+				vertices[addr + 1].position = vertex10;
+				vertices[addr + 2].position = vertex11;
+				vertices[addr + 3].position = vertex00;
+				vertices[addr + 4].position = vertex11;
+				vertices[addr + 5].position = vertex01;
 				for (var i = 0u ; i < 6 ; i++) {
 					vertices[addr + i].normal = evalNormal(vertices[addr + i].position);
 				}

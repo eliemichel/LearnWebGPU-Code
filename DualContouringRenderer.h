@@ -36,8 +36,6 @@ private:
 		const std::vector<wgpu::BindGroupLayout>& extraBindGroupLayouts = {}
 	);
 
-	void initModuleLut(const InitContext& context);
-
 	void initBakingResources(const InitContext& context);
 	void initDrawingResources(const InitContext& context);
 
@@ -79,8 +77,6 @@ private:
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::Buffer m_countBuffer = nullptr;
 	wgpu::Buffer m_mapBuffer = nullptr;
-	wgpu::Buffer m_moduleLutBuffer = nullptr;
-	uint32_t m_moduleLutBufferSize;
 	wgpu::Texture m_texture = nullptr;
 	wgpu::TextureView m_textureView = nullptr;
 	wgpu::Texture m_positionTexture = nullptr;

@@ -19,7 +19,6 @@ DualContouringRenderer::DualContouringRenderer(const InitContext& context, uint3
 	: m_uniforms{ resolution }
 	, m_device(context.device)
 {
-	initModuleLut(context);
 	initBakingResources(context);
 	initDrawingResources(context);
 }
@@ -45,10 +44,6 @@ DualContouringRenderer::~DualContouringRenderer() {
 	if (m_mapBuffer) {
 		m_mapBuffer.destroy();
 		m_mapBuffer = nullptr;
-	}
-	if (m_moduleLutBuffer) {
-		m_moduleLutBuffer.destroy();
-		m_moduleLutBuffer = nullptr;
 	}
 	if (m_texture) {
 		m_texture.destroy();
@@ -100,337 +95,6 @@ DualContouringRenderer::BoundComputePipeline DualContouringRenderer::createBound
 	boundPipeline.pipeline = device.createComputePipeline(pipelineDesc);
 
 	return boundPipeline;
-}
-
-struct ModuleTransform {
-	using ModuleLutEntry = DualContouringRenderer::ModuleLutEntry;
-
-	std::array<uint32_t, 8> permutation; // corner index -> transformed corner index
-
-	uint32_t operator() (uint32_t moduleCode) const {
-		uint32_t transformedModuleCode = 0;
-		for (int i = 0; i < 8; ++i) {
-			if (moduleCode & (1 << i)) {
-				transformedModuleCode += 1 << permutation[i];
-			}
-		}
-		return transformedModuleCode;
-	}
-	ModuleLutEntry operator() (const ModuleLutEntry& entry) const {
-		return {
-			permutation[entry.edgeStartCorner],
-			permutation[entry.edgeEndCorner]
-		};
-	}
-	std::vector<ModuleLutEntry> operator() (const std::vector<ModuleLutEntry>&entries) const {
-		const auto& tr = *this;
-		std::vector<ModuleLutEntry> transformedEntries;
-		for (const auto& entry : entries) {
-			transformedEntries.push_back(tr(entry));
-		}
-		return transformedEntries;
-	}
-
-	static glm::uvec3 CornerOffset(uint32_t i) {
-		return glm::uvec3(
-			(i & (1u << 0)) >> 0,
-			(i & (1u << 1)) >> 1,
-			(i & (1u << 2)) >> 2
-		);
-	}
-	static uint32_t CornerIndex(const glm::uvec3& offset) {
-		return (offset.x << 0) + (offset.y << 1) + (offset.z << 2);
-	}
-
-	static std::vector<ModuleTransform> ComputeAllTransforms() {
-		std::vector<glm::vec3> axes = {
-			{1,0,0},
-			{0,1,0},
-			{0,0,1}
-		};
-		std::vector<ModuleTransform> transforms;
-		// for each up axis
-		for (int i = 0; i < 2 * axes.size(); ++i) {
-			glm::vec3 up = axes[i % axes.size()] * (i >= axes.size() ? -1.0f : 1.0f);
-			glm::vec3 forward = axes[(i + 1) % axes.size()];
-			// for each side face
-			for (int j = 0; j < 4; ++j) {
-				glm::vec3 side = cross(up, forward);
-				glm::mat3 localToWorld = { forward, side, up };
-				ModuleTransform tr;
-				for (uint32_t k = 0; k < 8; ++k) {
-					tr.permutation[k] = ModuleTransform::CornerIndex(glm::uvec3((localToWorld * (glm::vec3(ModuleTransform::CornerOffset(k)) - 0.5f)) + 0.5f));
-				}
-				transforms.push_back(tr);
-				forward = side;
-			}
-		}
-		return transforms;
-	}
-};
-
-void DualContouringRenderer::initModuleLut(const InitContext& context) {
-	Device device = context.device;
-	Queue queue = device.getQueue();
-
-	// 15 base cubes that we then flip/rotate
-	// (in the order listed on Wikipedia, X is horizontal to the right, Y is to the background and Z is up)
-	std::unordered_map<uint32_t,std::vector<ModuleLutEntry>> baseModules;
-	uint32_t i000 = ModuleTransform::CornerIndex({ 0, 0, 0 });
-	uint32_t i100 = ModuleTransform::CornerIndex({ 1, 0, 0 });
-	uint32_t i010 = ModuleTransform::CornerIndex({ 0, 1, 0 });
-	uint32_t i110 = ModuleTransform::CornerIndex({ 1, 1, 0 });
-	uint32_t i001 = ModuleTransform::CornerIndex({ 0, 0, 1 });
-	uint32_t i101 = ModuleTransform::CornerIndex({ 1, 0, 1 });
-	uint32_t i011 = ModuleTransform::CornerIndex({ 0, 1, 1 });
-	uint32_t i111 = ModuleTransform::CornerIndex({ 1, 1, 1 });
-	{
-		baseModules[0] = {};
-	}
-	{
-		uint32_t moduleCode = 1u << i000;
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i001 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i100);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i000, i001 });
-		
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i100, i101 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i101);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i101, i100 });
-		entries.push_back({ i101, i111 });
-		entries.push_back({ i101, i001 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i000 });
-
-		entries.push_back({ i010, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i011 });
-
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i100) + (1u << i110) + (1u << i010);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i010, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010) + (1u << i001);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i000 });
-		entries.push_back({ i010, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-
-		entries.push_back({ i001, i000 });
-		entries.push_back({ i001, i101 });
-		entries.push_back({ i001, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i011) + (1u << i101);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i110, i010 });
-
-		entries.push_back({ i011, i010 });
-		entries.push_back({ i011, i001 });
-		entries.push_back({ i011, i111 });
-
-		entries.push_back({ i101, i100 });
-		entries.push_back({ i101, i111 });
-		entries.push_back({ i101, i001 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i010) + (1u << i011);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i110, i111 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i011, i111 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i011, i111 });
-		entries.push_back({ i000, i001 });
-
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i011, i111 });
-		entries.push_back({ i011, i001 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010) + (1u << i011);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i100, i000 });
-
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i011, i001 });
-
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i011, i001 });
-		entries.push_back({ i010, i000 });
-
-		entries.push_back({ i011, i001 });
-		entries.push_back({ i011, i111 });
-		entries.push_back({ i110, i111 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i111, i110 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-	}
-	{ // issue
-		uint32_t moduleCode = (1u << i000) + (1u << i100) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i100, i110 });
-
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i000, i001 });
-
-		entries.push_back({ i111, i110 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i001) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i100, i000 });
-
-		entries.push_back({ i001, i000 });
-		entries.push_back({ i001, i011 });
-		entries.push_back({ i001, i101 });
-
-		entries.push_back({ i111, i110 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i001) + (1u << i110) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i001, i011 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i001, i011 });
-		entries.push_back({ i001, i101 });
-		
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i110, i010 });
-		entries.push_back({ i111, i011 });
-
-		entries.push_back({ i111, i011 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i110, i100 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i010) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i010, i011 });
-
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i010, i011 });
-	}
-
-	std::vector<ModuleTransform> transforms = ModuleTransform::ComputeAllTransforms();
-	std::unordered_map<uint32_t, std::vector<ModuleLutEntry>> modules;
-	for (const auto& cube : baseModules) {
-		uint32_t moduleCode = cube.first;
-		uint32_t complementaryModuleCode = ~moduleCode & 255;
-		const auto& entries = cube.second;
-		for (const auto& tr : transforms) {
-			modules[tr(moduleCode)] = tr(entries);
-			modules[tr(complementaryModuleCode)] = tr(entries);
-		}
-	}
-
-	ModuleLut lut;
-	std::fill(lut.endOffset.begin(), lut.endOffset.end(), 0);
-	uint32_t offset = 0;
-	for (int k = 0; k < 256; ++k) {
-		auto it = modules.find(k);
-		if (it != modules.end()) {
-			for (auto& entry : it->second) {
-				lut.entries.push_back(entry);
-				++offset;
-			}
-		}
-		lut.endOffset[k] = offset;
-	}
-
-	m_moduleLutBufferSize = static_cast<uint32_t>(256 * sizeof(uint32_t) + std::max(lut.entries.size(), (size_t)1) * sizeof(ModuleLutEntry));
-
-	BufferDescriptor bufferDesc = Default;
-	bufferDesc.label = "DualContouring Module LUT";
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Storage;
-	bufferDesc.size = (m_moduleLutBufferSize + 3) & ~3;
-	m_moduleLutBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(m_moduleLutBuffer, 0, &lut.endOffset, 256 * sizeof(uint32_t));
-	queue.writeBuffer(m_moduleLutBuffer, 256 * sizeof(uint32_t), lut.entries.data(), lut.entries.size() * sizeof(ModuleLutEntry));
 }
 
 void DualContouringRenderer::initBakingResources(const InitContext& context) {
@@ -539,17 +203,6 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	countBinding.offset = 0;
 	countBinding.size = (sizeof(Counts) + 3) & ~3;
 
-	BindGroupLayoutEntry moduleLutBindingLayout = Default;
-	moduleLutBindingLayout.binding = 4;
-	moduleLutBindingLayout.visibility = ShaderStage::Compute;
-	moduleLutBindingLayout.buffer.type = BufferBindingType::ReadOnlyStorage;
-	moduleLutBindingLayout.buffer.minBindingSize = 0;
-	BindGroupEntry moduleLutBinding = Default;
-	moduleLutBinding.binding = 4;
-	moduleLutBinding.buffer = m_moduleLutBuffer;
-	moduleLutBinding.offset = 0;
-	moduleLutBinding.size = (m_moduleLutBufferSize + 3) & ~3;
-
 	BindGroupLayoutEntry storagePositionTextureBindingLayout = Default;
 	storagePositionTextureBindingLayout.binding = 5;
 	storagePositionTextureBindingLayout.visibility = ShaderStage::Compute;
@@ -611,8 +264,8 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	m_bakingPipelines.count = createBoundComputePipeline(
 		device,
 		"DualContouring Bake Count",
-		{ uniformBindingLayout, textureBindingLayout, storagePositionTextureBindingLayout, countBindingLayout, moduleLutBindingLayout },
-		{ uniformBinding, textureBinding, storagePositionTextureBinding, countBinding, moduleLutBinding },
+		{ uniformBindingLayout, textureBindingLayout, storagePositionTextureBindingLayout, countBindingLayout },
+		{ uniformBinding, textureBinding, storagePositionTextureBinding, countBinding },
 		shaderModule,
 		"main_count"
 	);
@@ -620,8 +273,8 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	m_bakingPipelines.fill = createBoundComputePipeline(
 		device,
 		"DualContouring Bake Fill",
-		{ uniformBindingLayout, textureBindingLayout, positionTextureBindingLayout, countBindingLayout, moduleLutBindingLayout },
-		{ uniformBinding, textureBinding, positionTextureBinding, countBinding, moduleLutBinding },
+		{ uniformBindingLayout, textureBindingLayout, positionTextureBindingLayout, countBindingLayout },
+		{ uniformBinding, textureBinding, positionTextureBinding, countBinding },
 		shaderModule,
 		"main_fill",
 		{ m_vertexStorageBindGroupLayout }
@@ -827,7 +480,7 @@ void DualContouringRenderer::bake() {
 		computePass.setPipeline(m_bakingPipelines.fill.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.fill.bindGroup, 0, nullptr);
 		computePass.setBindGroup(1, m_vertexStorageBindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
+		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
 
 		computePass.end();
 
