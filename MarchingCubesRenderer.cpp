@@ -204,7 +204,7 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 	{
 		uint32_t moduleCode = (1u << i000) + (1u << i101);
 		auto& entries = baseModules[moduleCode];
-		/*
+		//*
 		entries.push_back({ i000, i001 });
 		entries.push_back({ i000, i010 });
 		entries.push_back({ i000, i100 });
@@ -212,7 +212,7 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 		entries.push_back({ i101, i100 });
 		entries.push_back({ i101, i111 });
 		entries.push_back({ i101, i001 });
-		*/
+		/*/
 		entries.push_back({ i000, i001 });
 		entries.push_back({ i101, i001 });
 		entries.push_back({ i101, i111 });
@@ -228,6 +228,7 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 		entries.push_back({ i101, i111 });
 		entries.push_back({ i000, i100 });
 		entries.push_back({ i101, i100 });
+		//*/
 	}
 	{
 		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010);

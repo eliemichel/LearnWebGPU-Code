@@ -357,8 +357,8 @@ bool Application::onInit() {
 		m_uniformBuffer,
 		sizeof(CameraUniforms)
 	};
-	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 32);
-	m_dualContouringRenderer = std::make_shared<DualContouringRenderer>(ctx, 32);
+	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 128);
+	m_dualContouringRenderer = std::make_shared<DualContouringRenderer>(ctx, 128);
 
 	initGui();
 
