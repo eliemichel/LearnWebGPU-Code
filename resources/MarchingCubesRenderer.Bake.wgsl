@@ -190,7 +190,7 @@ fn main_fill(in: ComputeInput) {
 		
 		var grid_coord = vec3<f32>(in.id) + grid_offset;
 		let position = positionFromGridCoord(grid_coord);
-		vertices[addr + i].position = position + vec3<f32>(0.0, 0.0, 0.0); // global offset for debug
+		vertices[addr + i].position = position + vec3<f32>(-1.0, 0.0, 0.0); // global offset for debug
 		vertices[addr + i].normal = evalNormal(position);
 	}
 }
