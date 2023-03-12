@@ -25,7 +25,7 @@ struct VertexInput {
 @group(0) @binding(6) var position_grid_read: texture_3d<f32>;
 @group(1) @binding(0) var<storage,read_write> vertices: array<VertexInput>;
 
-const edge_lut = array<vec2<u32>,12>(
+let edge_lut = array<vec2<u32>,12>(
 	vec2<u32>(0, 1), // (000, 001)
 	vec2<u32>(1, 3), // (001, 011)
 	vec2<u32>(3, 2), // (011, 010)
@@ -117,7 +117,7 @@ fn loadVertexPosition(cell_coord: vec3<u32>) -> vec3<f32> {
 fn main_eval(in: ComputeInput) {
 	let position = positionFromGridCoord(vec3<f32>(in.id));
 	let d = evalSdf(position);
-	textureStore(distance_grid_write, in.id, vec4<f32>(d));
+	textureStore(distance_grid_write, in.id.xy, vec4<f32>(d));
 }
 
 @compute @workgroup_size(1)

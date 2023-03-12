@@ -12,7 +12,7 @@ include(utils.cmake)
 option(DEV_MODE "Set up development helper settings" ON)
 
 add_subdirectory(glfw)
-add_subdirectory(webgpu)
+include(webgpu.cmake)
 add_subdirectory(glfw3webgpu)
 add_subdirectory(imgui)
 

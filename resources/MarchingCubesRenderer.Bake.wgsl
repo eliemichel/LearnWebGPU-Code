@@ -71,9 +71,9 @@ fn allocateVertices(vertex_count: u32) -> u32 {
 // Transform a corner index into a grid index offset
 fn cornerOffset(i: u32) -> vec3<u32> {
 	return vec3<u32>(
-		(i & (1u << 0)) >> 0,
-		(i & (1u << 1)) >> 1,
-		(i & (1u << 2)) >> 2,
+		(i & (1u << 0u)) >> 0u,
+		(i & (1u << 1u)) >> 1u,
+		(i & (1u << 2u)) >> 2u,
 	);
 }
 fn cornerOffsetF(i: u32) -> vec3<f32> {
@@ -100,8 +100,8 @@ fn main_reset_count() {
 @compute @workgroup_size(1)
 fn main_count(in: ComputeInput) {
 	var cornerDepth: array<f32,8>;
-	var module_code: u32 = 0;
-	for (var i: u32 = 0 ; i < 8 ; i++) {
+	var module_code: u32 = 0u;
+	for (var i: u32 = 0u ; i < 8 ; i++) {
 		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
 		if (cornerDepth[i] < 0) {
 			module_code += 1u << i;
@@ -120,7 +120,7 @@ fn main_count(in: ComputeInput) {
 @compute @workgroup_size(1)
 fn main_fill(in: ComputeInput) {
 	var cornerDepth: array<f32,8>;
-	var module_code: u32 = 0;
+	var module_code: u32 = 0u;
 	for (var i = 0u ; i < 8 ; i++) {
 		cornerDepth[i] = textureLoad(distance_grid_read, in.id + cornerOffset(i), 0).r;
 		if (cornerDepth[i] < 0) {

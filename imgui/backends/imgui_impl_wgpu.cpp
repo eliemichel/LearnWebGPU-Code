@@ -33,13 +33,14 @@
 
 // These differences of implementation should vanish as soon as WebGPU gets in version 1.0 stable
 #ifdef WEBGPU_BACKEND_WGPU
-#include <wgpu.h>
+#include <webgpu/wgpu.h>
 #define wgpuBindGroupLayoutRelease wgpuBindGroupLayoutDrop
 #define wgpuBindGroupRelease wgpuBindGroupDrop
 #define wgpuRenderPipelineRelease wgpuRenderPipelineDrop
 #define wgpuSamplerRelease wgpuSamplerDrop
 #define wgpuShaderModuleRelease wgpuShaderModuleDrop
 #define wgpuTextureViewRelease wgpuTextureViewDrop
+#define wgpuTextureRelease wgpuTextureDrop
 #define wgpuBufferRelease wgpuBufferDrop
 #define wgpuQueueRelease(...)
 #endif // WEBGPU_BACKEND_WGPU
@@ -103,12 +104,17 @@ struct VertexOutput {
     @location(1) uv: vec2<f32>,
 };
 
-@group(0) @binding(0) var<uniform> mvp: mat4x4<f32>;
+struct Uniforms {
+    mvp: mat4x4<f32>,
+    gamma: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 @vertex
 fn main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.position = mvp * vec4<f32>(in.position, 0.0, 1.0);
+    out.position = uniforms.mvp * vec4<f32>(in.position, 0.0, 1.0);
     out.color = in.color;
     out.uv = in.uv;
     return out;
@@ -122,14 +128,19 @@ struct VertexOutput {
     @location(1) uv: vec2<f32>,
 };
 
+struct Uniforms {
+    mvp: mat4x4<f32>,
+    gamma: f32,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var s: sampler;
-@group(0) @binding(2) var<uniform> gamma: f32;
 @group(1) @binding(0) var t: texture_2d<f32>;
 
 @fragment
 fn main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = in.color * textureSample(t, s, in.uv);
-    let corrected_color = pow(color.rgb, vec3<f32>(gamma));
+    let corrected_color = pow(color.rgb, vec3<f32>(uniforms.gamma));
     return vec4<f32>(corrected_color, color.a);
 }
 )";
@@ -521,7 +532,7 @@ static void ImGui_ImplWGPU_CreateUniformBuffer()
         nullptr,
         "Dear ImGui Uniform buffer",
         WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-        (sizeof(Uniforms) + 3) & ~3,
+        (sizeof(Uniforms) + 15) & ~15, // ceil to a multiple of 16
         false
     };
     g_resources.Uniforms = wgpuDeviceCreateBuffer(g_wgpuDevice, &ub_desc);
@@ -545,16 +556,13 @@ bool ImGui_ImplWGPU_CreateDeviceObjects()
     graphics_pipeline_desc.multisample.alphaToCoverageEnabled = false;
 
     // Bind group layouts
-    WGPUBindGroupLayoutEntry common_bg_layout_entries[3] = {};
+    WGPUBindGroupLayoutEntry common_bg_layout_entries[2] = {};
     common_bg_layout_entries[0].binding = 0;
-    common_bg_layout_entries[0].visibility = WGPUShaderStage_Vertex;
+    common_bg_layout_entries[0].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
     common_bg_layout_entries[0].buffer.type = WGPUBufferBindingType_Uniform;
     common_bg_layout_entries[1].binding = 1;
     common_bg_layout_entries[1].visibility = WGPUShaderStage_Fragment;
     common_bg_layout_entries[1].sampler.type = WGPUSamplerBindingType_Filtering;
-    common_bg_layout_entries[2].binding = 2;
-    common_bg_layout_entries[2].visibility = WGPUShaderStage_Fragment;
-    common_bg_layout_entries[2].buffer.type = WGPUBufferBindingType_Uniform;
 
     WGPUBindGroupLayoutEntry image_bg_layout_entries[1] = {};
     image_bg_layout_entries[0].binding = 0;
@@ -563,7 +571,7 @@ bool ImGui_ImplWGPU_CreateDeviceObjects()
     image_bg_layout_entries[0].texture.viewDimension = WGPUTextureViewDimension_2D;
 
     WGPUBindGroupLayoutDescriptor common_bg_layout_desc = {};
-    common_bg_layout_desc.entryCount = 3;
+    common_bg_layout_desc.entryCount = 2;
     common_bg_layout_desc.entries = common_bg_layout_entries;
 
     WGPUBindGroupLayoutDescriptor image_bg_layout_desc = {};
@@ -645,9 +653,8 @@ bool ImGui_ImplWGPU_CreateDeviceObjects()
     // Create resource bind group
     WGPUBindGroupEntry common_bg_entries[] =
     {
-        { nullptr, 0, g_resources.Uniforms, offsetof(Uniforms, MVP), sizeof(Uniforms::MVP), 0, 0 },
+        { nullptr, 0, g_resources.Uniforms, 0, (sizeof(Uniforms) + 15) & ~15, 0, 0 },
         { nullptr, 1, 0, 0, 0, g_resources.Sampler, 0 },
-        { nullptr, 2, g_resources.Uniforms, offsetof(Uniforms, gamma), sizeof(Uniforms::gamma), 0, 0 },
     };
 
     WGPUBindGroupDescriptor common_bg_descriptor = {};
