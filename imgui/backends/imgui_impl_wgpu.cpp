@@ -560,6 +560,7 @@ bool ImGui_ImplWGPU_CreateDeviceObjects()
     common_bg_layout_entries[0].binding = 0;
     common_bg_layout_entries[0].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
     common_bg_layout_entries[0].buffer.type = WGPUBufferBindingType_Uniform;
+    common_bg_layout_entries[0].buffer.minBindingSize = (sizeof(Uniforms) + 15) & ~15;
     common_bg_layout_entries[1].binding = 1;
     common_bg_layout_entries[1].visibility = WGPUShaderStage_Fragment;
     common_bg_layout_entries[1].sampler.type = WGPUSamplerBindingType_Filtering;

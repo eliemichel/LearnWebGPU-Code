@@ -14,6 +14,7 @@ public:
 
 	struct DrawingContext {
 		wgpu::RenderPassEncoder renderPass;
+		bool showWireframe;
 	};
 
 public:

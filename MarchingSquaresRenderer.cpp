@@ -1,4 +1,4 @@
-#include "MarchingCubesRenderer.h"
+#include "MarchingSquaresRenderer.h"
 #include "ResourceManager.h"
 
 #include <GLFW/glfw3.h>
@@ -8,14 +8,14 @@
 
 using namespace wgpu;
 
-const float MarchingCubesRenderer::s_quadVertices[] = {
-	0.0, 0.0,
-	0.0, 1.0,
-	1.0, 1.0,
-	1.0, 0.0
+const float MarchingSquaresRenderer::s_quadVertices[] = {
+	0.0f, 0.0f,
+	0.0f, 1.0f,
+	1.0f, 1.0f,
+	1.0f, 0.0f
 };
 
-MarchingCubesRenderer::MarchingCubesRenderer(const InitContext& context, uint32_t resolution)
+MarchingSquaresRenderer::MarchingSquaresRenderer(const InitContext& context, uint32_t resolution)
 	: m_uniforms{ resolution }
 	, m_device(context.device)
 {
@@ -24,7 +24,7 @@ MarchingCubesRenderer::MarchingCubesRenderer(const InitContext& context, uint32_
 	initDrawingResources(context);
 }
 
-MarchingCubesRenderer::~MarchingCubesRenderer() {
+MarchingSquaresRenderer::~MarchingSquaresRenderer() {
 	if (m_quadVertexBuffer) {
 		m_quadVertexBuffer.destroy();
 		m_quadVertexBuffer = nullptr;
@@ -56,7 +56,7 @@ MarchingCubesRenderer::~MarchingCubesRenderer() {
 	}
 }
 
-MarchingCubesRenderer::BoundComputePipeline MarchingCubesRenderer::createBoundComputePipeline(
+MarchingSquaresRenderer::BoundComputePipeline MarchingSquaresRenderer::createBoundComputePipeline(
 	Device device,
 	const char *label,
 	const std::vector<BindGroupLayoutEntry>& bindingLayouts,
@@ -99,7 +99,7 @@ MarchingCubesRenderer::BoundComputePipeline MarchingCubesRenderer::createBoundCo
 }
 
 struct ModuleTransform {
-	using ModuleLutEntry = MarchingCubesRenderer::ModuleLutEntry;
+	using ModuleLutEntry = MarchingSquaresRenderer::ModuleLutEntry;
 
 	std::array<uint32_t, 8> permutation; // corner index -> transformed corner index
 
@@ -165,7 +165,7 @@ struct ModuleTransform {
 	}
 };
 
-void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
+void MarchingSquaresRenderer::initModuleLut(const InitContext& context) {
 	Device device = context.device;
 	Queue queue = device.getQueue();
 
@@ -438,7 +438,7 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 	m_moduleLutBufferSize = static_cast<uint32_t>(256 * sizeof(uint32_t) + std::max(lut.entries.size(), (size_t)1) * sizeof(ModuleLutEntry));
 
 	BufferDescriptor bufferDesc = Default;
-	bufferDesc.label = "MarchingCubes Module LUT";
+	bufferDesc.label = "MarchingSquares Module LUT";
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Storage;
 	bufferDesc.size = (m_moduleLutBufferSize + 3) & ~3;
 	m_moduleLutBuffer = device.createBuffer(bufferDesc);
@@ -446,38 +446,44 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 	queue.writeBuffer(m_moduleLutBuffer, 256 * sizeof(uint32_t), lut.entries.data(), lut.entries.size() * sizeof(ModuleLutEntry));
 }
 
-void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
+void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 	Device device = context.device;
 	Queue queue = device.getQueue();
 
 	// 1. Buffers
 	BufferDescriptor bufferDesc = Default;
-	bufferDesc.label = "MarchingCubes Quad";
+	bufferDesc.label = "MarchingSquares Quad";
 	bufferDesc.usage = BufferUsage::Vertex;
 	bufferDesc.size = sizeof(s_quadVertices);
 	m_quadVertexBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "MarchingCubes Uniforms";
+	bufferDesc.label = "MarchingSquares Uniforms";
 	bufferDesc.usage = BufferUsage::Uniform | BufferUsage::CopyDst;
 	bufferDesc.size = (sizeof(Uniforms) + 3) & ~3;
 	m_uniformBuffer = device.createBuffer(bufferDesc);
 	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, bufferDesc.size);
 
-	bufferDesc.label = "MarchingCubes Counts";
+	bufferDesc.label = "MarchingSquares Counts";
 	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopySrc;
 	bufferDesc.size = (sizeof(Counts) + 3) & ~3;
 	m_countBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "MarchingCubes Map";
+	bufferDesc.label = "MarchingSquares Map";
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::MapRead;
 	bufferDesc.size = (sizeof(Counts) + 3) & ~3;
 	m_mapBuffer = device.createBuffer(bufferDesc);
 
+	bufferDesc.label = "MarchingSquares Vertices";
+	bufferDesc.usage = BufferUsage::Vertex | BufferUsage::Storage;
+	bufferDesc.size = sizeof(VertexAttributes);
+	m_vertexBuffer = m_device.createBuffer(bufferDesc);
+	m_vertexBufferSize = sizeof(VertexAttributes);
+
 	// 2. Texture
 	TextureDescriptor textureDesc = Default;
-	textureDesc.label = "MarchingCubes";
-	textureDesc.dimension = TextureDimension::_3D;
-	textureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
+	textureDesc.label = "MarchingSquares";
+	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, 1 };
 	textureDesc.format = TextureFormat::RGBA16Float;
 	textureDesc.mipLevelCount = 1;
 	textureDesc.usage = TextureUsage::StorageBinding | TextureUsage::TextureBinding;
@@ -488,7 +494,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	textureViewDesc.arrayLayerCount = 1;
 	textureViewDesc.baseMipLevel = 0;
 	textureViewDesc.mipLevelCount = 1;
-	textureViewDesc.dimension = TextureViewDimension::_3D;
+	textureViewDesc.dimension = TextureViewDimension::_2D;
 	textureViewDesc.format = textureDesc.format;
 	m_textureView = m_texture.createView(textureViewDesc);
 
@@ -508,7 +514,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	storageTextureBindingLayout.binding = 1;
 	storageTextureBindingLayout.visibility = ShaderStage::Compute;
 	storageTextureBindingLayout.storageTexture.access = StorageTextureAccess::WriteOnly;
-	storageTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_3D;
+	storageTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_2D;
 	storageTextureBindingLayout.storageTexture.format = textureDesc.format;
 	BindGroupEntry storageTextureBinding = Default;
 	storageTextureBinding.binding = 1;
@@ -518,7 +524,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	textureBindingLayout.binding = 2;
 	textureBindingLayout.visibility = ShaderStage::Compute;
 	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
-	textureBindingLayout.texture.viewDimension = TextureViewDimension::_3D;
+	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
 	BindGroupEntry textureBinding = Default;
 	textureBinding.binding = 2;
 	textureBinding.textureView = m_textureView;
@@ -538,7 +544,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	moduleLutBindingLayout.binding = 4;
 	moduleLutBindingLayout.visibility = ShaderStage::Compute;
 	moduleLutBindingLayout.buffer.type = BufferBindingType::ReadOnlyStorage;
-	moduleLutBindingLayout.buffer.minBindingSize = 0;
+	moduleLutBindingLayout.buffer.minBindingSize = (m_moduleLutBufferSize + 3) & ~3;
 	BindGroupEntry moduleLutBinding = Default;
 	moduleLutBinding.binding = 4;
 	moduleLutBinding.buffer = m_moduleLutBuffer;
@@ -549,7 +555,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	vertexStorageBindingLayout.binding = 0;
 	vertexStorageBindingLayout.visibility = ShaderStage::Compute;
 	vertexStorageBindingLayout.buffer.type = BufferBindingType::Storage;
-	vertexStorageBindingLayout.buffer.minBindingSize = 0;
+	vertexStorageBindingLayout.buffer.minBindingSize = sizeof(VertexAttributes);
 	BindGroupEntry vertexStorageBinding = Default;
 	vertexStorageBinding.binding = 0;
 	vertexStorageBinding.buffer = m_vertexBuffer;
@@ -558,17 +564,17 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 
 	// This is in a separate binding group because we update it regularly
 	BindGroupLayoutDescriptor bindGroupLayoutDesc = Default;
-	bindGroupLayoutDesc.label = "MarchingCubes Bake Fill (group #1)";
+	bindGroupLayoutDesc.label = "MarchingSquares Bake Fill (group #1)";
 	bindGroupLayoutDesc.entries = &vertexStorageBindingLayout;
 	bindGroupLayoutDesc.entryCount = 1;
 	m_vertexStorageBindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
 
 	// 4. Compute pipelines
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingCubesRenderer.Bake.wgsl", device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingSquaresRenderer.Bake.wgsl", device);
 
 	m_bakingPipelines.eval = createBoundComputePipeline(
 		device,
-		"MarchingCubes Bake Eval",
+		"MarchingSquares Bake Eval",
 		{ uniformBindingLayout, storageTextureBindingLayout },
 		{ uniformBinding, storageTextureBinding },
 		shaderModule,
@@ -577,7 +583,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 
 	m_bakingPipelines.resetCount = createBoundComputePipeline(
 		device,
-		"MarchingCubes Bake Reset Count",
+		"MarchingSquares Bake Reset Count",
 		{ countBindingLayout },
 		{ countBinding },
 		shaderModule,
@@ -586,7 +592,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 
 	m_bakingPipelines.count = createBoundComputePipeline(
 		device,
-		"MarchingCubes Bake Count",
+		"MarchingSquares Bake Count",
 		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
 		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
 		shaderModule,
@@ -595,7 +601,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 
 	m_bakingPipelines.fill = createBoundComputePipeline(
 		device,
-		"MarchingCubes Bake Fill",
+		"MarchingSquares Bake Fill",
 		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
 		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
 		shaderModule,
@@ -604,7 +610,7 @@ void MarchingCubesRenderer::initBakingResources(const InitContext& context) {
 	);
 }
 
-void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
+void MarchingSquaresRenderer::initDrawingResources(const InitContext& context) {
 	auto device = context.device;
 
 	// 1. Bind Group
@@ -620,7 +626,7 @@ void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
 	bindingLayouts[1].buffer.minBindingSize = context.cameraUniformBufferSize;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc = Default;
-	bindGroupLayoutDesc.label = "MarchingCubes Draw";
+	bindGroupLayoutDesc.label = "MarchingSquares Draw";
 	bindGroupLayoutDesc.entries = bindingLayouts.data();
 	bindGroupLayoutDesc.entryCount = static_cast<uint32_t>(bindingLayouts.size());
 	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
@@ -637,14 +643,14 @@ void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
 	bindings[1].size = (context.cameraUniformBufferSize + 3) & ~3;
 
 	BindGroupDescriptor bindGroupDesc = Default;
-	bindGroupDesc.label = "MarchingCubes Draw";
+	bindGroupDesc.label = "MarchingSquares Draw";
 	bindGroupDesc.entries = bindings.data();
 	bindGroupDesc.entryCount = static_cast<uint32_t>(bindings.size());
 	bindGroupDesc.layout = bindGroupLayout;
 	m_drawingBindGroup = device.createBindGroup(bindGroupDesc);
 
 	// 2. Render pipeline
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingCubesRenderer.Draw.wgsl", device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingSquaresRenderer.Draw.wgsl", device);
 
 	RenderPipelineDescriptor pipelineDesc = Default;
 
@@ -698,7 +704,7 @@ void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
 	m_drawingPipeline = device.createRenderPipeline(pipelineDesc);
 }
 
-void MarchingCubesRenderer::bake() {
+void MarchingSquaresRenderer::bake() {
 	Queue queue = m_device.getQueue();
 
 	m_uniforms.time = static_cast<float>(glfwGetTime());
@@ -707,7 +713,7 @@ void MarchingCubesRenderer::bake() {
 	// 1. Sample distance function and count vertices
 	{
 		CommandEncoderDescriptor commandEncoderDesc = Default;
-		commandEncoderDesc.label = "MarchingCubes Baking (Sample)";
+		commandEncoderDesc.label = "MarchingSquares Baking (Sample)";
 		CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
 		ComputePassDescriptor computePassDesc = Default;
@@ -760,10 +766,10 @@ void MarchingCubesRenderer::bake() {
 	}
 
 	// 3. Allocate memory
-	uint32_t neededVertexBufferSize = m_vertexCount * sizeof(VertexAttributes);
+	uint32_t neededVertexBufferSize = std::min(m_vertexCount, 1u) * sizeof(VertexAttributes);
 	bool mustReallocate = m_vertexBufferSize < neededVertexBufferSize || neededVertexBufferSize < m_vertexBufferSize / 4;
 	if (mustReallocate) {
-		std::cout << "[MarchingCubesRenderer] Reallocating vertex buffer, new size = " << neededVertexBufferSize << "B" << std::endl;
+		std::cout << "[MarchingSquaresRenderer] Reallocating vertex buffer, new size = " << neededVertexBufferSize << "B" << std::endl;
 		if (m_vertexBuffer) {
 			m_vertexBuffer.destroy();
 			m_vertexBuffer = nullptr;
@@ -771,7 +777,7 @@ void MarchingCubesRenderer::bake() {
 		}
 
 		BufferDescriptor bufferDesc = Default;
-		bufferDesc.label = "MarchingCubes Vertices";
+		bufferDesc.label = "MarchingSquares Vertices";
 		bufferDesc.usage = BufferUsage::Vertex | BufferUsage::Storage;
 		bufferDesc.size = neededVertexBufferSize;
 		m_vertexBuffer = m_device.createBuffer(bufferDesc);
@@ -784,7 +790,7 @@ void MarchingCubesRenderer::bake() {
 		entry.offset = 0;
 		entry.size = m_vertexBufferSize;
 		BindGroupDescriptor bindGroupDesc = Default;
-		bindGroupDesc.label = "MarchingCubes Bake Fill (group #1)";
+		bindGroupDesc.label = "MarchingSquares Bake Fill (group #1)";
 		bindGroupDesc.entries = &entry;
 		bindGroupDesc.entryCount = 1;
 		bindGroupDesc.layout = m_vertexStorageBindGroupLayout;
@@ -794,7 +800,7 @@ void MarchingCubesRenderer::bake() {
 	// 4. Fill in memory
 	{
 		CommandEncoderDescriptor commandEncoderDesc = Default;
-		commandEncoderDesc.label = "MarchingCubes Baking (Fill)";
+		commandEncoderDesc.label = "MarchingSquares Baking (Fill)";
 		CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
 		ComputePassDescriptor computePassDesc = Default;
@@ -814,8 +820,8 @@ void MarchingCubesRenderer::bake() {
 	}
 }
 
-void MarchingCubesRenderer::draw(const DrawingContext& context) const {
-	if (!m_vertexBuffer) return;
+void MarchingSquaresRenderer::draw(const DrawingContext& context) const {
+	if (m_vertexCount == 0) return;
 	auto renderPass = context.renderPass;
 
 	renderPass.setPipeline(m_drawingPipeline);
