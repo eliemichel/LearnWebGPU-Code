@@ -20,6 +20,10 @@ add_executable(App
 	AbstractRenderer.h
 	Application.h
 	Application.cpp
+	DualContouringRenderer.h
+	DualContouringRenderer.cpp
+	MarchingCubesRenderer.h
+	MarchingCubesRenderer.cpp
 	MarchingSquaresRenderer.h
 	MarchingSquaresRenderer.cpp
 	ResourceManager.h

@@ -38,6 +38,8 @@
 #include <memory>
 
 class MarchingSquaresRenderer;
+class MarchingCubesRenderer;
+class DualContouringRenderer;
 
 class Application {
 public:
@@ -144,4 +146,6 @@ private:
 	Settings m_settings;
 
 	std::shared_ptr<MarchingSquaresRenderer> m_marchingSquaresRenderer;
+	std::shared_ptr<MarchingCubesRenderer> m_marchingCubesRenderer;
+	std::shared_ptr<DualContouringRenderer> m_dualContouringRenderer;
 };

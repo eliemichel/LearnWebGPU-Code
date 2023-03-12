@@ -27,6 +27,8 @@
 #include "Application.h"
 #include "ResourceManager.h"
 #include "MarchingSquaresRenderer.h"
+#include "MarchingCubesRenderer.h"
+#include "DualContouringRenderer.h"
 
 #include <GLFW/glfw3.h>
 
@@ -134,19 +136,20 @@ bool Application::onInit() {
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
-	requiredLimits.limits.maxBufferSize = 8 * 1024 * 1024;
+	requiredLimits.limits.maxBufferSize = 32 * 1024 * 1024;
 	requiredLimits.limits.maxTextureDimension2D = 4096;
+	requiredLimits.limits.maxTextureDimension3D = 256;
 	requiredLimits.limits.maxTextureArrayLayers = 1;
 	requiredLimits.limits.maxStorageBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxStorageTexturesPerShaderStage = 1;
-	requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
+	requiredLimits.limits.maxSampledTexturesPerShaderStage = 2;
 	requiredLimits.limits.maxSamplersPerShaderStage = 1;
 	requiredLimits.limits.maxComputeWorkgroupSizeX = 1;
 	requiredLimits.limits.maxComputeWorkgroupSizeY = 1;
 	requiredLimits.limits.maxComputeWorkgroupSizeZ = 1;
 	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 1;
 	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 1024;
-	requiredLimits.limits.maxStorageBufferBindingSize = 8 * 1024 * 1024;
+	requiredLimits.limits.maxStorageBufferBindingSize = 32 * 1024 * 1024;
 	requiredLimits.limits.maxVertexBufferArrayStride = 64;
 	requiredLimits.limits.maxInterStageShaderComponents = 6;
 	//requiredLimits.limits.maxInterStageShaderVariables = 4;
@@ -192,6 +195,8 @@ bool Application::onInit() {
 		sizeof(CameraUniforms)
 	};
 	m_marchingSquaresRenderer = std::make_shared<MarchingSquaresRenderer>(ctx, 128);
+	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 128);
+	m_dualContouringRenderer = std::make_shared<DualContouringRenderer>(ctx, 128);
 
 	initGui();
 
@@ -270,6 +275,8 @@ void Application::onFrame() {
 
 	updateDragInertia();
 	m_marchingSquaresRenderer->bake();
+	m_marchingCubesRenderer->bake();
+	m_dualContouringRenderer->bake();
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
@@ -332,6 +339,8 @@ void Application::onFrame() {
 		m_settings.showWireframe
 	};
 	m_marchingSquaresRenderer->draw(ctx);
+	m_marchingCubesRenderer->draw(ctx);
+	m_dualContouringRenderer->draw(ctx);
 
 	updateGui(renderPass);
 

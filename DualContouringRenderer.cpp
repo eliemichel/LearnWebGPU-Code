@@ -1,4 +1,4 @@
-#include "MarchingSquaresRenderer.h"
+#include "DualContouringRenderer.h"
 #include "ResourceManager.h"
 
 #include <GLFW/glfw3.h>
@@ -8,23 +8,22 @@
 
 using namespace wgpu;
 
-const float MarchingSquaresRenderer::s_quadVertices[] = {
-	0.0f, 0.0f,
-	0.0f, 1.0f,
-	1.0f, 1.0f,
-	1.0f, 0.0f
+float const DualContouringRenderer::s_quadVertices[] = {
+	0.0, 0.0,
+	0.0, 1.0,
+	1.0, 1.0,
+	1.0, 0.0
 };
 
-MarchingSquaresRenderer::MarchingSquaresRenderer(const InitContext& context, uint32_t resolution)
+DualContouringRenderer::DualContouringRenderer(const InitContext& context, uint32_t resolution)
 	: m_uniforms{ resolution }
 	, m_device(context.device)
 {
-	initModuleLut(context);
 	initBakingResources(context);
 	initDrawingResources(context);
 }
 
-MarchingSquaresRenderer::~MarchingSquaresRenderer() {
+DualContouringRenderer::~DualContouringRenderer() {
 	if (m_quadVertexBuffer) {
 		m_quadVertexBuffer.destroy();
 		m_quadVertexBuffer = nullptr;
@@ -46,17 +45,17 @@ MarchingSquaresRenderer::~MarchingSquaresRenderer() {
 		m_mapBuffer.destroy();
 		m_mapBuffer = nullptr;
 	}
-	if (m_moduleLutBuffer) {
-		m_moduleLutBuffer.destroy();
-		m_moduleLutBuffer = nullptr;
-	}
 	if (m_texture) {
 		m_texture.destroy();
 		m_texture = nullptr;
 	}
+	if (m_positionTexture) {
+		m_positionTexture.destroy();
+		m_positionTexture = nullptr;
+	}
 }
 
-MarchingSquaresRenderer::BoundComputePipeline MarchingSquaresRenderer::createBoundComputePipeline(
+DualContouringRenderer::BoundComputePipeline DualContouringRenderer::createBoundComputePipeline(
 	Device device,
 	const char *label,
 	const std::vector<BindGroupLayoutEntry>& bindingLayouts,
@@ -98,392 +97,44 @@ MarchingSquaresRenderer::BoundComputePipeline MarchingSquaresRenderer::createBou
 	return boundPipeline;
 }
 
-struct ModuleTransform {
-	using ModuleLutEntry = MarchingSquaresRenderer::ModuleLutEntry;
-
-	std::array<uint32_t, 8> permutation; // corner index -> transformed corner index
-
-	uint32_t operator() (uint32_t moduleCode) const {
-		uint32_t transformedModuleCode = 0;
-		for (int i = 0; i < 8; ++i) {
-			if (moduleCode & (1 << i)) {
-				transformedModuleCode += 1 << permutation[i];
-			}
-		}
-		return transformedModuleCode;
-	}
-	ModuleLutEntry operator() (const ModuleLutEntry& entry) const {
-		return {
-			permutation[entry.edgeStartCorner],
-			permutation[entry.edgeEndCorner]
-		};
-	}
-	std::vector<ModuleLutEntry> operator() (const std::vector<ModuleLutEntry>&entries) const {
-		const auto& tr = *this;
-		std::vector<ModuleLutEntry> transformedEntries;
-		for (const auto& entry : entries) {
-			transformedEntries.push_back(tr(entry));
-		}
-		return transformedEntries;
-	}
-
-	static glm::uvec3 CornerOffset(uint32_t i) {
-		return glm::uvec3(
-			(i & (1u << 0)) >> 0,
-			(i & (1u << 1)) >> 1,
-			(i & (1u << 2)) >> 2
-		);
-	}
-	static uint32_t CornerIndex(const glm::uvec3& offset) {
-		return (offset.x << 0) + (offset.y << 1) + (offset.z << 2);
-	}
-
-	static std::vector<ModuleTransform> ComputeAllTransforms() {
-		std::vector<glm::vec3> axes = {
-			{1,0,0},
-			{0,1,0},
-			{0,0,1}
-		};
-		std::vector<ModuleTransform> transforms;
-		// for each up axis
-		for (int i = 0; i < 2 * axes.size(); ++i) {
-			glm::vec3 up = axes[i % axes.size()] * (i >= axes.size() ? -1.0f : 1.0f);
-			glm::vec3 forward = axes[(i + 1) % axes.size()];
-			// for each side face
-			for (int j = 0; j < 4; ++j) {
-				glm::vec3 side = cross(up, forward);
-				glm::mat3 localToWorld = { forward, side, up };
-				ModuleTransform tr;
-				for (uint32_t k = 0; k < 8; ++k) {
-					tr.permutation[k] = ModuleTransform::CornerIndex(glm::uvec3((localToWorld * (glm::vec3(ModuleTransform::CornerOffset(k)) - 0.5f)) + 0.5f));
-				}
-				transforms.push_back(tr);
-				forward = side;
-			}
-		}
-		return transforms;
-	}
-};
-
-void MarchingSquaresRenderer::initModuleLut(const InitContext& context) {
-	Device device = context.device;
-	Queue queue = device.getQueue();
-
-	// 15 base cubes that we then flip/rotate
-	// (in the order listed on Wikipedia, X is horizontal to the right, Y is to the background and Z is up)
-	std::unordered_map<uint32_t,std::vector<ModuleLutEntry>> baseModules;
-	uint32_t i000 = ModuleTransform::CornerIndex({ 0, 0, 0 });
-	uint32_t i100 = ModuleTransform::CornerIndex({ 1, 0, 0 });
-	uint32_t i010 = ModuleTransform::CornerIndex({ 0, 1, 0 });
-	uint32_t i110 = ModuleTransform::CornerIndex({ 1, 1, 0 });
-	uint32_t i001 = ModuleTransform::CornerIndex({ 0, 0, 1 });
-	uint32_t i101 = ModuleTransform::CornerIndex({ 1, 0, 1 });
-	uint32_t i011 = ModuleTransform::CornerIndex({ 0, 1, 1 });
-	uint32_t i111 = ModuleTransform::CornerIndex({ 1, 1, 1 });
-	{
-		baseModules[0] = {};
-	}
-	{
-		uint32_t moduleCode = 1u << i000;
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i001 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i100);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i000, i001 });
-		
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i100, i101 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i101);
-		auto& entries = baseModules[moduleCode];
-		/*
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i101, i100 });
-		entries.push_back({ i101, i111 });
-		entries.push_back({ i101, i001 });
-		*/
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i101, i001 });
-		entries.push_back({ i101, i111 });
-
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i101, i111 });
-		entries.push_back({ i000, i010 });
-
-		entries.push_back({ i101, i111 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i101, i111 });
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i101, i100 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i000 });
-
-		entries.push_back({ i010, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i011 });
-
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i100) + (1u << i110) + (1u << i010);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i010, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010) + (1u << i001);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i000 });
-		entries.push_back({ i010, i000 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-
-		entries.push_back({ i001, i000 });
-		entries.push_back({ i001, i101 });
-		entries.push_back({ i001, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i011) + (1u << i101);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i110, i010 });
-
-		entries.push_back({ i011, i010 });
-		entries.push_back({ i011, i001 });
-		entries.push_back({ i011, i111 });
-
-		entries.push_back({ i101, i100 });
-		entries.push_back({ i101, i111 });
-		entries.push_back({ i101, i001 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i010) + (1u << i011);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i110, i111 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i011, i111 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i011, i111 });
-		entries.push_back({ i000, i001 });
-
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i011, i111 });
-		entries.push_back({ i011, i001 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010) + (1u << i011);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i100, i000 });
-
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i110, i111 });
-		entries.push_back({ i011, i001 });
-
-		entries.push_back({ i100, i000 });
-		entries.push_back({ i011, i001 });
-		entries.push_back({ i010, i000 });
-
-		entries.push_back({ i011, i001 });
-		entries.push_back({ i011, i111 });
-		entries.push_back({ i110, i111 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i111, i110 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-	}
-	{ // issue
-		uint32_t moduleCode = (1u << i000) + (1u << i100) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i100, i110 });
-
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i000, i001 });
-
-		entries.push_back({ i111, i110 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i100) + (1u << i001) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i100, i101 });
-		entries.push_back({ i100, i110 });
-		entries.push_back({ i100, i000 });
-
-		entries.push_back({ i001, i000 });
-		entries.push_back({ i001, i011 });
-		entries.push_back({ i001, i101 });
-
-		entries.push_back({ i111, i110 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i001) + (1u << i110) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i000, i010 });
-		entries.push_back({ i001, i011 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i001, i011 });
-		entries.push_back({ i001, i101 });
-		
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i110, i010 });
-		entries.push_back({ i111, i011 });
-
-		entries.push_back({ i111, i011 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i110, i100 });
-	}
-	{
-		uint32_t moduleCode = (1u << i000) + (1u << i110) + (1u << i010) + (1u << i111);
-		auto& entries = baseModules[moduleCode];
-		entries.push_back({ i110, i100 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i000, i100 });
-
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i010, i011 });
-
-		entries.push_back({ i010, i011 });
-		entries.push_back({ i111, i101 });
-		entries.push_back({ i111, i011 });
-
-		entries.push_back({ i000, i001 });
-		entries.push_back({ i000, i100 });
-		entries.push_back({ i010, i011 });
-	}
-
-	std::vector<ModuleTransform> transforms = ModuleTransform::ComputeAllTransforms();
-	std::unordered_map<uint32_t, std::vector<ModuleLutEntry>> modules;
-	for (const auto& cube : baseModules) {
-		uint32_t moduleCode = cube.first;
-		uint32_t complementaryModuleCode = ~moduleCode & 255;
-		const auto& entries = cube.second;
-		for (const auto& tr : transforms) {
-			modules[tr(moduleCode)] = tr(entries);
-			modules[tr(complementaryModuleCode)] = tr(entries);
-		}
-	}
-
-	ModuleLut lut;
-	std::fill(lut.endOffset.begin(), lut.endOffset.end(), 0);
-	uint32_t offset = 0;
-	for (int k = 0; k < 256; ++k) {
-		auto it = modules.find(k);
-		if (it != modules.end()) {
-			for (auto& entry : it->second) {
-				lut.entries.push_back(entry);
-				++offset;
-			}
-		}
-		lut.endOffset[k] = offset;
-	}
-
-	m_moduleLutBufferSize = static_cast<uint32_t>(256 * sizeof(uint32_t) + std::max(lut.entries.size(), (size_t)1) * sizeof(ModuleLutEntry));
-
-	BufferDescriptor bufferDesc = Default;
-	bufferDesc.label = "MarchingSquares Module LUT";
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Storage;
-	bufferDesc.size = (m_moduleLutBufferSize + 3) & ~3;
-	m_moduleLutBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(m_moduleLutBuffer, 0, &lut.endOffset, 256 * sizeof(uint32_t));
-	queue.writeBuffer(m_moduleLutBuffer, 256 * sizeof(uint32_t), lut.entries.data(), lut.entries.size() * sizeof(ModuleLutEntry));
-}
-
-void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
+void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	Device device = context.device;
 	Queue queue = device.getQueue();
 
 	// 1. Buffers
 	BufferDescriptor bufferDesc = Default;
-	bufferDesc.label = "MarchingSquares Quad";
+	bufferDesc.label = "DualContouring Quad";
 	bufferDesc.usage = BufferUsage::Vertex;
 	bufferDesc.size = sizeof(s_quadVertices);
 	m_quadVertexBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "MarchingSquares Uniforms";
+	bufferDesc.label = "DualContouring Uniforms";
 	bufferDesc.usage = BufferUsage::Uniform | BufferUsage::CopyDst;
 	bufferDesc.size = (sizeof(Uniforms) + 3) & ~3;
 	m_uniformBuffer = device.createBuffer(bufferDesc);
 	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, bufferDesc.size);
 
-	bufferDesc.label = "MarchingSquares Counts";
+	bufferDesc.label = "DualContouring Counts";
 	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopySrc;
 	bufferDesc.size = (sizeof(Counts) + 3) & ~3;
 	m_countBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "MarchingSquares Map";
+	bufferDesc.label = "DualContouring Map";
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::MapRead;
 	bufferDesc.size = (sizeof(Counts) + 3) & ~3;
 	m_mapBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "MarchingSquares Vertices";
+	bufferDesc.label = "DualContouring Vertices";
 	bufferDesc.usage = BufferUsage::Vertex | BufferUsage::Storage;
 	bufferDesc.size = sizeof(VertexAttributes);
 	m_vertexBuffer = m_device.createBuffer(bufferDesc);
 	m_vertexBufferSize = sizeof(VertexAttributes);
 
-	// 2. Texture
+	// 2. Textures
 	TextureDescriptor textureDesc = Default;
-	textureDesc.label = "MarchingSquares";
-	textureDesc.dimension = TextureDimension::_2D;
-	textureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, 1 };
+	textureDesc.label = "DualContouring SDF";
+	textureDesc.dimension = TextureDimension::_3D;
+	textureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
 	textureDesc.format = TextureFormat::RGBA16Float;
 	textureDesc.mipLevelCount = 1;
 	textureDesc.usage = TextureUsage::StorageBinding | TextureUsage::TextureBinding;
@@ -494,9 +145,27 @@ void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 	textureViewDesc.arrayLayerCount = 1;
 	textureViewDesc.baseMipLevel = 0;
 	textureViewDesc.mipLevelCount = 1;
-	textureViewDesc.dimension = TextureViewDimension::_2D;
+	textureViewDesc.dimension = TextureViewDimension::_3D;
 	textureViewDesc.format = textureDesc.format;
 	m_textureView = m_texture.createView(textureViewDesc);
+
+	TextureDescriptor positionTextureDesc = Default;
+	positionTextureDesc.label = "DualContouring Position";
+	positionTextureDesc.dimension = TextureDimension::_3D;
+	positionTextureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
+	positionTextureDesc.format = TextureFormat::RGBA16Float;
+	positionTextureDesc.mipLevelCount = 1;
+	positionTextureDesc.usage = TextureUsage::StorageBinding | TextureUsage::TextureBinding;
+	m_positionTexture = device.createTexture(positionTextureDesc);
+
+	TextureViewDescriptor positionTextureViewDesc = Default;
+	positionTextureViewDesc.baseArrayLayer = 0;
+	positionTextureViewDesc.arrayLayerCount = 1;
+	positionTextureViewDesc.baseMipLevel = 0;
+	positionTextureViewDesc.mipLevelCount = 1;
+	positionTextureViewDesc.dimension = TextureViewDimension::_3D;
+	positionTextureViewDesc.format = textureDesc.format;
+	m_positionTextureView = m_positionTexture.createView(positionTextureViewDesc);
 
 	// 3. Bind Group Entries
 	BindGroupLayoutEntry uniformBindingLayout = Default;
@@ -514,7 +183,7 @@ void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 	storageTextureBindingLayout.binding = 1;
 	storageTextureBindingLayout.visibility = ShaderStage::Compute;
 	storageTextureBindingLayout.storageTexture.access = StorageTextureAccess::WriteOnly;
-	storageTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_2D;
+	storageTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_3D;
 	storageTextureBindingLayout.storageTexture.format = textureDesc.format;
 	BindGroupEntry storageTextureBinding = Default;
 	storageTextureBinding.binding = 1;
@@ -524,7 +193,7 @@ void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 	textureBindingLayout.binding = 2;
 	textureBindingLayout.visibility = ShaderStage::Compute;
 	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
-	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
+	textureBindingLayout.texture.viewDimension = TextureViewDimension::_3D;
 	BindGroupEntry textureBinding = Default;
 	textureBinding.binding = 2;
 	textureBinding.textureView = m_textureView;
@@ -540,16 +209,24 @@ void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 	countBinding.offset = 0;
 	countBinding.size = (sizeof(Counts) + 3) & ~3;
 
-	BindGroupLayoutEntry moduleLutBindingLayout = Default;
-	moduleLutBindingLayout.binding = 4;
-	moduleLutBindingLayout.visibility = ShaderStage::Compute;
-	moduleLutBindingLayout.buffer.type = BufferBindingType::ReadOnlyStorage;
-	moduleLutBindingLayout.buffer.minBindingSize = (m_moduleLutBufferSize + 3) & ~3;
-	BindGroupEntry moduleLutBinding = Default;
-	moduleLutBinding.binding = 4;
-	moduleLutBinding.buffer = m_moduleLutBuffer;
-	moduleLutBinding.offset = 0;
-	moduleLutBinding.size = (m_moduleLutBufferSize + 3) & ~3;
+	BindGroupLayoutEntry storagePositionTextureBindingLayout = Default;
+	storagePositionTextureBindingLayout.binding = 5;
+	storagePositionTextureBindingLayout.visibility = ShaderStage::Compute;
+	storagePositionTextureBindingLayout.storageTexture.access = StorageTextureAccess::WriteOnly;
+	storagePositionTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_3D;
+	storagePositionTextureBindingLayout.storageTexture.format = positionTextureDesc.format;
+	BindGroupEntry storagePositionTextureBinding = Default;
+	storagePositionTextureBinding.binding = 5;
+	storagePositionTextureBinding.textureView = m_positionTextureView;
+
+	BindGroupLayoutEntry positionTextureBindingLayout = Default;
+	positionTextureBindingLayout.binding = 6;
+	positionTextureBindingLayout.visibility = ShaderStage::Compute;
+	positionTextureBindingLayout.texture.sampleType = TextureSampleType::Float;
+	positionTextureBindingLayout.texture.viewDimension = TextureViewDimension::_3D;
+	BindGroupEntry positionTextureBinding = Default;
+	positionTextureBinding.binding = 6;
+	positionTextureBinding.textureView = m_positionTextureView;
 
 	BindGroupLayoutEntry vertexStorageBindingLayout = Default;
 	vertexStorageBindingLayout.binding = 0;
@@ -564,17 +241,17 @@ void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 
 	// This is in a separate binding group because we update it regularly
 	BindGroupLayoutDescriptor bindGroupLayoutDesc = Default;
-	bindGroupLayoutDesc.label = "MarchingSquares Bake Fill (group #1)";
+	bindGroupLayoutDesc.label = "DualContouring Bake Fill (group #1)";
 	bindGroupLayoutDesc.entries = &vertexStorageBindingLayout;
 	bindGroupLayoutDesc.entryCount = 1;
 	m_vertexStorageBindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
 
 	// 4. Compute pipelines
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingSquaresRenderer.Bake.wgsl", device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/DualContouringRenderer.Bake.wgsl", device);
 
 	m_bakingPipelines.eval = createBoundComputePipeline(
 		device,
-		"MarchingSquares Bake Eval",
+		"DualContouring Bake Eval",
 		{ uniformBindingLayout, storageTextureBindingLayout },
 		{ uniformBinding, storageTextureBinding },
 		shaderModule,
@@ -583,7 +260,7 @@ void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 
 	m_bakingPipelines.resetCount = createBoundComputePipeline(
 		device,
-		"MarchingSquares Bake Reset Count",
+		"DualContouring Bake Reset Count",
 		{ countBindingLayout },
 		{ countBinding },
 		shaderModule,
@@ -592,25 +269,25 @@ void MarchingSquaresRenderer::initBakingResources(const InitContext& context) {
 
 	m_bakingPipelines.count = createBoundComputePipeline(
 		device,
-		"MarchingSquares Bake Count",
-		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
-		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
+		"DualContouring Bake Count",
+		{ uniformBindingLayout, textureBindingLayout, storagePositionTextureBindingLayout, countBindingLayout },
+		{ uniformBinding, textureBinding, storagePositionTextureBinding, countBinding },
 		shaderModule,
 		"main_count"
 	);
 
 	m_bakingPipelines.fill = createBoundComputePipeline(
 		device,
-		"MarchingSquares Bake Fill",
-		{ uniformBindingLayout, textureBindingLayout, countBindingLayout, moduleLutBindingLayout },
-		{ uniformBinding, textureBinding, countBinding, moduleLutBinding },
+		"DualContouring Bake Fill",
+		{ uniformBindingLayout, textureBindingLayout, positionTextureBindingLayout, countBindingLayout },
+		{ uniformBinding, textureBinding, positionTextureBinding, countBinding },
 		shaderModule,
 		"main_fill",
 		{ m_vertexStorageBindGroupLayout }
 	);
 }
 
-void MarchingSquaresRenderer::initDrawingResources(const InitContext& context) {
+void DualContouringRenderer::initDrawingResources(const InitContext& context) {
 	auto device = context.device;
 
 	// 1. Bind Group
@@ -626,7 +303,7 @@ void MarchingSquaresRenderer::initDrawingResources(const InitContext& context) {
 	bindingLayouts[1].buffer.minBindingSize = context.cameraUniformBufferSize;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc = Default;
-	bindGroupLayoutDesc.label = "MarchingSquares Draw";
+	bindGroupLayoutDesc.label = "DualContouring Draw";
 	bindGroupLayoutDesc.entries = bindingLayouts.data();
 	bindGroupLayoutDesc.entryCount = static_cast<uint32_t>(bindingLayouts.size());
 	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
@@ -643,14 +320,14 @@ void MarchingSquaresRenderer::initDrawingResources(const InitContext& context) {
 	bindings[1].size = (context.cameraUniformBufferSize + 3) & ~3;
 
 	BindGroupDescriptor bindGroupDesc = Default;
-	bindGroupDesc.label = "MarchingSquares Draw";
+	bindGroupDesc.label = "DualContouring Draw";
 	bindGroupDesc.entries = bindings.data();
 	bindGroupDesc.entryCount = static_cast<uint32_t>(bindings.size());
 	bindGroupDesc.layout = bindGroupLayout;
 	m_drawingBindGroup = device.createBindGroup(bindGroupDesc);
 
 	// 2. Render pipeline
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/MarchingSquaresRenderer.Draw.wgsl", device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/DualContouringRenderer.Draw.wgsl", device);
 
 	RenderPipelineDescriptor pipelineDesc = Default;
 
@@ -704,7 +381,7 @@ void MarchingSquaresRenderer::initDrawingResources(const InitContext& context) {
 	m_drawingPipeline = device.createRenderPipeline(pipelineDesc);
 }
 
-void MarchingSquaresRenderer::bake() {
+void DualContouringRenderer::bake() {
 	Queue queue = m_device.getQueue();
 
 	m_uniforms.time = static_cast<float>(glfwGetTime());
@@ -713,7 +390,7 @@ void MarchingSquaresRenderer::bake() {
 	// 1. Sample distance function and count vertices
 	{
 		CommandEncoderDescriptor commandEncoderDesc = Default;
-		commandEncoderDesc.label = "MarchingSquares Baking (Sample)";
+		commandEncoderDesc.label = "DualContouring Baking (Sample)";
 		CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
 		ComputePassDescriptor computePassDesc = Default;
@@ -769,7 +446,7 @@ void MarchingSquaresRenderer::bake() {
 	uint32_t neededVertexBufferSize = std::max(m_vertexCount, 1u) * sizeof(VertexAttributes);
 	bool mustReallocate = m_vertexBufferSize < neededVertexBufferSize || neededVertexBufferSize < m_vertexBufferSize / 4;
 	if (mustReallocate) {
-		std::cout << "[MarchingSquaresRenderer] Reallocating vertex buffer, new size = " << neededVertexBufferSize << "B" << std::endl;
+		std::cout << "[DualContouringRenderer] Reallocating vertex buffer, new size = " << neededVertexBufferSize << "B" << std::endl;
 		if (m_vertexBuffer) {
 			m_vertexBuffer.destroy();
 			m_vertexBuffer = nullptr;
@@ -777,7 +454,7 @@ void MarchingSquaresRenderer::bake() {
 		}
 
 		BufferDescriptor bufferDesc = Default;
-		bufferDesc.label = "MarchingSquares Vertices";
+		bufferDesc.label = "DualContouring Vertices";
 		bufferDesc.usage = BufferUsage::Vertex | BufferUsage::Storage;
 		bufferDesc.size = neededVertexBufferSize;
 		m_vertexBuffer = m_device.createBuffer(bufferDesc);
@@ -791,7 +468,7 @@ void MarchingSquaresRenderer::bake() {
 		entry.offset = 0;
 		entry.size = m_vertexBufferSize;
 		BindGroupDescriptor bindGroupDesc = Default;
-		bindGroupDesc.label = "MarchingSquares Bake Fill (group #1)";
+		bindGroupDesc.label = "DualContouring Bake Fill (group #1)";
 		bindGroupDesc.entries = &entry;
 		bindGroupDesc.entryCount = 1;
 		bindGroupDesc.layout = m_vertexStorageBindGroupLayout;
@@ -801,7 +478,7 @@ void MarchingSquaresRenderer::bake() {
 	// 4. Fill in memory
 	{
 		CommandEncoderDescriptor commandEncoderDesc = Default;
-		commandEncoderDesc.label = "MarchingSquares Baking (Fill)";
+		commandEncoderDesc.label = "DualContouring Baking (Fill)";
 		CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
 		ComputePassDescriptor computePassDesc = Default;
@@ -810,7 +487,7 @@ void MarchingSquaresRenderer::bake() {
 		computePass.setPipeline(m_bakingPipelines.fill.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.fill.bindGroup, 0, nullptr);
 		computePass.setBindGroup(1, m_vertexStorageBindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
+		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
 
 		computePass.end();
 
@@ -821,7 +498,7 @@ void MarchingSquaresRenderer::bake() {
 	}
 }
 
-void MarchingSquaresRenderer::draw(const DrawingContext& context) const {
+void DualContouringRenderer::draw(const DrawingContext& context) const {
 	if (m_vertexCount == 0) return;
 	auto renderPass = context.renderPass;
 
