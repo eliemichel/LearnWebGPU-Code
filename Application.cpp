@@ -313,7 +313,10 @@ void Application::onFrame() {
 	renderPassDesc.timestampWrites = nullptr;
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
-	AbstractRenderer::DrawingContext ctx{ renderPass };
+	AbstractRenderer::DrawingContext ctx{
+		renderPass,
+		m_settings.showWireframe
+	};
 	m_marchingCubesRenderer->draw(ctx);
 	m_dualContouringRenderer->draw(ctx);
 
@@ -449,8 +452,12 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
+	/*
 	ImGui::Begin("Settings");
 	ImGui::Checkbox("Show Wireframe", &m_settings.showWireframe);
+	ImGui::End();
+	*/
+	ImGui::Begin("Profiling");
 	ImGui::End();
 
 	ImGui::Render();

@@ -137,7 +137,7 @@ private:
 	};
 
 	struct Settings {
-		bool showWireframe = true;
+		bool showWireframe = false;
 	};
 
 	CameraState m_cameraState;

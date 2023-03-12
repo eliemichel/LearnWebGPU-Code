@@ -73,6 +73,7 @@ private:
 	Uniforms m_uniforms;
 	wgpu::Device m_device = nullptr;
 	wgpu::RenderPipeline m_drawingPipeline = nullptr;
+	wgpu::RenderPipeline m_wireframeDrawingPipeline = nullptr;
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	uint32_t m_vertexBufferSize = 0;
 	wgpu::Buffer m_quadVertexBuffer = nullptr;

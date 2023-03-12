@@ -88,22 +88,6 @@ fn evalNormal(pos: vec3<f32>) -> vec3<f32> {
                      k.yyx * evalSdf(pos + k.yyx * eps) + 
                      k.yxy * evalSdf(pos + k.yxy * eps) + 
                      k.xxx * evalSdf(pos + k.xxx * eps));
-
-	/*
-	let offset1 = vec3<f32>(0.0);
-	let radius1 = 0.55 + 0.1 * cos(3.0 * uniforms.time);
-	let d1 = length(pos - offset1) - radius1;
-
-	let offset2 = vec3<f32>(0.0, 0.6, 0.6);
-	let radius2 = 0.3;
-	let d2 = length(pos - offset2) - radius2;
-
-	if (d1 < d2) {
-		return normalize(pos - offset1);
-	} else {
-		return normalize(pos - offset2);
-	}
-	*/
 }
 
 fn allocateVertices(vertex_count: u32) -> u32 {
