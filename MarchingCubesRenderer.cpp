@@ -722,19 +722,22 @@ void MarchingCubesRenderer::bake() {
 
 		ComputePassDescriptor computePassDesc = Default;
 		ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
-		computePass.insertDebugMarker("test");
-
+		
+		computePass.pushDebugGroup("MC: Eval SDF");
 		computePass.setPipeline(m_bakingPipelines.eval.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.eval.bindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
+		computePass.popDebugGroup();
 
 		computePass.setPipeline(m_bakingPipelines.resetCount.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.resetCount.bindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(1, 1, 1);
 
+		computePass.pushDebugGroup("MC: Count vertices");
 		computePass.setPipeline(m_bakingPipelines.count.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.count.bindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
+		computePass.popDebugGroup();
 
 		computePass.end();
 
@@ -812,10 +815,12 @@ void MarchingCubesRenderer::bake() {
 		ComputePassDescriptor computePassDesc = Default;
 		ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
+		computePass.pushDebugGroup("MC: Compute vertices");
 		computePass.setPipeline(m_bakingPipelines.fill.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.fill.bindGroup, 0, nullptr);
 		computePass.setBindGroup(1, m_vertexStorageBindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
+		computePass.popDebugGroup();
 
 		computePass.end();
 
@@ -824,11 +829,25 @@ void MarchingCubesRenderer::bake() {
 		CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 		queue.submit(command);
 	}
+
+
+	QuerySetDescriptor querySetDesc;
+	querySetDesc.count = 1;
+	querySetDesc.pipelineStatisticsCount = 0;
+	querySetDesc.type = QueryType::Timestamp;
+	QuerySet querySet = m_device.createQuerySet(querySetDesc);
+
+	ComputePassTimestampWrite timestampWrites;
+	timestampWrites.location = ComputePassTimestampLocation::Beginning;
+	timestampWrites.queryIndex = 0;
+	timestampWrites.querySet = querySet;
 }
 
 void MarchingCubesRenderer::draw(const DrawingContext& context) const {
 	if (m_vertexCount == 0) return;
 	auto renderPass = context.renderPass;
+
+	renderPass.pushDebugGroup("MC: Draw");
 
 	renderPass.setPipeline(m_drawingPipeline);
 
@@ -837,12 +856,18 @@ void MarchingCubesRenderer::draw(const DrawingContext& context) const {
 
 	renderPass.draw(m_vertexCount, 1, 0, 0);
 
+	renderPass.popDebugGroup();
+
 	if (context.showWireframe) {
+		renderPass.pushDebugGroup("MC: Draw Wireframe");
+
 		renderPass.setPipeline(m_wireframeDrawingPipeline);
 
 		renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexCount * sizeof(VertexAttributes));
 		renderPass.setBindGroup(0, m_drawingBindGroup, 0, nullptr);
 
 		renderPass.draw(m_vertexCount, 1, 0, 0);
+
+		renderPass.popDebugGroup();
 	}
 }

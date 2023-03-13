@@ -396,17 +396,21 @@ void DualContouringRenderer::bake() {
 		ComputePassDescriptor computePassDesc = Default;
 		ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
+		computePass.pushDebugGroup("DC: Eval SDF");
 		computePass.setPipeline(m_bakingPipelines.eval.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.eval.bindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
+		computePass.popDebugGroup();
 
 		computePass.setPipeline(m_bakingPipelines.resetCount.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.resetCount.bindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(1, 1, 1);
 
+		computePass.pushDebugGroup("DC: Count vertices");
 		computePass.setPipeline(m_bakingPipelines.count.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.count.bindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
+		computePass.popDebugGroup();
 
 		computePass.end();
 
@@ -484,10 +488,12 @@ void DualContouringRenderer::bake() {
 		ComputePassDescriptor computePassDesc = Default;
 		ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
+		computePass.pushDebugGroup("DC: Compute vertices");
 		computePass.setPipeline(m_bakingPipelines.fill.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.fill.bindGroup, 0, nullptr);
 		computePass.setBindGroup(1, m_vertexStorageBindGroup, 0, nullptr);
 		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
+		computePass.popDebugGroup();
 
 		computePass.end();
 
@@ -502,10 +508,14 @@ void DualContouringRenderer::draw(const DrawingContext& context) const {
 	if (m_vertexCount == 0) return;
 	auto renderPass = context.renderPass;
 
+	renderPass.pushDebugGroup("DC: Draw");
+
 	renderPass.setPipeline(m_drawingPipeline);
 
 	renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexCount * sizeof(VertexAttributes));
 	renderPass.setBindGroup(0, m_drawingBindGroup, 0, nullptr);
 
 	renderPass.draw(m_vertexCount, 1, 0, 0);
+
+	renderPass.popDebugGroup();
 }

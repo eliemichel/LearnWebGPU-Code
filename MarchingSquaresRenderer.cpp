@@ -721,7 +721,7 @@ void MarchingSquaresRenderer::bake() {
 
 		computePass.setPipeline(m_bakingPipelines.eval.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.eval.bindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
+		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, 1);
 
 		computePass.setPipeline(m_bakingPipelines.resetCount.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.resetCount.bindGroup, 0, nullptr);
@@ -729,7 +729,7 @@ void MarchingSquaresRenderer::bake() {
 
 		computePass.setPipeline(m_bakingPipelines.count.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.count.bindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
+		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, 1);
 
 		computePass.end();
 
@@ -810,7 +810,7 @@ void MarchingSquaresRenderer::bake() {
 		computePass.setPipeline(m_bakingPipelines.fill.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.fill.bindGroup, 0, nullptr);
 		computePass.setBindGroup(1, m_vertexStorageBindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
+		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, 1);
 
 		computePass.end();
 
