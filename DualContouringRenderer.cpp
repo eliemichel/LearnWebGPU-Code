@@ -155,7 +155,7 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	positionTextureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
 	positionTextureDesc.format = TextureFormat::RGBA16Float;
 	positionTextureDesc.mipLevelCount = 1;
-	positionTextureDesc.usage = TextureUsage::StorageBinding | TextureUsage::TextureBinding;
+	positionTextureDesc.usage = TextureUsage::StorageBinding;
 	m_positionTexture = device.createTexture(positionTextureDesc);
 
 	TextureViewDescriptor positionTextureViewDesc = Default;
