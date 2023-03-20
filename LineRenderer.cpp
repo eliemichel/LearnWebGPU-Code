@@ -1,4 +1,4 @@
-#include "DualContouringRenderer.h"
+#include "LineRenderer.h"
 #include "ResourceManager.h"
 
 #include <GLFW/glfw3.h>
@@ -8,22 +8,27 @@
 
 using namespace wgpu;
 
-float const DualContouringRenderer::s_quadVertices[] = {
+#ifdef WEBGPU_BACKEND_WGPU
+#define WGPU_ANY_SIZE WGPU_WHOLE_SIZE
+#else
+#define WGPU_ANY_SIZE 0
+#endif
+
+const float LineRenderer::s_quadVertices[] = {
 	0.0, 0.0,
 	0.0, 1.0,
 	1.0, 1.0,
 	1.0, 0.0
 };
 
-DualContouringRenderer::DualContouringRenderer(const InitContext& context, uint32_t resolution)
-	: m_uniforms{ resolution }
-	, m_device(context.device)
+LineRenderer::LineRenderer(const InitContext& context)
+	: m_device(context.device)
 {
 	initBakingResources(context);
 	initDrawingResources(context);
 }
 
-DualContouringRenderer::~DualContouringRenderer() {
+LineRenderer::~LineRenderer() {
 	if (m_quadVertexBuffer) {
 		m_quadVertexBuffer.destroy();
 		m_quadVertexBuffer = nullptr;
@@ -45,17 +50,16 @@ DualContouringRenderer::~DualContouringRenderer() {
 		m_mapBuffer.destroy();
 		m_mapBuffer = nullptr;
 	}
-	if (m_texture) {
-		m_texture.destroy();
-		m_texture = nullptr;
-	}
-	if (m_positionTexture) {
-		m_positionTexture.destroy();
-		m_positionTexture = nullptr;
-	}
 }
 
-DualContouringRenderer::BoundComputePipeline DualContouringRenderer::createBoundComputePipeline(
+void LineRenderer::setVertices(const std::vector<VertexAttributes>& vertexData) {
+	m_vertexCount = static_cast<int32_t>(vertexData.size());
+	updateVertexBufferSize();
+	Queue queue = m_device.getQueue();
+	queue.writeBuffer(m_vertexBuffer, 0, vertexData.data(), vertexData.size() * sizeof(VertexAttributes));
+}
+
+LineRenderer::BoundComputePipeline LineRenderer::createBoundComputePipeline(
 	Device device,
 	const char *label,
 	const std::vector<BindGroupLayoutEntry>& bindingLayouts,
@@ -97,77 +101,40 @@ DualContouringRenderer::BoundComputePipeline DualContouringRenderer::createBound
 	return boundPipeline;
 }
 
-void DualContouringRenderer::initBakingResources(const InitContext& context) {
+void LineRenderer::initBakingResources(const InitContext& context) {
 	Device device = context.device;
 	Queue queue = device.getQueue();
 
 	// 1. Buffers
 	BufferDescriptor bufferDesc = Default;
-	bufferDesc.label = "DualContouring Quad";
+	bufferDesc.label = "MarchingCubes Quad";
 	bufferDesc.usage = BufferUsage::Vertex;
 	bufferDesc.size = sizeof(s_quadVertices);
 	m_quadVertexBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "DualContouring Uniforms";
+	bufferDesc.label = "MarchingCubes Uniforms";
 	bufferDesc.usage = BufferUsage::Uniform | BufferUsage::CopyDst;
 	bufferDesc.size = (sizeof(Uniforms) + 3) & ~3;
 	m_uniformBuffer = device.createBuffer(bufferDesc);
 	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, bufferDesc.size);
 
-	bufferDesc.label = "DualContouring Counts";
+	bufferDesc.label = "MarchingCubes Counts";
 	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopySrc;
 	bufferDesc.size = (sizeof(Counts) + 3) & ~3;
 	m_countBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "DualContouring Map";
+	bufferDesc.label = "MarchingCubes Map";
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::MapRead;
 	bufferDesc.size = (sizeof(Counts) + 3) & ~3;
 	m_mapBuffer = device.createBuffer(bufferDesc);
 
-	bufferDesc.label = "DualContouring Vertices";
+	bufferDesc.label = "MarchingCubes Vertices";
 	bufferDesc.usage = BufferUsage::Vertex | BufferUsage::Storage;
 	bufferDesc.size = sizeof(VertexAttributes);
 	m_vertexBuffer = m_device.createBuffer(bufferDesc);
 	m_vertexBufferSize = sizeof(VertexAttributes);
 
-	// 2. Textures
-	TextureDescriptor textureDesc = Default;
-	textureDesc.label = "DualContouring SDF";
-	textureDesc.dimension = TextureDimension::_3D;
-	textureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
-	textureDesc.format = TextureFormat::RGBA16Float;
-	textureDesc.mipLevelCount = 1;
-	textureDesc.usage = TextureUsage::StorageBinding | TextureUsage::TextureBinding;
-	m_texture = device.createTexture(textureDesc);
-
-	TextureViewDescriptor textureViewDesc = Default;
-	textureViewDesc.baseArrayLayer = 0;
-	textureViewDesc.arrayLayerCount = 1;
-	textureViewDesc.baseMipLevel = 0;
-	textureViewDesc.mipLevelCount = 1;
-	textureViewDesc.dimension = TextureViewDimension::_3D;
-	textureViewDesc.format = textureDesc.format;
-	m_textureView = m_texture.createView(textureViewDesc);
-
-	TextureDescriptor positionTextureDesc = Default;
-	positionTextureDesc.label = "DualContouring Position";
-	positionTextureDesc.dimension = TextureDimension::_3D;
-	positionTextureDesc.size = { m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution };
-	positionTextureDesc.format = TextureFormat::RGBA16Float;
-	positionTextureDesc.mipLevelCount = 1;
-	positionTextureDesc.usage = TextureUsage::StorageBinding;
-	m_positionTexture = device.createTexture(positionTextureDesc);
-
-	TextureViewDescriptor positionTextureViewDesc = Default;
-	positionTextureViewDesc.baseArrayLayer = 0;
-	positionTextureViewDesc.arrayLayerCount = 1;
-	positionTextureViewDesc.baseMipLevel = 0;
-	positionTextureViewDesc.mipLevelCount = 1;
-	positionTextureViewDesc.dimension = TextureViewDimension::_3D;
-	positionTextureViewDesc.format = textureDesc.format;
-	m_positionTextureView = m_positionTexture.createView(positionTextureViewDesc);
-
-	// 3. Bind Group Entries
+	// 2. Bind Group Entries
 	BindGroupLayoutEntry uniformBindingLayout = Default;
 	uniformBindingLayout.binding = 0;
 	uniformBindingLayout.visibility = ShaderStage::Compute;
@@ -179,27 +146,8 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	uniformBinding.offset = 0;
 	uniformBinding.size = (sizeof(Uniforms) + 3) & ~3;
 
-	BindGroupLayoutEntry storageTextureBindingLayout = Default;
-	storageTextureBindingLayout.binding = 1;
-	storageTextureBindingLayout.visibility = ShaderStage::Compute;
-	storageTextureBindingLayout.storageTexture.access = StorageTextureAccess::WriteOnly;
-	storageTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_3D;
-	storageTextureBindingLayout.storageTexture.format = textureDesc.format;
-	BindGroupEntry storageTextureBinding = Default;
-	storageTextureBinding.binding = 1;
-	storageTextureBinding.textureView = m_textureView;
-
-	BindGroupLayoutEntry textureBindingLayout = Default;
-	textureBindingLayout.binding = 2;
-	textureBindingLayout.visibility = ShaderStage::Compute;
-	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
-	textureBindingLayout.texture.viewDimension = TextureViewDimension::_3D;
-	BindGroupEntry textureBinding = Default;
-	textureBinding.binding = 2;
-	textureBinding.textureView = m_textureView;
-
 	BindGroupLayoutEntry countBindingLayout = Default;
-	countBindingLayout.binding = 3;
+	countBindingLayout.binding = 1;
 	countBindingLayout.visibility = ShaderStage::Compute;
 	countBindingLayout.buffer.type = BufferBindingType::Storage;
 	countBindingLayout.buffer.minBindingSize = sizeof(Counts);
@@ -209,30 +157,11 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 	countBinding.offset = 0;
 	countBinding.size = (sizeof(Counts) + 3) & ~3;
 
-	BindGroupLayoutEntry storagePositionTextureBindingLayout = Default;
-	storagePositionTextureBindingLayout.binding = 5;
-	storagePositionTextureBindingLayout.visibility = ShaderStage::Compute;
-	storagePositionTextureBindingLayout.storageTexture.access = StorageTextureAccess::WriteOnly;
-	storagePositionTextureBindingLayout.storageTexture.viewDimension = TextureViewDimension::_3D;
-	storagePositionTextureBindingLayout.storageTexture.format = positionTextureDesc.format;
-	BindGroupEntry storagePositionTextureBinding = Default;
-	storagePositionTextureBinding.binding = 5;
-	storagePositionTextureBinding.textureView = m_positionTextureView;
-
-	BindGroupLayoutEntry positionTextureBindingLayout = Default;
-	positionTextureBindingLayout.binding = 6;
-	positionTextureBindingLayout.visibility = ShaderStage::Compute;
-	positionTextureBindingLayout.texture.sampleType = TextureSampleType::Float;
-	positionTextureBindingLayout.texture.viewDimension = TextureViewDimension::_3D;
-	BindGroupEntry positionTextureBinding = Default;
-	positionTextureBinding.binding = 6;
-	positionTextureBinding.textureView = m_positionTextureView;
-
 	BindGroupLayoutEntry vertexStorageBindingLayout = Default;
 	vertexStorageBindingLayout.binding = 0;
 	vertexStorageBindingLayout.visibility = ShaderStage::Compute;
 	vertexStorageBindingLayout.buffer.type = BufferBindingType::Storage;
-	vertexStorageBindingLayout.buffer.minBindingSize = sizeof(VertexAttributes);
+	vertexStorageBindingLayout.buffer.minBindingSize = WGPU_ANY_SIZE;
 	BindGroupEntry vertexStorageBinding = Default;
 	vertexStorageBinding.binding = 0;
 	vertexStorageBinding.buffer = m_vertexBuffer;
@@ -241,53 +170,26 @@ void DualContouringRenderer::initBakingResources(const InitContext& context) {
 
 	// This is in a separate binding group because we update it regularly
 	BindGroupLayoutDescriptor bindGroupLayoutDesc = Default;
-	bindGroupLayoutDesc.label = "DualContouring Bake Fill (group #1)";
+	bindGroupLayoutDesc.label = "LineRenderer Vertices (group #1)";
 	bindGroupLayoutDesc.entries = &vertexStorageBindingLayout;
 	bindGroupLayoutDesc.entryCount = 1;
 	m_vertexStorageBindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
 
-	// 4. Compute pipelines
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/DualContouringRenderer.Bake.wgsl", device);
+	// 3. Compute pipelines
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/LineRenderer.Bake.wgsl", device);
 
-	m_bakingPipelines.eval = createBoundComputePipeline(
+	m_bakingPipelines.generate = createBoundComputePipeline(
 		device,
-		"DualContouring Bake Eval",
-		{ uniformBindingLayout, storageTextureBindingLayout },
-		{ uniformBinding, storageTextureBinding },
+		"Procedural Tree Generate",
+		{ uniformBindingLayout },
+		{ uniformBinding },
 		shaderModule,
-		"main_eval"
-	);
-
-	m_bakingPipelines.resetCount = createBoundComputePipeline(
-		device,
-		"DualContouring Bake Reset Count",
-		{ countBindingLayout },
-		{ countBinding },
-		shaderModule,
-		"main_reset_count"
-	);
-
-	m_bakingPipelines.count = createBoundComputePipeline(
-		device,
-		"DualContouring Bake Count",
-		{ uniformBindingLayout, textureBindingLayout, storagePositionTextureBindingLayout, countBindingLayout },
-		{ uniformBinding, textureBinding, storagePositionTextureBinding, countBinding },
-		shaderModule,
-		"main_count"
-	);
-
-	m_bakingPipelines.fill = createBoundComputePipeline(
-		device,
-		"DualContouring Bake Fill",
-		{ uniformBindingLayout, textureBindingLayout, positionTextureBindingLayout, countBindingLayout },
-		{ uniformBinding, textureBinding, positionTextureBinding, countBinding },
-		shaderModule,
-		"main_fill",
+		"main_generate",
 		{ m_vertexStorageBindGroupLayout }
 	);
 }
 
-void DualContouringRenderer::initDrawingResources(const InitContext& context) {
+void LineRenderer::initDrawingResources(const InitContext& context) {
 	auto device = context.device;
 
 	// 1. Bind Group
@@ -303,7 +205,7 @@ void DualContouringRenderer::initDrawingResources(const InitContext& context) {
 	bindingLayouts[1].buffer.minBindingSize = context.cameraUniformBufferSize;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc = Default;
-	bindGroupLayoutDesc.label = "DualContouring Draw";
+	bindGroupLayoutDesc.label = "Line Draw";
 	bindGroupLayoutDesc.entries = bindingLayouts.data();
 	bindGroupLayoutDesc.entryCount = static_cast<uint32_t>(bindingLayouts.size());
 	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
@@ -320,14 +222,14 @@ void DualContouringRenderer::initDrawingResources(const InitContext& context) {
 	bindings[1].size = (context.cameraUniformBufferSize + 3) & ~3;
 
 	BindGroupDescriptor bindGroupDesc = Default;
-	bindGroupDesc.label = "DualContouring Draw";
+	bindGroupDesc.label = "Line Draw";
 	bindGroupDesc.entries = bindings.data();
 	bindGroupDesc.entryCount = static_cast<uint32_t>(bindings.size());
 	bindGroupDesc.layout = bindGroupLayout;
 	m_drawingBindGroup = device.createBindGroup(bindGroupDesc);
 
 	// 2. Render pipeline
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/DualContouringRenderer.Draw.wgsl", device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/LineRenderer.Draw.wgsl", device);
 
 	RenderPipelineDescriptor pipelineDesc = Default;
 
@@ -376,81 +278,15 @@ void DualContouringRenderer::initDrawingResources(const InitContext& context) {
 	pipelineLayoutDesc.bindGroupLayouts = (const WGPUBindGroupLayout*)&bindGroupLayout;
 	pipelineDesc.layout = device.createPipelineLayout(pipelineLayoutDesc);
 
-	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
-
+	pipelineDesc.primitive.topology = PrimitiveTopology::LineList;
 	m_drawingPipeline = device.createRenderPipeline(pipelineDesc);
 }
 
-void DualContouringRenderer::bake() {
-	Queue queue = m_device.getQueue();
-
-	m_uniforms.time = static_cast<float>(glfwGetTime());
-	queue.writeBuffer(m_uniformBuffer, offsetof(Uniforms, time), &m_uniforms.time, sizeof(Uniforms::time));
-
-	// 1. Sample distance function and count vertices
-	{
-		CommandEncoderDescriptor commandEncoderDesc = Default;
-		commandEncoderDesc.label = "DualContouring Baking (Sample)";
-		CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
-
-		ComputePassDescriptor computePassDesc = Default;
-		ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
-
-		computePass.pushDebugGroup("DC: Eval SDF");
-		computePass.setPipeline(m_bakingPipelines.eval.pipeline);
-		computePass.setBindGroup(0, m_bakingPipelines.eval.bindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
-		computePass.popDebugGroup();
-
-		computePass.setPipeline(m_bakingPipelines.resetCount.pipeline);
-		computePass.setBindGroup(0, m_bakingPipelines.resetCount.bindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(1, 1, 1);
-
-		computePass.pushDebugGroup("DC: Count vertices");
-		computePass.setPipeline(m_bakingPipelines.count.pipeline);
-		computePass.setBindGroup(0, m_bakingPipelines.count.bindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution - 1, m_uniforms.resolution - 1, m_uniforms.resolution - 1);
-		computePass.popDebugGroup();
-
-		computePass.end();
-
-		encoder.copyBufferToBuffer(m_countBuffer, 0, m_mapBuffer, 0, sizeof(Counts));
-
-		CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
-		queue.submit(command);
-	}
-
-	// 2. Get counts
-	{
-		bool done = false;
-		auto handle = m_mapBuffer.mapAsync(MapMode::Read, 0, sizeof(Counts), [&](BufferMapAsyncStatus status) {
-			if (status == BufferMapAsyncStatus::Success) {
-#ifdef WEBGPU_BACKEND_WGPU
-				const Counts* countData = (const Counts*)m_mapBuffer.getMappedRange(0, sizeof(Counts));
-#else
-				const Counts* countData = (const Counts*)wgpuBufferGetConstMappedRange(m_mapBuffer, 0, sizeof(Counts));
-#endif
-				m_vertexCount = countData->pointCount;
-				m_mapBuffer.unmap();
-			}
-			done = true;
-		});
-
-		while (!done) {
-			// Do nothing, this checks for ongoing asynchronous operations and call their callbacks if needed
-			wgpuQueueSubmit(queue, 0, nullptr);
-		}
-	}
-
-	if (m_vertexCount == 0) {
-		return;
-	}
-
-	// 3. Allocate memory
+void LineRenderer::updateVertexBufferSize() {
 	uint32_t neededVertexBufferSize = std::max(m_vertexCount, 1u) * sizeof(VertexAttributes);
 	bool mustReallocate = m_vertexBufferSize < neededVertexBufferSize || neededVertexBufferSize < m_vertexBufferSize / 4;
 	if (mustReallocate) {
-		std::cout << "[DualContouringRenderer] Reallocating vertex buffer, new size = " << neededVertexBufferSize << "B" << std::endl;
+		std::cout << "[LineRenderer] Reallocating vertex buffer, new size = " << neededVertexBufferSize << "B" << std::endl;
 		if (m_vertexBuffer) {
 			m_vertexBuffer.destroy();
 			m_vertexBuffer = nullptr;
@@ -458,13 +294,12 @@ void DualContouringRenderer::bake() {
 		}
 
 		BufferDescriptor bufferDesc = Default;
-		bufferDesc.label = "DualContouring Vertices";
-		bufferDesc.usage = BufferUsage::Vertex | BufferUsage::Storage;
+		bufferDesc.label = "LineRenderer Vertices";
+		bufferDesc.usage = BufferUsage::Vertex | BufferUsage::Storage | BufferUsage::CopyDst;
 		bufferDesc.size = neededVertexBufferSize;
 		m_vertexBuffer = m_device.createBuffer(bufferDesc);
 		m_vertexBufferSize = neededVertexBufferSize;
-	}
-	if (mustReallocate || m_vertexCount == 0) {
+
 		// Update vertexStorageBindGroup
 		BindGroupEntry entry = Default;
 		entry.binding = 0;
@@ -472,27 +307,36 @@ void DualContouringRenderer::bake() {
 		entry.offset = 0;
 		entry.size = m_vertexBufferSize;
 		BindGroupDescriptor bindGroupDesc = Default;
-		bindGroupDesc.label = "DualContouring Bake Fill (group #1)";
+		bindGroupDesc.label = "MarchingCubes Bake Fill (group #1)";
 		bindGroupDesc.entries = &entry;
 		bindGroupDesc.entryCount = 1;
 		bindGroupDesc.layout = m_vertexStorageBindGroupLayout;
 		m_vertexStorageBindGroup = m_device.createBindGroup(bindGroupDesc);
 	}
+}
 
-	// 4. Fill in memory
+void LineRenderer::bake() {
+	Queue queue = m_device.getQueue();
+
+	m_vertexCount = 2;
+	updateVertexBufferSize();
+
+	m_uniforms.time = static_cast<float>(glfwGetTime());
+	queue.writeBuffer(m_uniformBuffer, offsetof(Uniforms, time), &m_uniforms.time, sizeof(Uniforms::time));
+
 	{
 		CommandEncoderDescriptor commandEncoderDesc = Default;
-		commandEncoderDesc.label = "DualContouring Baking (Fill)";
+		commandEncoderDesc.label = "Procedural Tree (Generate)";
 		CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
 		ComputePassDescriptor computePassDesc = Default;
 		ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
-
-		computePass.pushDebugGroup("DC: Compute vertices");
-		computePass.setPipeline(m_bakingPipelines.fill.pipeline);
-		computePass.setBindGroup(0, m_bakingPipelines.fill.bindGroup, 0, nullptr);
+		
+		computePass.pushDebugGroup("Tree: Generate");
+		computePass.setPipeline(m_bakingPipelines.generate.pipeline);
+		computePass.setBindGroup(0, m_bakingPipelines.generate.bindGroup, 0, nullptr);
 		computePass.setBindGroup(1, m_vertexStorageBindGroup, 0, nullptr);
-		computePass.dispatchWorkgroups(m_uniforms.resolution, m_uniforms.resolution, m_uniforms.resolution);
+		computePass.dispatchWorkgroups(1, 1, 1);
 		computePass.popDebugGroup();
 
 		computePass.end();
@@ -504,11 +348,11 @@ void DualContouringRenderer::bake() {
 	}
 }
 
-void DualContouringRenderer::draw(const DrawingContext& context) const {
+void LineRenderer::draw(const DrawingContext& context) const {
 	if (m_vertexCount == 0) return;
 	auto renderPass = context.renderPass;
 
-	renderPass.pushDebugGroup("DC: Draw");
+	renderPass.pushDebugGroup("Tree: Draw");
 
 	renderPass.setPipeline(m_drawingPipeline);
 

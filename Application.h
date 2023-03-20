@@ -40,6 +40,7 @@
 class MarchingSquaresRenderer;
 class MarchingCubesRenderer;
 class DualContouringRenderer;
+class LineRenderer;
 
 class Application {
 public:
@@ -148,4 +149,5 @@ private:
 	std::shared_ptr<MarchingSquaresRenderer> m_marchingSquaresRenderer;
 	std::shared_ptr<MarchingCubesRenderer> m_marchingCubesRenderer;
 	std::shared_ptr<DualContouringRenderer> m_dualContouringRenderer;
+	std::shared_ptr<LineRenderer> m_lineRenderer;
 };

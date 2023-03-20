@@ -10,14 +10,26 @@
 #include <vector>
 #include <array>
 
-class MarchingSquaresRenderer : public AbstractRenderer {
+/**
+ * This is messy because it started as a Procedural Tree generator
+ */
+class LineRenderer : public AbstractRenderer {
 public:
-	MOVE_ONLY(MarchingSquaresRenderer)
+	MOVE_ONLY(LineRenderer)
 
-	MarchingSquaresRenderer(const InitContext& context, uint32_t resolution);
-	~MarchingSquaresRenderer();
+	struct VertexAttributes {
+		glm::vec4 position;
+		glm::vec4 color;
+	};
+
+	LineRenderer(const InitContext& context);
+	~LineRenderer();
+
+	void setVertices(const std::vector<VertexAttributes>& vertexData);
 	
+	// Don't use, this is a test for a procedural tree on GPU
 	void bake();
+
 	void draw(const DrawingContext& context) const override;
 
 private:
@@ -36,20 +48,13 @@ private:
 		const std::vector<wgpu::BindGroupLayout>& extraBindGroupLayouts = {}
 	);
 
-	void initModuleLut(const InitContext& context);
-
 	void initBakingResources(const InitContext& context);
 	void initDrawingResources(const InitContext& context);
+	void updateVertexBufferSize();
 
 private:
 	struct Uniforms {
-		uint32_t resolution;
 		float time;
-	};
-
-	struct VertexAttributes {
-		glm::vec4 position;
-		glm::vec4 normal;
 	};
 
 	struct Counts {
@@ -73,25 +78,18 @@ private:
 	Uniforms m_uniforms;
 	wgpu::Device m_device = nullptr;
 	wgpu::RenderPipeline m_drawingPipeline = nullptr;
+	wgpu::BindGroup m_drawingBindGroup = nullptr;
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	uint32_t m_vertexBufferSize = 0;
 	wgpu::Buffer m_quadVertexBuffer = nullptr;
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::Buffer m_countBuffer = nullptr;
 	wgpu::Buffer m_mapBuffer = nullptr;
-	wgpu::Buffer m_moduleLutBuffer = nullptr;
-	uint32_t m_moduleLutBufferSize;
-	wgpu::Texture m_texture = nullptr;
-	wgpu::TextureView m_textureView = nullptr;
-	wgpu::BindGroup m_drawingBindGroup = nullptr;
 	wgpu::BindGroupLayout m_vertexStorageBindGroupLayout = nullptr;
 	wgpu::BindGroup m_vertexStorageBindGroup = nullptr;
 	uint32_t m_vertexCount;
 	struct BakingPipelines {
-		BoundComputePipeline eval;
-		BoundComputePipeline resetCount;
-		BoundComputePipeline count;
-		BoundComputePipeline fill;
+		BoundComputePipeline generate;
 	};
 	BakingPipelines m_bakingPipelines;
 

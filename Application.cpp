@@ -26,9 +26,8 @@
 
 #include "Application.h"
 #include "ResourceManager.h"
-#include "MarchingSquaresRenderer.h"
-#include "MarchingCubesRenderer.h"
-#include "DualContouringRenderer.h"
+#include "LineRenderer.h"
+#include "ProceduralTree.h"
 
 #include <GLFW/glfw3.h>
 
@@ -194,9 +193,11 @@ bool Application::onInit() {
 		m_uniformBuffer,
 		sizeof(CameraUniforms)
 	};
-	m_marchingSquaresRenderer = std::make_shared<MarchingSquaresRenderer>(ctx, 128);
-	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 128);
-	m_dualContouringRenderer = std::make_shared<DualContouringRenderer>(ctx, 128);
+	m_lineRenderer = std::make_shared<LineRenderer>(ctx);
+
+	ProceduralTree tree;
+	tree.generate();
+	m_lineRenderer->setVertices(tree.lineVertices());
 
 	initGui();
 
@@ -274,9 +275,7 @@ void Application::onFrame() {
 	Queue queue = m_device.getQueue();
 
 	updateDragInertia();
-	m_marchingSquaresRenderer->bake();
-	m_marchingCubesRenderer->bake();
-	m_dualContouringRenderer->bake();
+	//m_lineRenderer->bake();
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
@@ -338,9 +337,7 @@ void Application::onFrame() {
 		renderPass,
 		m_settings.showWireframe
 	};
-	m_marchingSquaresRenderer->draw(ctx);
-	m_marchingCubesRenderer->draw(ctx);
-	m_dualContouringRenderer->draw(ctx);
+	m_lineRenderer->draw(ctx);
 
 	updateGui(renderPass);
 
