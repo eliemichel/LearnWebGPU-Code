@@ -75,7 +75,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 		normalize(in.normal),
 	);
 	let rotatedN = normalize(rotation * localN);
-	let N = mix(in.normal, rotatedN, uLighting.normalMapStrength);
+	let N = normalize(mix(in.normal, rotatedN, uLighting.normalMapStrength));
 
 	// Compute shading
 	let V = normalize(in.viewDirection);
@@ -83,11 +83,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// Instead of looping over the light sources, we sample the environment map
 	// in the reflected direction to get the specular shading.
 	let ibl_direction = -reflect(V, N);
-	let Pi = 3.14159266;
+	let Pi = 3.14159265359;
 	let theta = acos(ibl_direction.z / length(ibl_direction));
-	let phi = atan2(length(ibl_direction.xy), ibl_direction.x);
-	let ibl_uv = vec2<f32>(phi / (2.0 * Pi), theta / Pi + 0.5);
-	let ibl_sample = textureSample(environmentTexture, textureSampler, ibl_uv).rgb;
+	let phi = atan2(ibl_direction.y, ibl_direction.x);
+	let ibl_uv = vec2<f32>(phi / (2.0 * Pi) + 0.5, theta / Pi);
+	let level = mix(1.0, 6.0, step(fract(20.0 * in.uv.y), 0.5));
+	let ibl_sample = textureSampleLevel(environmentTexture, textureSampler, ibl_uv, level).rgb;
 
 	var diffuse = vec3<f32>(0.0);
 	let specular = ibl_sample;
