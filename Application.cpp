@@ -152,7 +152,7 @@ bool Application::onInit() {
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/cylinder.obj", m_vertexData);
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -227,8 +227,8 @@ bool Application::onInit() {
 	m_bindings[1].binding = 1;
 	m_bindings[1].sampler = sampler;
 
-	if (!initTexture(RESOURCE_DIR "/cobblestone_floor_08_diff_2k.jpg")) return false;
-	if (!initTexture(RESOURCE_DIR "/cobblestone_floor_08_nor_gl_2k.png")) return false;
+	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
+	if (!initTexture(RESOURCE_DIR "/fourareen2K_normals.png")) return false;
 	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
