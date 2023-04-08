@@ -229,6 +229,7 @@ bool Application::onInit() {
 
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_normals.png")) return false;
+	if (!initTexture(RESOURCE_DIR "/autumn_park_4k.exr")) return false;
 	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
@@ -600,7 +601,10 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 bool Application::initTexture(const std::filesystem::path &path) {
 	// Create a texture
 	TextureView textureView = nullptr;
-	Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
+	Texture texture =
+		path.extension() == ".exr"
+		? ResourceManager::loadExrTexture(path, m_device, &textureView)
+		: ResourceManager::loadTexture(path, m_device, &textureView);
 	if (!texture) {
 		std::cerr << "Could not load texture!" << std::endl;
 		return false;

@@ -32,3 +32,6 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#define TINYEXR_IMPLEMENTATION
+#include "tinyexr.h"

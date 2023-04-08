@@ -43,11 +43,12 @@ struct LightingUniforms {
 
 // Instead of the simple uTime variable, our uniform variable is a struct
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
-@group(0) @binding(4) var<uniform> uLighting: LightingUniforms;
+@group(0) @binding(5) var<uniform> uLighting: LightingUniforms;
 
 @group(0) @binding(1) var textureSampler: sampler;
 @group(0) @binding(2) var baseColorTexture: texture_2d<f32>;
 @group(0) @binding(3) var normalTexture: texture_2d<f32>;
+@group(0) @binding(4) var environmentTexture: texture_2d<f32>;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -78,22 +79,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	// Compute shading
 	let V = normalize(in.viewDirection);
+	
+	// Instead of looping over the light sources, we sample the environment map
+	// in the reflected direction to get the specular shading.
+	let ibl_direction = -reflect(V, N);
+	let Pi = 3.14159266;
+	let theta = acos(ibl_direction.z / length(ibl_direction));
+	let phi = atan2(length(ibl_direction.xy), ibl_direction.x);
+	let ibl_uv = vec2<f32>(phi / (2.0 * Pi), theta / Pi + 0.5);
+	let ibl_sample = textureSample(environmentTexture, textureSampler, ibl_uv).rgb;
+
 	var diffuse = vec3<f32>(0.0);
-	var specular = vec3<f32>(0.0);
-	for (var i: i32 = 0; i < 2; i++) {
-		let L = normalize(uLighting.directions[i].xyz);
-		let R = -reflect(L, N); // equivalent to 2.0 * dot(N, L) * N - L
-		let color = uLighting.colors[i].rgb;
-		let RoV = max(0.0, dot(R, V));
-		let LoN = max(0.0, dot(L, N));
-
-		diffuse += LoN * color;
-
-		// You may or may not multiply by the light color here, the Phong model
-		// even allows to have a different color for diffuse and specular
-		// contributions.
-		specular += pow(RoV, uLighting.hardness);
-	}
+	let specular = ibl_sample;
 	
 	// Sample texture
 	let baseColor = textureSample(baseColorTexture, textureSampler, in.uv).rgb;

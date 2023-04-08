@@ -23,6 +23,9 @@ add_executable(App
 	ResourceManager.cpp
 	implementations.cpp
 	main.cpp
+	miniz.h
+	miniz.c
+	tinyexr.h
 )
 
 if(DEV_MODE)
@@ -42,9 +45,10 @@ endif()
 
 target_include_directories(App PRIVATE .)
 target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu imgui)
+target_compile_definitions(App PRIVATE NOMINMAX)
 
 if(MSVC)
-	target_compile_options(App PRIVATE /wd4201)
+	target_compile_options(App PRIVATE /wd4201 /wd4706 /wd4127)
 endif(MSVC)
 
 set_target_properties(App PROPERTIES CXX_STANDARD 17)
