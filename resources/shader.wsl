@@ -34,14 +34,16 @@ struct LightingUniforms {
 	hardness: f32,
 	kd: f32,
 	ks: f32,
+	normalMapStrength: f32,
 }
 
 // Instead of the simple uTime variable, our uniform variable is a struct
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
-@group(0) @binding(3) var<uniform> uLighting: LightingUniforms;
+@group(0) @binding(4) var<uniform> uLighting: LightingUniforms;
 
 @group(0) @binding(1) var textureSampler: sampler;
 @group(0) @binding(2) var baseColorTexture: texture_2d<f32>;
+@group(0) @binding(3) var normalTexture: texture_2d<f32>;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -57,8 +59,11 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+	// Sample normal
+	let encodedN = textureSample(normalTexture, textureSampler, in.uv).rgb;
+	let N = normalize(mix(in.normal, encodedN - 0.5, uLighting.normalMapStrength));
+
 	// Compute shading
-	let N = normalize(in.normal);
 	let V = normalize(in.viewDirection);
 	var diffuse = vec3<f32>(0.0);
 	var specular = vec3<f32>(0.0);

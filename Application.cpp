@@ -152,7 +152,7 @@ bool Application::onInit() {
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/plane.obj", m_vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -227,7 +227,8 @@ bool Application::onInit() {
 	m_bindings[1].binding = 1;
 	m_bindings[1].sampler = sampler;
 
-	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
+	if (!initTexture(RESOURCE_DIR "/cobblestone_floor_08_diff_2k.jpg")) return false;
+	if (!initTexture(RESOURCE_DIR "/cobblestone_floor_08_nor_gl_2k.png")) return false;
 	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
@@ -577,6 +578,7 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	changed = ImGui::SliderFloat("Hardness", &m_lightingUniforms.hardness, 0.01f, 128.0f) || changed;
 	changed = ImGui::SliderFloat("K Diffuse", &m_lightingUniforms.kd, 0.0f, 2.0f) || changed;
 	changed = ImGui::SliderFloat("K Specular", &m_lightingUniforms.ks, 0.0f, 2.0f) || changed;
+	changed = ImGui::SliderFloat("Normal Map Strength", &m_lightingUniforms.normalMapStrength, 0.0f, 1.0f) || changed;
 	ImGui::End();
 	m_lightingUniformsChanged = changed;
 
@@ -633,6 +635,7 @@ void Application::initLighting() {
 	m_lightingUniforms.hardness = 16.0f;
 	m_lightingUniforms.kd = 1.0f;
 	m_lightingUniforms.ks = 0.5f;
+	m_lightingUniforms.normalMapStrength = 0.5f;
 
 	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 

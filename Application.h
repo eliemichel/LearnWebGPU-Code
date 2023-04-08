@@ -119,7 +119,7 @@ private:
 		float hardness;
 		float kd;
 		float ks;
-		float _pad;
+		float normalMapStrength;
 	};
 	static_assert(sizeof(LightingUniforms) % 16 == 0);
 	wgpu::Buffer m_lightingUniformBuffer = nullptr;
