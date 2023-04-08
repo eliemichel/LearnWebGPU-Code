@@ -44,7 +44,13 @@ public:
 	 */
 	struct VertexAttributes {
 		vec3 position;
-		vec3 normal;
+
+		// Texture mapping attributes represent the local frame in which
+		// normals sampled from the normal map are expressed.
+		vec3 tangent; // X axis
+		vec3 bitangent; // Y axis
+		vec3 normal; // Z axis
+
 		vec3 color;
 		vec2 uv;
 	};
@@ -60,4 +66,8 @@ public:
 	// Load an image from a standard image file into a new texture object
 	// NB: The texture must be destroyed after use
 	static wgpu::Texture loadTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
+
+private:
+	// Compute Tangent and Bitangent attributes from the normal and UVs.
+	static void computeTextureFrameAttributes(std::vector<VertexAttributes>& vertexData);
 };

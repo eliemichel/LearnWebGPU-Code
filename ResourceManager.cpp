@@ -112,7 +112,35 @@ bool ResourceManager::loadGeometryFromObj(const path& path, std::vector<VertexAt
 		}
 	}
 
+	computeTextureFrameAttributes(vertexData);
+
 	return true;
+}
+
+void ResourceManager::computeTextureFrameAttributes(std::vector<VertexAttributes>& vertexData) {
+	size_t triangleCount = vertexData.size() / 3;
+	// We compute the local texture frame per triangle
+	for (int t = 0; t < triangleCount; ++t) {
+		VertexAttributes* v = &vertexData[3 * t];
+
+		// Formulas from http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/
+
+		vec3 deltaPos1 = v[1].position - v[0].position;
+		vec3 deltaPos2 = v[2].position - v[0].position;
+
+		vec2 deltaUV1 = v[1].uv - v[0].uv;
+		vec2 deltaUV2 = v[2].uv - v[0].uv;
+
+		float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+		vec3 tangent = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r;
+		vec3 bitangent = (deltaPos2 * deltaUV1.x - deltaPos1 * deltaUV2.x) * r;
+		
+		// We assign these to the 3 corners of the triangle
+		for (int k = 0; k < 3; ++k) {
+			vertexData[3 * t + k].tangent = tangent;
+			vertexData[3 * t + k].bitangent = bitangent;
+		}
+	}
 }
 
 // Equivalent of std::bit_width that is available from C++20 onward

@@ -1,5 +1,7 @@
 struct VertexInput {
 	@location(0) position: vec3<f32>,
+	@location(4) tangent: vec3<f32>,
+	@location(5) bitangent: vec3<f32>,
 	@location(1) normal: vec3<f32>,
 	@location(2) color: vec3<f32>,
 	@location(3) uv: vec2<f32>,
@@ -8,6 +10,8 @@ struct VertexInput {
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
 	@location(0) color: vec3<f32>,
+	@location(4) tangent: vec3<f32>,
+	@location(5) bitangent: vec3<f32>,
 	@location(1) normal: vec3<f32>,
 	@location(2) uv: vec2<f32>,
 	@location(3) viewDirection: vec3<f32>,
@@ -51,6 +55,8 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	let worldPosition = uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
 	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * worldPosition;
 	out.color = in.color;
+	out.tangent = (uMyUniforms.modelMatrix * vec4<f32>(in.tangent, 0.0)).xyz;
+	out.bitangent = (uMyUniforms.modelMatrix * vec4<f32>(in.bitangent, 0.0)).xyz;
 	out.normal = (uMyUniforms.modelMatrix * vec4<f32>(in.normal, 0.0)).xyz;
 	out.uv = in.uv;
 	out.viewDirection = uMyUniforms.cameraWorldPosition - worldPosition.xyz;
@@ -61,7 +67,14 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// Sample normal
 	let encodedN = textureSample(normalTexture, textureSampler, in.uv).rgb;
-	let N = normalize(mix(in.normal, encodedN - 0.5, uLighting.normalMapStrength));
+	let localN = encodedN - 0.5;
+	let rotation = mat3x3<f32>(
+		normalize(in.tangent),
+		normalize(in.bitangent),
+		normalize(in.normal),
+	);
+	let rotatedN = normalize(rotation * localN);
+	let N = mix(in.normal, rotatedN, uLighting.normalMapStrength);
 
 	// Compute shading
 	let V = normalize(in.viewDirection);
@@ -87,6 +100,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	// Combine texture and lighting
 	let color = baseColor * uLighting.kd * diffuse + uLighting.ks * specular;
+
+	// To debug normals
+	//let color = N * 0.5 + 0.5;
 
 	// Gamma-correction
 	let corrected_color = pow(color, vec3<f32>(2.2));
