@@ -229,7 +229,7 @@ bool Application::onInit() {
 
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_normals.png")) return false;
-	if (!initTexture(RESOURCE_DIR "/autumn_park_4k.jpg")) return false;
+	if (!initTexture(RESOURCE_DIR "/autumn_park_4k.exr")) return false;
 	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
