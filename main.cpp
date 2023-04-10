@@ -26,7 +26,7 @@
 
 #include <GLFW/glfw3.h>
 
-#include <webgpu.h>
+#include <webgpu/webgpu.h>
 
 #include <iostream>
 
