@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include <webgpu.h>
+#include <webgpu/webgpu.h>
 
 /**
  * Utility function to get a WebGPU adapter, so that
