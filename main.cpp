@@ -3,7 +3,7 @@
  *   https://github.com/eliemichel/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022 Elie Michel
+ * Copyright (c) 2022-2023 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -68,16 +68,15 @@ int main (int, char**) {
 
     WGPUDeviceDescriptor deviceDesc = {};
 	deviceDesc.nextInChain = nullptr;
-	deviceDesc.label = "My Device"; // anything works here, that's your call
-	deviceDesc.requiredFeaturesCount = 0; // we do not require any specific feature
-	deviceDesc.requiredLimits = nullptr; // we do not require any specific limit
+	deviceDesc.label = "My Device";
+	deviceDesc.requiredFeaturesCount = 0;
+	deviceDesc.requiredLimits = nullptr;
 	deviceDesc.defaultQueue.nextInChain = nullptr;
 	deviceDesc.defaultQueue.label = "The default queue";
 	WGPUDevice device = requestDevice(adapter, &deviceDesc);
 
 	std::cout << "Got device: " << device << std::endl;
 
-	// Add a callback that gets executed upon errors in our use of the device
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
@@ -90,6 +89,37 @@ int main (int, char**) {
 	wgpuDeviceSetDeviceLostCallback(device, [](WGPUDeviceLostReason reason, char const * message, void*) {
 		std::cout << "Device lost! Reason: " << reason << ", message: " << message << std::endl;
 	}, nullptr);
+
+	// Get the main and only command queue used to send instructions to the GPU
+	WGPUQueue queue = wgpuDeviceGetQueue(device);
+
+#ifdef WEBGPU_BACKEND_DAWN
+	// Add a callback to monitor the moment queued work winished
+	auto onQueueWorkDone = [](WGPUQueueWorkDoneStatus status, void* /* pUserData */) {
+	    std::cout << "Queued work finished with status: " << status << std::endl;
+	};
+	wgpuQueueOnSubmittedWorkDone(queue, 0 /* non standard argument for Dawn */, onQueueWorkDone, nullptr /* pUserData */);
+#endif // WEBGPU_BACKEND_DAWN
+
+	// We create a command encoder to be able to create command buffers
+	WGPUCommandEncoderDescriptor encoderDesc = {};
+	encoderDesc.nextInChain = nullptr;
+	encoderDesc.label = "My command encoder";
+	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+
+	// Encode some mock commands
+	wgpuCommandEncoderInsertDebugMarker(encoder, "Do one thing");
+	wgpuCommandEncoderInsertDebugMarker(encoder, "Do another thing");
+
+	// Encode commands into a command buffer
+	WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+	cmdBufferDescriptor.nextInChain = nullptr;
+	cmdBufferDescriptor.label = "Command buffer";
+	WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+
+	// Finally submit the command queue
+	std::cout << "Submitting command..." << std::endl;
+	wgpuQueueSubmit(queue, 1, &command);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
