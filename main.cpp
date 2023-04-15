@@ -1,9 +1,9 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
- *   https://github.com/eliemichel/LearnWebGPU
+ *   https://eliemichel.github.io/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022 Elie Michel
+ * Copyright (c) 2022-2023 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,17 @@
 #include <webgpu/webgpu.h>
 
 #include <iostream>
+
+// Dawn and wgpu-native do not agree yet on the lifetime management
+// of objects. We align on Dawn convention of calling "release" the
+// methods that free memory for objects created with wgpuCreateSomething.
+// (The key difference is that Dawn also offers a "reference" function to
+// increment a reference counter, and release decreases this counter and
+// actually frees memory only when the counter gets to 0)
+#ifdef WEBGPU_BACKEND_WGPU
+#include <webgpu/wgpu.h>
+#define wgpuInstanceRelease wgpuInstanceDrop
+#endif
 
 int main (int, char**) {
 	// We create the equivalent of the navigator.gpu if this were web code
@@ -65,6 +76,9 @@ int main (int, char**) {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
+
+	// 5. We clean up the WebGPU instance
+	wgpuInstanceRelease(instance);
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
