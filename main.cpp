@@ -1,6 +1,6 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
- *   https://github.com/eliemichel/LearnWebGPU
+ *   https://eliemichel.github.io/LearnWebGPU
  * 
  * MIT License
  * Copyright (c) 2022-2023 Elie Michel
@@ -25,6 +25,7 @@
  */
 
 #include "webgpu-utils.h"
+#include "webgpu-release.h"
 
 #include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
@@ -125,6 +126,9 @@ int main (int, char**) {
 		glfwPollEvents();
 	}
 
+	wgpuDeviceRelease(device);
+	wgpuAdapterRelease(adapter);
+	wgpuInstanceRelease(instance);
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
