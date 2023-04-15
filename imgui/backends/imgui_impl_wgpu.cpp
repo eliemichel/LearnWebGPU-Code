@@ -32,6 +32,13 @@
 #include <limits.h>
 #include <webgpu/webgpu.h>
 
+// Temporary fix until wgpu-native fixes the regression
+#ifdef WEBGPU_BACKEND_WGPU
+#define WGPU_ANY_SIZE WGPU_WHOLE_SIZE
+#else
+#define WGPU_ANY_SIZE 0
+#endif
+
 // These differences of implementation should vanish as soon as WebGPU gets in version 1.0 stable
 #ifdef WEBGPU_BACKEND_WGPU
 #include <webgpu/wgpu.h>
@@ -583,9 +590,11 @@ bool ImGui_ImplWGPU_CreateDeviceObjects()
     common_bg_layout_entries[0].binding = 0;
     common_bg_layout_entries[0].visibility = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
     common_bg_layout_entries[0].buffer.type = WGPUBufferBindingType_Uniform;
+    common_bg_layout_entries[0].buffer.minBindingSize = WGPU_ANY_SIZE;
     common_bg_layout_entries[1].binding = 1;
     common_bg_layout_entries[1].visibility = WGPUShaderStage_Fragment;
     common_bg_layout_entries[1].sampler.type = WGPUSamplerBindingType_Filtering;
+    common_bg_layout_entries[0].buffer.minBindingSize = WGPU_ANY_SIZE;
 
     WGPUBindGroupLayoutEntry image_bg_layout_entries[1] = {};
     image_bg_layout_entries[0].binding = 0;

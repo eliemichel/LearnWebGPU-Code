@@ -102,13 +102,11 @@ bool Application::onInit() {
 	}
 
 	// Add window callbacks
-	/*
 	glfwSetWindowUserPointer(m_window, this);
 	glfwSetFramebufferSizeCallback(m_window, onWindowResize);
 	glfwSetCursorPosCallback(m_window, onWindowMouseMove);
 	glfwSetMouseButtonCallback(m_window, onWindowMouseButton);
 	glfwSetScrollCallback(m_window, onWindowScroll);
-	*/
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
@@ -127,6 +125,16 @@ bool Application::onInit() {
 	requiredLimits.limits.maxBindGroups = 2;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
+	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+	requiredLimits.limits.maxBufferSize = 1024 * 1024 * sizeof(float);
+	requiredLimits.limits.maxTextureDimension1D = 4096;
+	requiredLimits.limits.maxTextureDimension2D = 4096;
+	requiredLimits.limits.maxTextureDimension3D = 4096;
+	requiredLimits.limits.maxTextureArrayLayers = 1;
+	requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
+	requiredLimits.limits.maxSamplersPerShaderStage = 1;
+	requiredLimits.limits.maxVertexBufferArrayStride = 68;
+	requiredLimits.limits.maxInterStageShaderComponents = 17;
 
 	// Create device
 	DeviceDescriptor deviceDesc{};
@@ -153,12 +161,12 @@ bool Application::onInit() {
 	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
 #endif
 	buildSwapChain();
-	/*
+	
 	std::cout << "Creating shader module..." << std::endl;
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -188,6 +196,36 @@ bool Application::onInit() {
 	m_uniforms.modelMatrix = mat4x4(1.0);
 	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
+
+	switch (m_swapChainFormat)
+	{
+	case WGPUTextureFormat_ASTC10x10UnormSrgb:
+	case WGPUTextureFormat_ASTC10x5UnormSrgb:
+	case WGPUTextureFormat_ASTC10x6UnormSrgb:
+	case WGPUTextureFormat_ASTC10x8UnormSrgb:
+	case WGPUTextureFormat_ASTC12x10UnormSrgb:
+	case WGPUTextureFormat_ASTC12x12UnormSrgb:
+	case WGPUTextureFormat_ASTC4x4UnormSrgb:
+	case WGPUTextureFormat_ASTC5x5UnormSrgb:
+	case WGPUTextureFormat_ASTC6x5UnormSrgb:
+	case WGPUTextureFormat_ASTC6x6UnormSrgb:
+	case WGPUTextureFormat_ASTC8x5UnormSrgb:
+	case WGPUTextureFormat_ASTC8x6UnormSrgb:
+	case WGPUTextureFormat_ASTC8x8UnormSrgb:
+	case WGPUTextureFormat_BC1RGBAUnormSrgb:
+	case WGPUTextureFormat_BC2RGBAUnormSrgb:
+	case WGPUTextureFormat_BC3RGBAUnormSrgb:
+	case WGPUTextureFormat_BC7RGBAUnormSrgb:
+	case WGPUTextureFormat_BGRA8UnormSrgb:
+	case WGPUTextureFormat_ETC2RGB8A1UnormSrgb:
+	case WGPUTextureFormat_ETC2RGB8UnormSrgb:
+	case WGPUTextureFormat_ETC2RGBA8UnormSrgb:
+	case WGPUTextureFormat_RGBA8UnormSrgb:
+		m_uniforms.gamma = 2.2f;
+		break;
+	default:
+		m_uniforms.gamma = 1.0f;
+	}
 
 	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
 	updateViewMatrix();
@@ -357,7 +395,7 @@ bool Application::onInit() {
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
 	initGui();
-	*/
+	
 	return true;
 }
 
@@ -369,7 +407,7 @@ void Application::buildSwapChain() {
 	m_swapChainDesc = {};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
-	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
+	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
 	m_swapChainDesc.format = m_swapChainFormat;
 	m_swapChainDesc.presentMode = PresentMode::Fifo;
 	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
@@ -408,7 +446,6 @@ void Application::buildDepthBuffer() {
 
 void Application::onFrame() {
 	glfwPollEvents();
-	/*
 	TextureView nextTexture = m_swapChain.getCurrentTextureView();
 	if (!nextTexture) {
 		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
@@ -441,20 +478,25 @@ void Application::onFrame() {
 
 	RenderPassDepthStencilAttachment depthStencilAttachment;
 	depthStencilAttachment.view = m_depthTextureView;
-	depthStencilAttachment.depthClearValue = 100.0f;
+	depthStencilAttachment.depthClearValue = 1.0f;
 	depthStencilAttachment.depthLoadOp = LoadOp::Clear;
 	depthStencilAttachment.depthStoreOp = StoreOp::Store;
 	depthStencilAttachment.depthReadOnly = false;
 	depthStencilAttachment.stencilClearValue = 0;
+#ifdef WEBGPU_BACKEND_WGPU
 	depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
 	depthStencilAttachment.stencilStoreOp = StoreOp::Store;
+#else
+	depthStencilAttachment.stencilLoadOp = LoadOp::Undefined;
+	depthStencilAttachment.stencilStoreOp = StoreOp::Undefined;
+#endif
 	depthStencilAttachment.stencilReadOnly = true;
 
 	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
 	renderPassDesc.timestampWriteCount = 0;
 	renderPassDesc.timestampWrites = nullptr;
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
-
+	
 	renderPass.setPipeline(m_pipeline);
 
 	renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexData.size() * sizeof(VertexAttributes));
@@ -463,15 +505,20 @@ void Application::onFrame() {
 	renderPass.draw(m_indexCount, 1, 0, 0);
 
 	updateGui(renderPass);
-
+	
 	renderPass.end();
 
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(command);
-	
+
 	wgpuTextureViewRelease(nextTexture);
+#if !defined(WEBGPU_BACKEND_WGPU)
+	wgpuCommandBufferRelease(command);
+	wgpuCommandEncoderRelease(encoder);
+	wgpuRenderPassEncoderRelease(renderPass);
+	wgpuQueueRelease(queue);
+#endif
 	
-	*/
 	m_swapChain.present();
 }
 

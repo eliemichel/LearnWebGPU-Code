@@ -85,6 +85,8 @@ private:
 		vec4 color;
 		vec3 cameraWorldPosition;
 		float time;
+		float gamma;
+		float _pad[3];
 	};
 	static_assert(sizeof(MyUniforms) % 16 == 0);
 
