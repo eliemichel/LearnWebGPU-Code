@@ -1,9 +1,9 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
- *   https://github.com/eliemichel/LearnWebGPU
+ *   https://eliemichel.github.io/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022 Elie Michel
+ * Copyright (c) 2022-2023 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,6 +25,7 @@
  */
 
 #include "glfw3webgpu.h"
+#include "webgpu-release.h"
 
 #include <GLFW/glfw3.h>
 
@@ -192,6 +193,10 @@ int main (int, char**) {
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
+
+	// Don't forget to release the adapter
+	wgpuAdapterRelease(adapter);
+	wgpuInstanceRelease(instance);
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
