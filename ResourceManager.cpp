@@ -28,9 +28,6 @@
 
 #include "tiny_obj_loader.h"
 #include "stb_image.h"
-#include "tinyexr.h"
-#include "float16_t.hpp"
-using numeric::float16_t;
 
 #include <fstream>
 
@@ -50,11 +47,15 @@ ShaderModule ResourceManager::loadShaderModule(const path& path, Device device) 
 	ShaderModuleWGSLDescriptor shaderCodeDesc{};
 	shaderCodeDesc.chain.next = nullptr;
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
-	shaderCodeDesc.code = shaderSource.c_str();
 	ShaderModuleDescriptor shaderDesc{};
+	shaderDesc.nextInChain = &shaderCodeDesc.chain;
+#ifdef WEBGPU_BACKEND_WGPU
+	shaderCodeDesc.code = shaderSource.c_str();
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
-	shaderDesc.nextInChain = &shaderCodeDesc.chain;
+#else // WEBGPU_BACKEND_WGPU
+	shaderCodeDesc.source = shaderSource.c_str();
+#endif // WEBGPU_BACKEND_WGPU
 	return device.createShaderModule(shaderDesc);
 }
 
@@ -249,55 +250,3 @@ Texture ResourceManager::loadTexture(const path& path, Device device, TextureVie
 
 	return texture;
 }
-
-Texture ResourceManager::loadExrTexture(const path& path, Device device, TextureView* pTextureView) {
-	int width, height;
-	float* pixelData; // width * height * RGBA
-	const char* err = nullptr;
-
-	int ret = LoadEXR(&pixelData, &width, &height, path.string().c_str(), &err);
-	if (ret != TINYEXR_SUCCESS) {
-		if (err) {
-			std::cerr << "Could not load EXR file '" << path << "': " << err << std::endl;
-			FreeEXRErrorMessage(err); // release memory of error message.
-		}
-		return nullptr;
-	}
-
-	TextureDescriptor textureDesc;
-	textureDesc.dimension = TextureDimension::_2D;
-	textureDesc.format = TextureFormat::RGBA16Float;
-	textureDesc.size = { (unsigned int)width, (unsigned int)height, 1 };
-	textureDesc.mipLevelCount = bit_width(std::max(textureDesc.size.width, textureDesc.size.height));
-	textureDesc.sampleCount = 1;
-	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
-	textureDesc.viewFormatCount = 0;
-	textureDesc.viewFormats = nullptr;
-	Texture texture = device.createTexture(textureDesc);
-
-	// Convert to 16-bit floats because it is enough for a HDR
-	// and 32-bit would require to enable a particular device feature to be filterable
-	// (see https://www.w3.org/TR/webgpu/#texture-format-caps)
-	std::vector<float16_t> halfPixels(4 * width * height);
-	for (int i = 0; i < halfPixels.size(); ++i) {
-		halfPixels[i] = pixelData[i];
-	}
-	free(pixelData);
-
-	writeMipMaps(device, texture, textureDesc.size, textureDesc.mipLevelCount, halfPixels.data());
-
-	if (pTextureView) {
-		TextureViewDescriptor textureViewDesc;
-		textureViewDesc.aspect = TextureAspect::All;
-		textureViewDesc.baseArrayLayer = 0;
-		textureViewDesc.arrayLayerCount = 1;
-		textureViewDesc.baseMipLevel = 0;
-		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
-		textureViewDesc.dimension = TextureViewDimension::_2D;
-		textureViewDesc.format = textureDesc.format;
-		*pTextureView = texture.createView(textureViewDesc);
-	}
-
-	return texture;
-}
-

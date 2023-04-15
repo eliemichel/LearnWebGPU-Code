@@ -28,7 +28,7 @@
 
 #include "ResourceManager.h"
 
-#include <webgpu.hpp>
+#include <webgpu/webgpu.hpp>
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>

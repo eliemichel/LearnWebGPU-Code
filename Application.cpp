@@ -40,8 +40,8 @@
 #include <backends/imgui_impl_wgpu.h>
 #include <backends/imgui_impl_glfw.h>
 
-#include <webgpu.hpp>
-#include <wgpu.h> // wgpuTextureViewDrop
+#include <webgpu/webgpu.hpp>
+#include "webgpu-release.h"
 
 #include <iostream>
 #include <cassert>
@@ -102,11 +102,13 @@ bool Application::onInit() {
 	}
 
 	// Add window callbacks
+	/*
 	glfwSetWindowUserPointer(m_window, this);
 	glfwSetFramebufferSizeCallback(m_window, onWindowResize);
 	glfwSetCursorPosCallback(m_window, onWindowMouseMove);
 	glfwSetMouseButtonCallback(m_window, onWindowMouseButton);
 	glfwSetScrollCallback(m_window, onWindowScroll);
+	*/
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
@@ -145,9 +147,13 @@ bool Application::onInit() {
 	Queue queue = m_device.getQueue();
 
 	// Create swapchain
+#ifdef WEBGPU_BACKEND_DAWN
+	m_swapChainFormat = TextureFormat::BGRA8Unorm;
+#else
 	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#endif
 	buildSwapChain();
-
+	/*
 	std::cout << "Creating shader module..." << std::endl;
 	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
@@ -195,7 +201,11 @@ bool Application::onInit() {
 	samplerDesc.addressModeW = AddressMode::Repeat;
 	samplerDesc.magFilter = FilterMode::Linear;
 	samplerDesc.minFilter = FilterMode::Linear;
+#ifdef WEBGPU_BACKEND_DAWN
+	samplerDesc.mipmapFilter = FilterMode::Linear;
+#else
 	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+#endif
 	samplerDesc.lodMinClamp = 0.0f;
 	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
@@ -229,7 +239,7 @@ bool Application::onInit() {
 
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_normals.png")) return false;
-	if (!initTexture(RESOURCE_DIR "/autumn_park_4k.exr")) return false;
+	if (!initTexture(RESOURCE_DIR "/autumn_park_4k.jpg")) return false;
 	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
@@ -347,7 +357,7 @@ bool Application::onInit() {
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
 	initGui();
-
+	*/
 	return true;
 }
 
@@ -398,6 +408,13 @@ void Application::buildDepthBuffer() {
 
 void Application::onFrame() {
 	glfwPollEvents();
+	/*
+	TextureView nextTexture = m_swapChain.getCurrentTextureView();
+	if (!nextTexture) {
+		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
+		return;
+	}
+	
 	Queue queue = m_device.getQueue();
 
 	updateLighting();
@@ -406,12 +423,6 @@ void Application::onFrame() {
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
 	queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
-
-	TextureView nextTexture = m_swapChain.getCurrentTextureView();
-	if (!nextTexture) {
-		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
-		return;
-	}
 
 	CommandEncoderDescriptor commandEncoderDesc{};
 	commandEncoderDesc.label = "Command Encoder";
@@ -457,8 +468,10 @@ void Application::onFrame() {
 
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(command);
-
-	wgpuTextureViewDrop(nextTexture);
+	
+	wgpuTextureViewRelease(nextTexture);
+	
+	*/
 	m_swapChain.present();
 }
 
@@ -601,10 +614,7 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 bool Application::initTexture(const std::filesystem::path &path) {
 	// Create a texture
 	TextureView textureView = nullptr;
-	Texture texture =
-		path.extension() == ".exr"
-		? ResourceManager::loadExrTexture(path, m_device, &textureView)
-		: ResourceManager::loadTexture(path, m_device, &textureView);
+	Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
 	if (!texture) {
 		std::cerr << "Could not load texture!" << std::endl;
 		return false;

@@ -23,9 +23,7 @@ add_executable(App
 	ResourceManager.cpp
 	implementations.cpp
 	main.cpp
-	miniz.h
-	miniz.c
-	tinyexr.h
+	webgpu-release.h
 )
 
 if(DEV_MODE)

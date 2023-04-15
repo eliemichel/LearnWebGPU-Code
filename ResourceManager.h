@@ -26,7 +26,7 @@
 
 #pragma once
 
-#include <webgpu.hpp>
+#include <webgpu/webgpu.hpp>
 
 #include <glm/glm.hpp>
 
@@ -66,10 +66,6 @@ public:
 	// Load an image from a standard 8-bit image file into a new texture object
 	// NB: The texture must be destroyed after use
 	static wgpu::Texture loadTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
-
-	// Load a 32 bit float texture from an EXR file
-	// NB: The texture must be destroyed after use
-	static wgpu::Texture loadExrTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
 
 private:
 	// Compute Tangent and Bitangent attributes from the normal and UVs.
