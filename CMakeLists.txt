@@ -13,6 +13,7 @@ add_subdirectory(glfw3webgpu)
 
 add_executable(App
 	main.cpp
+	webgpu-release.h
 	webgpu-utils.h
 	webgpu-utils.cpp
 )

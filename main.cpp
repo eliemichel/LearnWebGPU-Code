@@ -1,9 +1,9 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
- *   https://github.com/eliemichel/LearnWebGPU
+ *   https://eliemichel.github.io/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022 Elie Michel
+ * Copyright (c) 2022-2023 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,17 +25,12 @@
  */
 
 #include "webgpu-utils.h"
+#include "webgpu-release.h"
 
 #include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
 
-#include <webgpu.h>
-
-// This header contains non-standard extensions of webgpu.h provided by the
-// wgpu-native implementation. This implementation requires us to use the
-// non-standard procedure wgpuTextureViewDrop (otherwise we try to remain
-// standard-only).
-#include <wgpu.h>
+#include <webgpu/webgpu.h>
 
 #include <iostream>
 #include <cassert>
@@ -118,7 +113,7 @@ int main (int, char**) {
 		// and thus the target surface changed.
 		if (!nextTexture) {
 			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
-			return 1;
+			break;
 		}
 		std::cout << "nextTexture: " << nextTexture << std::endl;
 
@@ -156,8 +151,7 @@ int main (int, char**) {
 		WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
 		wgpuRenderPassEncoderEnd(renderPass);
 
-		// Non-standard but required by wgpu-native
-		wgpuTextureViewDrop(nextTexture);
+		wgpuTextureViewRelease(nextTexture);
 
 		WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
 		cmdBufferDescriptor.nextInChain = nullptr;
@@ -169,6 +163,10 @@ int main (int, char**) {
 		wgpuSwapChainPresent(swapChain);
 	}
 
+	wgpuSwapChainRelease(swapChain);
+	wgpuDeviceRelease(device);
+	wgpuAdapterRelease(adapter);
+	wgpuInstanceRelease(instance);
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
