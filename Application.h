@@ -124,6 +124,10 @@ private:
 		float reflectance;
 		float normalMapStrength;
 		uint32_t highQuality; // bool
+		float roughness2;
+		float metallic2;
+		float reflectance2;
+		float instanceSpacing;
 		float _pad[3];
 	};
 	static_assert(sizeof(LightingUniforms) % 16 == 0);

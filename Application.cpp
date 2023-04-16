@@ -201,7 +201,7 @@ bool Application::onInit() {
 	// Matrices
 	m_uniforms.modelMatrix = mat4x4(1.0);
 	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
-	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
+	m_uniforms.projectionMatrix = glm::perspective(20 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 
 	switch (m_swapChainFormat)
 	{
@@ -514,7 +514,7 @@ void Application::onFrame() {
 	renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexData.size() * sizeof(VertexAttributes));
 	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-	renderPass.draw(m_indexCount, 1, 0, 0);
+	renderPass.draw(m_indexCount, 8, 0, 0);
 
 	updateGui(renderPass);
 	
@@ -593,7 +593,7 @@ void Application::onMouseButton(int button, int action, int mods) {
 void Application::onScroll(double xoffset, double yoffset) {
 	(void)xoffset;
 	m_cameraState.zoom += m_drag.scrollSensitivity * (float)yoffset;
-	m_cameraState.zoom = glm::clamp(m_cameraState.zoom, -2.0f, 2.0f);
+	m_cameraState.zoom = glm::clamp(m_cameraState.zoom, -5.0f, 5.0f);
 	updateViewMatrix();
 }
 
@@ -666,6 +666,10 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	bool highQuality = m_lightingUniforms.highQuality != 0;
 	changed = ImGui::Checkbox("High Quality", &highQuality) || changed;
 	m_lightingUniforms.highQuality = highQuality ? 1 : 0;
+	changed = ImGui::SliderFloat("Roughness 2", &m_lightingUniforms.roughness2, 0.0f, 1.0f) || changed;
+	changed = ImGui::SliderFloat("Metallic 2", &m_lightingUniforms.metallic2, 0.0f, 1.0f) || changed;
+	changed = ImGui::SliderFloat("Reflectance 2", &m_lightingUniforms.reflectance2, 0.0f, 1.0f) || changed;
+	changed = ImGui::SliderFloat("Instance Spacing", &m_lightingUniforms.instanceSpacing, 0.0f, 10.0f) || changed;
 	ImGui::End();
 	m_lightingUniformsChanged = changed;
 
@@ -724,6 +728,10 @@ void Application::initLighting() {
 	m_lightingUniforms.reflectance = 0.5f;
 	m_lightingUniforms.normalMapStrength = 0.5f;
 	m_lightingUniforms.highQuality = true;
+	m_lightingUniforms.roughness2 = 0.5f;
+	m_lightingUniforms.metallic2 = 0.0f;
+	m_lightingUniforms.reflectance2 = 0.5f;
+	m_lightingUniforms.instanceSpacing = 2.0f;
 
 	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 
@@ -731,7 +739,7 @@ void Application::initLighting() {
 	uint32_t bindingIndex = (uint32_t)m_bindingLayoutEntries.size();
 	BindGroupLayoutEntry bindingLayout = Default;
 	bindingLayout.binding = bindingIndex;
-	bindingLayout.visibility = ShaderStage::Fragment;
+	bindingLayout.visibility = ShaderStage::Fragment | ShaderStage::Vertex;
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
 	bindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
 	m_bindingLayoutEntries.push_back(bindingLayout);

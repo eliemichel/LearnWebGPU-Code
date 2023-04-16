@@ -122,6 +122,7 @@ fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3<f32> {
 /* **************** BINDINGS **************** */
 
 struct VertexInput {
+	@builtin(instance_index) instance_index: u32,
 	@location(0) position: vec3<f32>,
 	@location(4) tangent: vec3<f32>,
 	@location(5) bitangent: vec3<f32>,
@@ -138,6 +139,7 @@ struct VertexOutput {
 	@location(1) normal: vec3<f32>,
 	@location(2) uv: vec2<f32>,
 	@location(3) viewDirection: vec3<f32>,
+	@location(6) instance: f32,
 }
 
 /**
@@ -164,6 +166,10 @@ struct LightingUniforms {
 	reflectance: f32,
 	normalMapStrength: f32,
 	highQuality: u32,
+	roughness2: f32,
+	metallic2: f32,
+	reflectance2: f32,
+	instanceSpacing: f32,
 }
 
 // Instead of the simple uTime variable, our uniform variable is a struct
@@ -181,7 +187,9 @@ struct LightingUniforms {
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 	let worldPosition = uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
-	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * worldPosition;
+	out.instance = f32(in.instance_index) / 8.0;
+	let offset = vec4<f32>((out.instance - 0.5 + 0.5 / 8.0) * uLighting.instanceSpacing * 8.0, 0.0, 0.0, 0.0);
+	out.position = uMyUniforms.projectionMatrix * (uMyUniforms.viewMatrix * worldPosition + offset);
 	out.color = in.color;
 	out.tangent = (uMyUniforms.modelMatrix * vec4<f32>(in.tangent, 0.0)).xyz;
 	out.bitangent = (uMyUniforms.modelMatrix * vec4<f32>(in.bitangent, 0.0)).xyz;
@@ -200,6 +208,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// Compute shading
 	let V = normalize(in.viewDirection);
 
+	/*
 	// Instead of looping over the light sources, we sample the environment map
 	// in the reflected direction to get the specular shading.
 	let ibl_direction = -reflect(V, N);
@@ -211,6 +220,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	var diffuse = vec3<f32>(0.0);
 	let specular = ibl_sample;
+	*/
 	
 	// Sample texture
 	let baseColor = textureSample(baseColorTexture, textureSampler, in.uv).rgb;
@@ -223,15 +233,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	let material = MaterialProperties(
 		baseColor,
-		uLighting.roughness,
-		uLighting.metallic,
-		uLighting.reflectance,
+		mix(uLighting.roughness, uLighting.roughness2, in.instance),
+		mix(uLighting.metallic, uLighting.metallic2, in.instance),
+		mix(uLighting.reflectance, uLighting.reflectance2, in.instance),
 		uLighting.highQuality,
 	);
 	var color = vec3<f32>(0.0);
 	for (var i: i32 = 0; i < 2; i++) {
 		let L = normalize(uLighting.directions[i].xyz);
-		let lightEnergy = uLighting.colors[i].rgb;
+		let lightEnergy = uLighting.colors[i].rgb * 2.0;
 		color += brdf(material, N, L, V) * lightEnergy;
 	}
 
