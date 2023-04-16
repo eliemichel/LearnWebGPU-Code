@@ -188,8 +188,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 	let worldPosition = uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
 	out.instance = f32(in.instance_index) / 8.0;
-	let offset = vec4<f32>((out.instance - 0.5 + 0.5 / 8.0) * uLighting.instanceSpacing * 8.0, 0.0, 0.0, 0.0);
-	out.position = uMyUniforms.projectionMatrix * (uMyUniforms.viewMatrix * worldPosition + offset);
+	
+	// A trick to offset instances without changing their perspective
+	var proj = uMyUniforms.projectionMatrix;
+	proj[2][0] = (out.instance - 0.5) * uLighting.instanceSpacing;
+
+	out.position = proj * uMyUniforms.viewMatrix * worldPosition;
 	out.color = in.color;
 	out.tangent = (uMyUniforms.modelMatrix * vec4<f32>(in.tangent, 0.0)).xyz;
 	out.bitangent = (uMyUniforms.modelMatrix * vec4<f32>(in.bitangent, 0.0)).xyz;
