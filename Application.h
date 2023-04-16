@@ -110,6 +110,7 @@ private:
 	std::vector<ResourceManager::VertexAttributes> m_vertexData;
 	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
+	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
 
 	std::vector<wgpu::BindGroupLayoutEntry> m_bindingLayoutEntries;
 	std::vector<wgpu::BindGroupEntry> m_bindings;
@@ -118,10 +119,12 @@ private:
 	struct LightingUniforms {
 		std::array<vec4, 2> directions;
 		std::array<vec4, 2> colors;
-		float hardness;
-		float kd;
-		float ks;
+		float roughness;
+		float metallic;
+		float reflectance;
 		float normalMapStrength;
+		uint32_t highQuality; // bool
+		float _pad[3];
 	};
 	static_assert(sizeof(LightingUniforms) % 16 == 0);
 	wgpu::Buffer m_lightingUniformBuffer = nullptr;

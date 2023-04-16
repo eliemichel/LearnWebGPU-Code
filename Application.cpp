@@ -152,6 +152,12 @@ bool Application::onInit() {
 		std::cout << std::endl;
 	});
 
+	m_deviceLostCallback = m_device.setDeviceLostCallback([](DeviceLostReason reason, char const* message) {
+		std::cout << "Device error: reason " << reason;
+		if (message) std::cout << " (message: " << message << ")";
+		std::cout << std::endl;
+	});
+
 	Queue queue = m_device.getQueue();
 
 	// Create swapchain
@@ -395,6 +401,11 @@ bool Application::onInit() {
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
 	initGui();
+
+#ifdef WEBGPU_BACKEND_DAWN
+	// Flush error queue
+	m_device.tick();
+#endif
 	
 	return true;
 }
@@ -472,7 +483,8 @@ void Application::onFrame() {
 	colorAttachment.resolveTarget = nullptr;
 	colorAttachment.loadOp = LoadOp::Clear;
 	colorAttachment.storeOp = StoreOp::Store;
-	colorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
+	double grey = std::pow(0.256, m_uniforms.gamma);
+	colorAttachment.clearValue = Color{ grey, grey, grey, 1.0 };
 	renderPassDesc.colorAttachmentCount = 1;
 	renderPassDesc.colorAttachments = &colorAttachment;
 
@@ -647,10 +659,13 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	changed = ImGui::DragDirection("Direction #0", m_lightingUniforms.directions[0]) || changed;
 	changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1])) || changed;
 	changed = ImGui::DragDirection("Direction #1", m_lightingUniforms.directions[1]) || changed;
-	changed = ImGui::SliderFloat("Hardness", &m_lightingUniforms.hardness, 0.01f, 128.0f) || changed;
-	changed = ImGui::SliderFloat("K Diffuse", &m_lightingUniforms.kd, 0.0f, 2.0f) || changed;
-	changed = ImGui::SliderFloat("K Specular", &m_lightingUniforms.ks, 0.0f, 2.0f) || changed;
+	changed = ImGui::SliderFloat("Roughness", &m_lightingUniforms.roughness, 0.0f, 1.0f) || changed;
+	changed = ImGui::SliderFloat("Metallic", &m_lightingUniforms.metallic, 0.0f, 1.0f) || changed;
+	changed = ImGui::SliderFloat("Reflectance", &m_lightingUniforms.reflectance, 0.0f, 1.0f) || changed;
 	changed = ImGui::SliderFloat("Normal Map Strength", &m_lightingUniforms.normalMapStrength, 0.0f, 1.0f) || changed;
+	bool highQuality = m_lightingUniforms.highQuality != 0;
+	changed = ImGui::Checkbox("High Quality", &highQuality) || changed;
+	m_lightingUniforms.highQuality = highQuality ? 1 : 0;
 	ImGui::End();
 	m_lightingUniformsChanged = changed;
 
@@ -704,10 +719,11 @@ void Application::initLighting() {
 		vec4{1.0, 0.9, 0.6, 1.0},
 		vec4{0.6, 0.9, 1.0, 1.0}
 	};
-	m_lightingUniforms.hardness = 16.0f;
-	m_lightingUniforms.kd = 1.0f;
-	m_lightingUniforms.ks = 0.5f;
+	m_lightingUniforms.roughness = 0.5f;
+	m_lightingUniforms.metallic = 0.0f;
+	m_lightingUniforms.reflectance = 0.5f;
 	m_lightingUniforms.normalMapStrength = 0.5f;
+	m_lightingUniforms.highQuality = true;
 
 	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 
