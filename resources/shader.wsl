@@ -246,7 +246,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	for (var i: i32 = 0; i < 2; i++) {
 		let L = normalize(uLighting.directions[i].xyz);
 		let NoL = clamp(dot(N, L), 0.0, 1.0);
-		let illuminance = uLighting.radiances[i].rgb * 3.0 * NoL;
+		let illuminance = uLighting.colors[i].rgb * 3.0 * NoL;
 		radiance += brdf(material, N, L, V) * illuminance;
 	}
 

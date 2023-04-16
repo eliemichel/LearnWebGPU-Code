@@ -30,9 +30,12 @@ int main(int, char**) {
 	Application app;
 	app.onInit();
 
+	app.computeStuff();
+	/*
 	while (app.isRunning()) {
 		app.onFrame();
 	}
+	*/
 
 	app.onFinish();
 	return 0;

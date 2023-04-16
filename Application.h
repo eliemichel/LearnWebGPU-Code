@@ -58,6 +58,8 @@ public:
 	// A function that tells if the application is still running.
 	bool isRunning();
 
+	void computeStuff();
+
 private:
 	void buildSwapChain();
 	void buildDepthBuffer();

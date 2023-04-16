@@ -759,3 +759,135 @@ void Application::updateLighting() {
 		queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 	}
 }
+
+void Application::computeStuff() {
+	Queue queue = m_device.getQueue();
+
+	// Load compute shader
+	ShaderModule computeShaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/compute-shader.wgsl", m_device);
+
+	// Create bind group layout
+	std::vector<BindGroupLayoutEntry> bindings(2, Default);
+	// Input buffer
+	bindings[0].binding = 0;
+	bindings[0].buffer.type = BufferBindingType::ReadOnlyStorage;
+	bindings[0].visibility = ShaderStage::Compute;
+	// Output buffer
+	bindings[1].binding = 1;
+	bindings[1].buffer.type = BufferBindingType::Storage;
+	bindings[1].visibility = ShaderStage::Compute;
+
+	BindGroupLayoutDescriptor bindGroupLayoutDesc;
+	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
+	bindGroupLayoutDesc.entries = bindings.data();
+	BindGroupLayout bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+
+	// Create compute pipeline layout
+	PipelineLayoutDescriptor pipelineLayoutDesc;
+	pipelineLayoutDesc.bindGroupLayoutCount = 1;
+	pipelineLayoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
+	PipelineLayout pipelineLayout = m_device.createPipelineLayout(pipelineLayoutDesc);
+
+	// Create compute pipeline
+	ComputePipelineDescriptor computePipelineDesc;
+	computePipelineDesc.compute.constantCount = 0;
+	computePipelineDesc.compute.constants = nullptr;
+	computePipelineDesc.compute.entryPoint = "computeStuff";
+	computePipelineDesc.compute.module = computeShaderModule;
+	computePipelineDesc.layout = pipelineLayout;
+	ComputePipeline computePipeline = m_device.createComputePipeline(computePipelineDesc);
+
+	// Create input/output buffers
+	BufferDescriptor bufferDesc;
+	bufferDesc.mappedAtCreation = false;
+	bufferDesc.size = 32 * sizeof(float);
+	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopyDst;
+	Buffer inputBuffer = m_device.createBuffer(bufferDesc);
+	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopySrc;
+	Buffer outputBuffer = m_device.createBuffer(bufferDesc);
+
+	// Create an intermediary buffer to which we copy the output and that can be
+	// used for reading into the CPU memory.
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::MapRead;
+	Buffer mapBuffer = m_device.createBuffer(bufferDesc);
+
+	// Create compute bind group
+	std::vector<BindGroupEntry> entries(2, Default);
+	// Input buffer
+	entries[0].binding = 0;
+	entries[0].buffer = inputBuffer;
+	entries[0].offset = 0;
+	entries[0].size = bufferDesc.size;
+	// Output buffer
+	entries[1].binding = 1;
+	entries[1].buffer = outputBuffer;
+	entries[1].offset = 0;
+	entries[1].size = bufferDesc.size;
+
+	BindGroupDescriptor bindGroupDesc;
+	bindGroupDesc.layout = bindGroupLayout;
+	bindGroupDesc.entryCount = (uint32_t)entries.size();
+	bindGroupDesc.entries = (WGPUBindGroupEntry*)entries.data();
+	BindGroup bindGroup = m_device.createBindGroup(bindGroupDesc);
+
+	// Fill in input buffer
+	std::vector<float> input(32);
+	for (int i = 0; i < input.size(); ++i) {
+		input[i] = 0.1f * i;
+	}
+	queue.writeBuffer(inputBuffer, 0, input.data(), input.size() * sizeof(float));
+
+	// Initialize a command encoder
+	CommandEncoderDescriptor encoderDesc = Default;
+	CommandEncoder encoder = m_device.createCommandEncoder(encoderDesc);
+
+	// Create compute pass
+	ComputePassDescriptor computePassDesc;
+	computePassDesc.timestampWriteCount = 0;
+	computePassDesc.timestampWrites = nullptr;
+	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
+
+	// Use compute pass
+	computePass.setPipeline(computePipeline);
+	computePass.setBindGroup(0, bindGroup, 0, nullptr);
+	computePass.dispatchWorkgroups(1, 1, 1);
+
+	// Finalize compute pass
+	computePass.end();
+
+	// Before encoder.finish
+	encoder.copyBufferToBuffer(outputBuffer, 0, mapBuffer, 0, bufferDesc.size);
+
+	// Encode and submit the GPU commands
+	CommandBuffer commands = encoder.finish(CommandBufferDescriptor{});
+	queue.submit(commands);
+
+	// Print output
+	bool done = false;
+	auto handle = mapBuffer.mapAsync(MapMode::Read, 0, bufferDesc.size, [&](BufferMapAsyncStatus status) {
+		if (status == BufferMapAsyncStatus::Success) {
+			const float* output = (const float*)mapBuffer.getConstMappedRange(0, bufferDesc.size);
+			for (int i = 0; i < input.size(); ++i) {
+				std::cout << "input " << input[i] << " became " << output[i] << std::endl;
+			}
+			mapBuffer.unmap();
+		}
+		done = true;
+	});
+
+	while (!done) {
+		// Do nothing, this checks for ongoing asynchronous operations and call their callbacks if needed
+#ifdef WEBGPU_BACKEND_DAWN
+		m_device.tick();
+#else
+		queue.submit(0, nullptr);
+#endif
+	}
+
+#if !defined(WEBGPU_BACKEND_WGPU)
+	wgpuCommandBufferRelease(commands);
+	wgpuCommandEncoderRelease(encoder);
+	wgpuComputePassEncoderRelease(computePass);
+	wgpuQueueRelease(queue);
+#endif
+}
