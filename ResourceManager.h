@@ -28,46 +28,12 @@
 
 #include <webgpu/webgpu.hpp>
 
-#include <glm/glm.hpp>
-
 #include <filesystem>
 
 class ResourceManager {
 public:
-	using vec3 = glm::vec3;
-	using vec2 = glm::vec2;
-
-	/**
-	 * A structure that describes the data layout in the vertex buffer,
-	 * used by loadGeometryFromObj and used it in `sizeof` and `offsetof`
-	 * when uploading data to the GPU.
-	 */
-	struct VertexAttributes {
-		vec3 position;
-
-		// Texture mapping attributes represent the local frame in which
-		// normals sampled from the normal map are expressed.
-		vec3 tangent; // X axis
-		vec3 bitangent; // Y axis
-		vec3 normal; // Z axis
-
-		vec3 color;
-		vec2 uv;
-	};
-
 	using path = std::filesystem::path;
 
 	// Load a shader from a WGSL file into a new shader module
 	static wgpu::ShaderModule loadShaderModule(const path& path, wgpu::Device device);
-
-	// Load an 3D mesh from a standard .obj file into a vertex data buffer
-	static bool loadGeometryFromObj(const path& path, std::vector<VertexAttributes>& vertexData);
-
-	// Load an image from a standard 8-bit image file into a new texture object
-	// NB: The texture must be destroyed after use
-	static wgpu::Texture loadTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
-
-private:
-	// Compute Tangent and Bitangent attributes from the normal and UVs.
-	static void computeTextureFrameAttributes(std::vector<VertexAttributes>& vertexData);
 };
