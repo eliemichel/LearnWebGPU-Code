@@ -51,6 +51,24 @@ using glm::vec3;
 using glm::vec2;
 
 bool Application::onInit() {
+	m_bufferSize = 32 * sizeof(float);
+	if (!initDevice()) return false;
+	initBindGroupLayout();
+	initComputePipeline();
+	initBuffers();
+	initBindGroup();
+	return true;
+}
+
+void Application::onFinish() {
+	terminateBindGroup();
+	terminateBuffers();
+	terminateComputePipeline();
+	terminateBindGroupLayout();
+	terminateDevice();
+}
+
+bool Application::initDevice() {
 	// Create instance
 	m_instance = createInstance(InstanceDescriptor{});
 	if (!m_instance) {
@@ -99,36 +117,64 @@ bool Application::onInit() {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
-	});
+		});
 
 	m_deviceLostCallback = m_device.setDeviceLostCallback([](DeviceLostReason reason, char const* message) {
 		std::cout << "Device error: reason " << reason;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
-	});
+		});
 
-	Queue queue = m_device.getQueue();
-
-#ifdef WEBGPU_BACKEND_DAWN
-	// Flush error queue
-	m_device.tick();
+#ifdef WEBGPU_BACKEND_WGPU
+	m_device.getQueue().submit(0, nullptr);
+#else
+	m_instance.processEvents();
 #endif
-	
+
 	return true;
 }
 
-void Application::onCompute() {
-	Queue queue = m_device.getQueue();
+void Application::terminateDevice() {
+	wgpuDeviceRelease(m_device);
+	wgpuInstanceRelease(m_instance);
+}
 
-	// Load compute shader
-	ShaderModule computeShaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/compute-shader.wgsl", m_device);
+void Application::initBindGroup() {
+	// Create compute bind group
+	std::vector<BindGroupEntry> entries(2, Default);
 
+	// Input buffer
+	entries[0].binding = 0;
+	entries[0].buffer = m_inputBuffer;
+	entries[0].offset = 0;
+	entries[0].size = m_bufferSize;
+
+	// Output buffer
+	entries[1].binding = 1;
+	entries[1].buffer = m_outputBuffer;
+	entries[1].offset = 0;
+	entries[1].size = m_bufferSize;
+
+	BindGroupDescriptor bindGroupDesc;
+	bindGroupDesc.layout = m_bindGroupLayout;
+	bindGroupDesc.entryCount = (uint32_t)entries.size();
+	bindGroupDesc.entries = (WGPUBindGroupEntry*)entries.data();
+	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
+}
+
+void Application::terminateBindGroup() {
+	wgpuBindGroupRelease(m_bindGroup);
+}
+
+void Application::initBindGroupLayout() {
 	// Create bind group layout
 	std::vector<BindGroupLayoutEntry> bindings(2, Default);
+
 	// Input buffer
 	bindings[0].binding = 0;
 	bindings[0].buffer.type = BufferBindingType::ReadOnlyStorage;
 	bindings[0].visibility = ShaderStage::Compute;
+
 	// Output buffer
 	bindings[1].binding = 1;
 	bindings[1].buffer.type = BufferBindingType::Storage;
@@ -137,13 +183,22 @@ void Application::onCompute() {
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
 	bindGroupLayoutDesc.entries = bindings.data();
-	BindGroupLayout bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+	m_bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+}
+
+void Application::terminateBindGroupLayout() {
+	wgpuBindGroupLayoutRelease(m_bindGroupLayout);
+}
+
+void Application::initComputePipeline() {
+	// Load compute shader
+	ShaderModule computeShaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/compute-shader.wgsl", m_device);
 
 	// Create compute pipeline layout
 	PipelineLayoutDescriptor pipelineLayoutDesc;
 	pipelineLayoutDesc.bindGroupLayoutCount = 1;
-	pipelineLayoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
-	PipelineLayout pipelineLayout = m_device.createPipelineLayout(pipelineLayoutDesc);
+	pipelineLayoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&m_bindGroupLayout;
+	m_pipelineLayout = m_device.createPipelineLayout(pipelineLayoutDesc);
 
 	// Create compute pipeline
 	ComputePipelineDescriptor computePipelineDesc;
@@ -151,48 +206,53 @@ void Application::onCompute() {
 	computePipelineDesc.compute.constants = nullptr;
 	computePipelineDesc.compute.entryPoint = "computeStuff";
 	computePipelineDesc.compute.module = computeShaderModule;
-	computePipelineDesc.layout = pipelineLayout;
-	ComputePipeline computePipeline = m_device.createComputePipeline(computePipelineDesc);
+	computePipelineDesc.layout = m_pipelineLayout;
+	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
+}
 
+void Application::terminateComputePipeline() {
+	wgpuComputePipelineRelease(m_pipeline);
+	wgpuPipelineLayoutRelease(m_pipelineLayout);
+}
+
+void Application::initBuffers() {
 	// Create input/output buffers
 	BufferDescriptor bufferDesc;
 	bufferDesc.mappedAtCreation = false;
-	bufferDesc.size = 32 * sizeof(float);
+	bufferDesc.size = m_bufferSize;
+
 	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopyDst;
-	Buffer inputBuffer = m_device.createBuffer(bufferDesc);
+	m_inputBuffer = m_device.createBuffer(bufferDesc);
+
 	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopySrc;
-	Buffer outputBuffer = m_device.createBuffer(bufferDesc);
+	m_outputBuffer = m_device.createBuffer(bufferDesc);
 
 	// Create an intermediary buffer to which we copy the output and that can be
 	// used for reading into the CPU memory.
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::MapRead;
-	Buffer mapBuffer = m_device.createBuffer(bufferDesc);
+	m_mapBuffer = m_device.createBuffer(bufferDesc);
+}
 
-	// Create compute bind group
-	std::vector<BindGroupEntry> entries(2, Default);
-	// Input buffer
-	entries[0].binding = 0;
-	entries[0].buffer = inputBuffer;
-	entries[0].offset = 0;
-	entries[0].size = bufferDesc.size;
-	// Output buffer
-	entries[1].binding = 1;
-	entries[1].buffer = outputBuffer;
-	entries[1].offset = 0;
-	entries[1].size = bufferDesc.size;
+void Application::terminateBuffers() {
+	m_inputBuffer.destroy();
+	wgpuBufferRelease(m_inputBuffer);
 
-	BindGroupDescriptor bindGroupDesc;
-	bindGroupDesc.layout = bindGroupLayout;
-	bindGroupDesc.entryCount = (uint32_t)entries.size();
-	bindGroupDesc.entries = (WGPUBindGroupEntry*)entries.data();
-	BindGroup bindGroup = m_device.createBindGroup(bindGroupDesc);
+	m_outputBuffer.destroy();
+	wgpuBufferRelease(m_outputBuffer);
+
+	m_mapBuffer.destroy();
+	wgpuBufferRelease(m_mapBuffer);
+}
+
+void Application::onCompute() {
+	Queue queue = m_device.getQueue();
 
 	// Fill in input buffer
-	std::vector<float> input(32);
+	std::vector<float> input(m_bufferSize / sizeof(float));
 	for (int i = 0; i < input.size(); ++i) {
 		input[i] = 0.1f * i;
 	}
-	queue.writeBuffer(inputBuffer, 0, input.data(), input.size() * sizeof(float));
+	queue.writeBuffer(m_inputBuffer, 0, input.data(), input.size() * sizeof(float));
 
 	// Initialize a command encoder
 	CommandEncoderDescriptor encoderDesc = Default;
@@ -205,15 +265,15 @@ void Application::onCompute() {
 	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
 	// Use compute pass
-	computePass.setPipeline(computePipeline);
-	computePass.setBindGroup(0, bindGroup, 0, nullptr);
+	computePass.setPipeline(m_pipeline);
+	computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 	computePass.dispatchWorkgroups(1, 1, 1);
 
 	// Finalize compute pass
 	computePass.end();
 
 	// Before encoder.finish
-	encoder.copyBufferToBuffer(outputBuffer, 0, mapBuffer, 0, bufferDesc.size);
+	encoder.copyBufferToBuffer(m_outputBuffer, 0, m_mapBuffer, 0, m_bufferSize);
 
 	// Encode and submit the GPU commands
 	CommandBuffer commands = encoder.finish(CommandBufferDescriptor{});
@@ -221,23 +281,23 @@ void Application::onCompute() {
 
 	// Print output
 	bool done = false;
-	auto handle = mapBuffer.mapAsync(MapMode::Read, 0, bufferDesc.size, [&](BufferMapAsyncStatus status) {
+	auto handle = m_mapBuffer.mapAsync(MapMode::Read, 0, m_bufferSize, [&](BufferMapAsyncStatus status) {
 		if (status == BufferMapAsyncStatus::Success) {
-			const float* output = (const float*)mapBuffer.getConstMappedRange(0, bufferDesc.size);
+			const float* output = (const float*)m_mapBuffer.getConstMappedRange(0, m_bufferSize);
 			for (int i = 0; i < input.size(); ++i) {
 				std::cout << "input " << input[i] << " became " << output[i] << std::endl;
 			}
-			mapBuffer.unmap();
+			m_mapBuffer.unmap();
 		}
 		done = true;
 	});
 
 	while (!done) {
-		// Do nothing, this checks for ongoing asynchronous operations and call their callbacks if needed
-#ifdef WEBGPU_BACKEND_DAWN
-		m_device.tick();
-#else
+		// Checks for ongoing asynchronous operations and call their callbacks if needed
+#ifdef WEBGPU_BACKEND_WGPU
 		queue.submit(0, nullptr);
+#else
+		m_instance.processEvents();
 #endif
 	}
 
@@ -247,7 +307,4 @@ void Application::onCompute() {
 	wgpuComputePassEncoderRelease(computePass);
 	wgpuQueueRelease(queue);
 #endif
-}
-
-void Application::onFinish() {
 }

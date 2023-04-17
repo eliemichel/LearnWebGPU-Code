@@ -40,9 +40,34 @@ public:
 	void onFinish();
 
 private:
+	// Detailed steps
+	bool initDevice();
+	void terminateDevice();
+
+	void initBindGroup();
+	void terminateBindGroup();
+
+	void initBindGroupLayout();
+	void terminateBindGroupLayout();
+
+	void initComputePipeline();
+	void terminateComputePipeline();
+
+	void initBuffers();
+	void terminateBuffers();
+
+private:
+	uint32_t m_bufferSize;
 	// Everything that is initialized in `onInit` and needed in `onCompute`.
 	wgpu::Instance m_instance = nullptr;
 	wgpu::Device m_device = nullptr;
+	wgpu::PipelineLayout m_pipelineLayout = nullptr;
+	wgpu::ComputePipeline m_pipeline = nullptr;
+	wgpu::Buffer m_inputBuffer = nullptr;
+	wgpu::Buffer m_outputBuffer = nullptr;
+	wgpu::Buffer m_mapBuffer = nullptr;
+	wgpu::BindGroup m_bindGroup = nullptr;
+	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
 };
