@@ -27,6 +27,10 @@
 #include "Application.h"
 #include "ResourceManager.h"
 
+#include "save_image.h"
+
+#include "stb_image.h"
+
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
@@ -55,14 +59,14 @@ bool Application::onInit() {
 	if (!initDevice()) return false;
 	initBindGroupLayout();
 	initComputePipeline();
-	initBuffers();
+	initTextureViews();
 	initBindGroup();
 	return true;
 }
 
 void Application::onFinish() {
 	terminateBindGroup();
-	terminateBuffers();
+	terminateTextureViews();
 	terminateComputePipeline();
 	terminateBindGroupLayout();
 	terminateDevice();
@@ -124,13 +128,13 @@ bool Application::initDevice() {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
-		});
+	});
 
 	m_deviceLostCallback = m_device.setDeviceLostCallback([](DeviceLostReason reason, char const* message) {
-		std::cout << "Device error: reason " << reason;
+		std::cout << "Device lost: reason " << reason;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
-		});
+	});
 
 #ifdef WEBGPU_BACKEND_WGPU
 	m_device.getQueue().submit(0, nullptr);
@@ -146,21 +150,92 @@ void Application::terminateDevice() {
 	wgpuInstanceRelease(m_instance);
 }
 
+void Application::initTextureViews() {
+	// Load image data
+	int width, height, channels;
+	uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
+	if (nullptr == pixelData) throw std::runtime_error("Could not load input texture!");
+	m_textureSize = { (uint32_t)width, (uint32_t)height, 1 };
+
+	// Create texture
+	TextureDescriptor textureDesc;
+	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.format = TextureFormat::RGBA8Unorm;
+	textureDesc.size = m_textureSize;
+	textureDesc.sampleCount = 1;
+	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::StorageBinding | TextureUsage::CopyDst;
+	textureDesc.viewFormatCount = 0;
+	textureDesc.viewFormats = nullptr;
+
+	// We start with 2 MIP levels:
+	//  - level 0 is given by the input.jpg file
+	//  - level 1 is filled by the compute shader
+	textureDesc.mipLevelCount = 2;
+
+	m_texture = m_device.createTexture(textureDesc);
+
+	// Upload texture data for MIP level 0 to the GPU
+	Queue queue = m_device.getQueue();
+	ImageCopyTexture destination;
+	destination.texture = m_texture;
+	destination.origin = { 0, 0, 0 };
+	destination.aspect = TextureAspect::All;
+	destination.mipLevel = 0;
+	TextureDataLayout source;
+	source.offset = 0;
+	source.bytesPerRow = 4 * m_textureSize.width;
+	source.rowsPerImage = m_textureSize.height;
+	queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, m_textureSize);
+
+	// Free CPU-side data
+	stbi_image_free(pixelData);
+
+	// Create views
+	TextureViewDescriptor textureViewDesc;
+	textureViewDesc.aspect = TextureAspect::All;
+	textureViewDesc.baseArrayLayer = 0;
+	textureViewDesc.arrayLayerCount = 1;
+	textureViewDesc.dimension = TextureViewDimension::_2D;
+	textureViewDesc.format = textureDesc.format;
+
+	// Each view must correspond to only 1 MIP level at a time
+	textureViewDesc.mipLevelCount = 1;
+
+	textureViewDesc.baseMipLevel = 0;
+	textureViewDesc.label = "Input View";
+	m_inputTextureView = m_texture.createView(textureViewDesc);
+
+	textureViewDesc.baseMipLevel = 1;
+	textureViewDesc.label = "Output View";
+	m_outputTextureView = m_texture.createView(textureViewDesc);
+
+#if !defined(WEBGPU_BACKEND_WGPU)
+	wgpuQueueRelease(queue);
+#endif
+}
+
+void Application::saveOutputImage() {
+	saveImage(RESOURCE_DIR "/output.png", m_device, m_outputTextureView, m_textureSize.width / 2, m_textureSize.height / 2);
+}
+
+void Application::terminateTextureViews() {
+	wgpuTextureViewRelease(m_inputTextureView);
+	wgpuTextureViewRelease(m_outputTextureView);
+	m_texture.destroy();
+	wgpuTextureRelease(m_texture);
+}
+
 void Application::initBindGroup() {
 	// Create compute bind group
 	std::vector<BindGroupEntry> entries(2, Default);
 
 	// Input buffer
 	entries[0].binding = 0;
-	entries[0].buffer = m_inputBuffer;
-	entries[0].offset = 0;
-	entries[0].size = m_bufferSize;
+	entries[0].textureView = m_inputTextureView;
 
 	// Output buffer
 	entries[1].binding = 1;
-	entries[1].buffer = m_outputBuffer;
-	entries[1].offset = 0;
-	entries[1].size = m_bufferSize;
+	entries[1].textureView = m_outputTextureView;
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
@@ -177,14 +252,17 @@ void Application::initBindGroupLayout() {
 	// Create bind group layout
 	std::vector<BindGroupLayoutEntry> bindings(2, Default);
 
-	// Input buffer
+	// Input image: MIP level 0 of the texture
 	bindings[0].binding = 0;
-	bindings[0].buffer.type = BufferBindingType::ReadOnlyStorage;
+	bindings[0].texture.sampleType = TextureSampleType::Float;
+	bindings[0].texture.viewDimension = TextureViewDimension::_2D;
 	bindings[0].visibility = ShaderStage::Compute;
 
-	// Output buffer
+	// Output image: MIP level 1 of the texture
 	bindings[1].binding = 1;
-	bindings[1].buffer.type = BufferBindingType::Storage;
+	bindings[1].storageTexture.access = StorageTextureAccess::WriteOnly;
+	bindings[1].storageTexture.format = TextureFormat::RGBA8Unorm;
+	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2D;
 	bindings[1].visibility = ShaderStage::Compute;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
@@ -222,44 +300,8 @@ void Application::terminateComputePipeline() {
 	wgpuPipelineLayoutRelease(m_pipelineLayout);
 }
 
-void Application::initBuffers() {
-	// Create input/output buffers
-	BufferDescriptor bufferDesc;
-	bufferDesc.mappedAtCreation = false;
-	bufferDesc.size = m_bufferSize;
-
-	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopyDst;
-	m_inputBuffer = m_device.createBuffer(bufferDesc);
-
-	bufferDesc.usage = BufferUsage::Storage | BufferUsage::CopySrc;
-	m_outputBuffer = m_device.createBuffer(bufferDesc);
-
-	// Create an intermediary buffer to which we copy the output and that can be
-	// used for reading into the CPU memory.
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::MapRead;
-	m_mapBuffer = m_device.createBuffer(bufferDesc);
-}
-
-void Application::terminateBuffers() {
-	m_inputBuffer.destroy();
-	wgpuBufferRelease(m_inputBuffer);
-
-	m_outputBuffer.destroy();
-	wgpuBufferRelease(m_outputBuffer);
-
-	m_mapBuffer.destroy();
-	wgpuBufferRelease(m_mapBuffer);
-}
-
 void Application::onCompute() {
 	Queue queue = m_device.getQueue();
-
-	// Fill in input buffer
-	std::vector<float> input(m_bufferSize / sizeof(float));
-	for (int i = 0; i < input.size(); ++i) {
-		input[i] = 0.1f * i;
-	}
-	queue.writeBuffer(m_inputBuffer, 0, input.data(), input.size() * sizeof(float));
 
 	// Initialize a command encoder
 	CommandEncoderDescriptor encoderDesc = Default;
@@ -275,43 +317,22 @@ void Application::onCompute() {
 	computePass.setPipeline(m_pipeline);
 	computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-	uint32_t invocationCount = m_bufferSize / sizeof(float);
-	uint32_t workgroupSize = 32;
-	// This ceils invocationCount / workgroupSize
-	uint32_t workgroupCount = (invocationCount + workgroupSize - 1) / workgroupSize;
-	computePass.dispatchWorkgroups(workgroupCount, 1, 1);
+	uint32_t invocationCountX = m_textureSize.width / 2;
+	uint32_t invocationCountY = m_textureSize.height / 2;
+	uint32_t workgroupSizePerDim = 8;
+	// This ceils invocationCountX / workgroupSizePerDim
+	uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
+	uint32_t workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;
+	computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY, 1);
 
 	// Finalize compute pass
 	computePass.end();
-
-	// Before encoder.finish
-	encoder.copyBufferToBuffer(m_outputBuffer, 0, m_mapBuffer, 0, m_bufferSize);
 
 	// Encode and submit the GPU commands
 	CommandBuffer commands = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(commands);
 
-	// Print output
-	bool done = false;
-	auto handle = m_mapBuffer.mapAsync(MapMode::Read, 0, m_bufferSize, [&](BufferMapAsyncStatus status) {
-		if (status == BufferMapAsyncStatus::Success) {
-			const float* output = (const float*)m_mapBuffer.getConstMappedRange(0, m_bufferSize);
-			for (int i = 0; i < input.size(); ++i) {
-				std::cout << "input " << input[i] << " became " << output[i] << std::endl;
-			}
-			m_mapBuffer.unmap();
-		}
-		done = true;
-	});
-
-	while (!done) {
-		// Checks for ongoing asynchronous operations and call their callbacks if needed
-#ifdef WEBGPU_BACKEND_WGPU
-		queue.submit(0, nullptr);
-#else
-		m_instance.processEvents();
-#endif
-	}
+	saveOutputImage();
 
 #if !defined(WEBGPU_BACKEND_WGPU)
 	wgpuCommandBufferRelease(commands);

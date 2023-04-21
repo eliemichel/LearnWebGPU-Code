@@ -26,3 +26,16 @@
 
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
+
+#pragma warning(push)
+#pragma warning(disable: 4244)
+#pragma warning(disable: 4996)
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define __STDC_LIB_EXT1__
+#include "stb_image_write.h"
+
+#pragma warning(pop)

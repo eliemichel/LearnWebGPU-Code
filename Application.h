@@ -44,6 +44,10 @@ private:
 	bool initDevice();
 	void terminateDevice();
 
+	void initTextureViews();
+	void saveOutputImage();
+	void terminateTextureViews();
+
 	void initBindGroup();
 	void terminateBindGroup();
 
@@ -53,9 +57,6 @@ private:
 	void initComputePipeline();
 	void terminateComputePipeline();
 
-	void initBuffers();
-	void terminateBuffers();
-
 private:
 	uint32_t m_bufferSize;
 	// Everything that is initialized in `onInit` and needed in `onCompute`.
@@ -63,9 +64,10 @@ private:
 	wgpu::Device m_device = nullptr;
 	wgpu::PipelineLayout m_pipelineLayout = nullptr;
 	wgpu::ComputePipeline m_pipeline = nullptr;
-	wgpu::Buffer m_inputBuffer = nullptr;
-	wgpu::Buffer m_outputBuffer = nullptr;
-	wgpu::Buffer m_mapBuffer = nullptr;
+	wgpu::Texture m_texture = nullptr;
+	wgpu::Extent3D m_textureSize;
+	wgpu::TextureView m_inputTextureView = nullptr;
+	wgpu::TextureView m_outputTextureView = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
 	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;

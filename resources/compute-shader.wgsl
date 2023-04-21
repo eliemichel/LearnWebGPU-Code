@@ -1,13 +1,14 @@
-@group(0) @binding(0) var<storage,read> inputBuffer: array<f32,64>;
-@group(0) @binding(1) var<storage,read_write> outputBuffer: array<f32,64>;
+@group(0) @binding(0) var previousMipLevel: texture_2d<f32>;
+@group(0) @binding(1) var nextMipLevel: texture_storage_2d<rgba8unorm,write>;
 
-// The function to evaluate for each element of the processed buffer
-fn f(x: f32) -> f32 {
-    return 2.0 * x + 1.0;
-}
-
-@compute @workgroup_size(32)
+@compute @workgroup_size(8, 8)
 fn computeStuff(@builtin(global_invocation_id) id: vec3<u32>) {
-    // Apply the function f to the buffer element at index id.x:
-    outputBuffer[id.x] = f(inputBuffer[id.x]);
+    let offset = vec2<u32>(0, 1);
+    let color = (
+        textureLoad(previousMipLevel, 2 * id.xy + offset.xx, 0) +
+        textureLoad(previousMipLevel, 2 * id.xy + offset.xy, 0) +
+        textureLoad(previousMipLevel, 2 * id.xy + offset.yx, 0) +
+        textureLoad(previousMipLevel, 2 * id.xy + offset.yy, 0)
+    ) * 0.25;
+    textureStore(nextMipLevel, id.xy, color);
 }

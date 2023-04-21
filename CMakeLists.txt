@@ -21,6 +21,9 @@ add_executable(App
 	implementations.cpp
 	main.cpp
 	webgpu-release.h
+	stb_image.h
+	stb_image_write.h
+	save_image.h
 )
 
 if(DEV_MODE)
