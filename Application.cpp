@@ -51,7 +51,7 @@ using glm::vec3;
 using glm::vec2;
 
 bool Application::onInit() {
-	m_bufferSize = 32 * sizeof(float);
+	m_bufferSize = 64 * sizeof(float);
 	if (!initDevice()) return false;
 	initBindGroupLayout();
 	initComputePipeline();
@@ -107,7 +107,7 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxComputeWorkgroupSizeY = 1;
 	requiredLimits.limits.maxComputeWorkgroupSizeZ = 1;
 	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 32;
-	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 1;
+	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 2;
 	requiredLimits.limits.maxStorageBufferBindingSize = m_bufferSize;
 
 	// Create device
@@ -274,7 +274,12 @@ void Application::onCompute() {
 	// Use compute pass
 	computePass.setPipeline(m_pipeline);
 	computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
-	computePass.dispatchWorkgroups(1, 1, 1);
+
+	uint32_t invocationCount = m_bufferSize / sizeof(float);
+	uint32_t workgroupSize = 32;
+	// This ceils invocationCount / workgroupSize
+	uint32_t workgroupCount = (invocationCount + workgroupSize - 1) / workgroupSize;
+	computePass.dispatchWorkgroups(workgroupCount, 1, 1);
 
 	// Finalize compute pass
 	computePass.end();
