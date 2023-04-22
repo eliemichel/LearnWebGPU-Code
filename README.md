@@ -1,9 +1,9 @@
 LearnWebGPU - Code
 ==================
 
-This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
+This repository contains the reference code base accompanying the [Learn WebGPU](https://eliemichel.github.io/LearnWebGPU) C++ programming guide.
 
-Branch `step105`: This corresponds to the code at the end of the page [Specular](https://eliemichel.github.io/LearnWebGPU/basic-3d-rendering/lighting-and-material/specular.html).
+Branch `step210`: This corresponds to the code at the end of the page [Mipmap Generation](https://eliemichel.github.io/LearnWebGPU/basic-compute/image-processing/mipmap-generation.html).
 
 Building
 --------

@@ -27,7 +27,7 @@
 #include "Application.h"
 #include "ResourceManager.h"
 
-#include "save_image.h"
+#include "save_texture.h"
 
 #include "stb_image.h"
 
@@ -46,6 +46,8 @@
 #include <string>
 #include <array>
 
+#define MIPMAP_GEN_OPTION B
+
 constexpr float PI = 3.14159265358979323846f;
 
 using namespace wgpu;
@@ -59,6 +61,7 @@ bool Application::onInit() {
 	if (!initDevice()) return false;
 	initBindGroupLayout();
 	initComputePipeline();
+	initTexture();
 	initTextureViews();
 	initBindGroup();
 	return true;
@@ -67,6 +70,7 @@ bool Application::onInit() {
 void Application::onFinish() {
 	terminateBindGroup();
 	terminateTextureViews();
+	terminateTexture();
 	terminateComputePipeline();
 	terminateBindGroupLayout();
 	terminateDevice();
@@ -150,7 +154,7 @@ void Application::terminateDevice() {
 	wgpuInstanceRelease(m_instance);
 }
 
-void Application::initTextureViews() {
+void Application::initTexture() {
 	// Load image data
 	int width, height, channels;
 	uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
@@ -163,9 +167,15 @@ void Application::initTextureViews() {
 	textureDesc.format = TextureFormat::RGBA8Unorm;
 	textureDesc.size = m_textureSize;
 	textureDesc.sampleCount = 1;
-	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::StorageBinding | TextureUsage::CopyDst;
 	textureDesc.viewFormatCount = 0;
 	textureDesc.viewFormats = nullptr;
+
+	textureDesc.usage = (
+		TextureUsage::TextureBinding | // to read the texture in a shader
+		TextureUsage::StorageBinding | // to write the texture in a shader
+		TextureUsage::CopyDst | // to upload the input data
+		TextureUsage::CopySrc   // to save the output data
+	);
 
 	// We start with 2 MIP levels:
 	//  - level 0 is given by the input.jpg file
@@ -174,8 +184,9 @@ void Application::initTextureViews() {
 
 	m_texture = m_device.createTexture(textureDesc);
 
-	// Upload texture data for MIP level 0 to the GPU
 	Queue queue = m_device.getQueue();
+
+	// Upload texture data for MIP level 0 to the GPU
 	ImageCopyTexture destination;
 	destination.texture = m_texture;
 	destination.origin = { 0, 0, 0 };
@@ -187,16 +198,26 @@ void Application::initTextureViews() {
 	source.rowsPerImage = m_textureSize.height;
 	queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, m_textureSize);
 
+#if !defined(WEBGPU_BACKEND_WGPU)
+	wgpuQueueRelease(queue);
+#endif
+
 	// Free CPU-side data
 	stbi_image_free(pixelData);
+}
 
-	// Create views
+void Application::terminateTexture() {
+	m_texture.destroy();
+	wgpuTextureRelease(m_texture);
+}
+
+void Application::initTextureViews() {
 	TextureViewDescriptor textureViewDesc;
 	textureViewDesc.aspect = TextureAspect::All;
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = 1;
 	textureViewDesc.dimension = TextureViewDimension::_2D;
-	textureViewDesc.format = textureDesc.format;
+	textureViewDesc.format = TextureFormat::RGBA8Unorm;
 
 	// Each view must correspond to only 1 MIP level at a time
 	textureViewDesc.mipLevelCount = 1;
@@ -208,21 +229,11 @@ void Application::initTextureViews() {
 	textureViewDesc.baseMipLevel = 1;
 	textureViewDesc.label = "Output View";
 	m_outputTextureView = m_texture.createView(textureViewDesc);
-
-#if !defined(WEBGPU_BACKEND_WGPU)
-	wgpuQueueRelease(queue);
-#endif
-}
-
-void Application::saveOutputImage() {
-	saveImage(RESOURCE_DIR "/output.png", m_device, m_outputTextureView, m_textureSize.width / 2, m_textureSize.height / 2);
 }
 
 void Application::terminateTextureViews() {
 	wgpuTextureViewRelease(m_inputTextureView);
 	wgpuTextureViewRelease(m_outputTextureView);
-	m_texture.destroy();
-	wgpuTextureRelease(m_texture);
 }
 
 void Application::initBindGroup() {
@@ -236,6 +247,12 @@ void Application::initBindGroup() {
 	// Output buffer
 	entries[1].binding = 1;
 	entries[1].textureView = m_outputTextureView;
+
+#if MIPMAP_GEN_OPTION == B
+	entries.resize(3);
+	entries[2].binding = 2;
+	entries[2].textureView = m_outputTextureView;
+#endif
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
@@ -265,6 +282,15 @@ void Application::initBindGroupLayout() {
 	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2D;
 	bindings[1].visibility = ShaderStage::Compute;
 
+#if MIPMAP_GEN_OPTION == B
+	bindings.resize(3);
+	// Extra binding to access the output in read mode
+	bindings[2].binding = 2;
+	bindings[2].texture.sampleType = TextureSampleType::Float;
+	bindings[2].texture.viewDimension = TextureViewDimension::_2D;
+	bindings[2].visibility = ShaderStage::Compute;
+#endif
+
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
 	bindGroupLayoutDesc.entries = bindings.data();
@@ -289,7 +315,11 @@ void Application::initComputePipeline() {
 	ComputePipelineDescriptor computePipelineDesc;
 	computePipelineDesc.compute.constantCount = 0;
 	computePipelineDesc.compute.constants = nullptr;
-	computePipelineDesc.compute.entryPoint = "computeStuff";
+#if MIPMAP_GEN_OPTION == A
+	computePipelineDesc.compute.entryPoint = "computeMipMap_OptionA";
+#else
+	computePipelineDesc.compute.entryPoint = "computeMipMap_OptionB";
+#endif
 	computePipelineDesc.compute.module = computeShaderModule;
 	computePipelineDesc.layout = m_pipelineLayout;
 	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
@@ -317,8 +347,13 @@ void Application::onCompute() {
 	computePass.setPipeline(m_pipeline);
 	computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
+#if MIPMAP_GEN_OPTION == A
 	uint32_t invocationCountX = m_textureSize.width / 2;
 	uint32_t invocationCountY = m_textureSize.height / 2;
+#else
+	uint32_t invocationCountX = m_textureSize.width;
+	uint32_t invocationCountY = m_textureSize.height;
+#endif
 	uint32_t workgroupSizePerDim = 8;
 	// This ceils invocationCountX / workgroupSizePerDim
 	uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
@@ -332,7 +367,7 @@ void Application::onCompute() {
 	CommandBuffer commands = encoder.finish(CommandBufferDescriptor{});
 	queue.submit(commands);
 
-	saveOutputImage();
+	saveTexture(RESOURCE_DIR "/output.png", m_device, m_texture, 1);
 
 #if !defined(WEBGPU_BACKEND_WGPU)
 	wgpuCommandBufferRelease(commands);

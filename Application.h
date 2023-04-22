@@ -44,8 +44,10 @@ private:
 	bool initDevice();
 	void terminateDevice();
 
+	void initTexture();
+	void terminateTexture();
+
 	void initTextureViews();
-	void saveOutputImage();
 	void terminateTextureViews();
 
 	void initBindGroup();

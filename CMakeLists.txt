@@ -23,7 +23,7 @@ add_executable(App
 	webgpu-release.h
 	stb_image.h
 	stb_image_write.h
-	save_image.h
+	save_texture.h
 )
 
 if(DEV_MODE)
