@@ -46,8 +46,6 @@
 #include <string>
 #include <array>
 
-#define MIPMAP_GEN_OPTION B
-
 constexpr float PI = 3.14159265358979323846f;
 
 using namespace wgpu;
@@ -248,12 +246,6 @@ void Application::initBindGroup() {
 	entries[1].binding = 1;
 	entries[1].textureView = m_outputTextureView;
 
-#if MIPMAP_GEN_OPTION == B
-	entries.resize(3);
-	entries[2].binding = 2;
-	entries[2].textureView = m_outputTextureView;
-#endif
-
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
 	bindGroupDesc.entryCount = (uint32_t)entries.size();
@@ -282,15 +274,6 @@ void Application::initBindGroupLayout() {
 	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2D;
 	bindings[1].visibility = ShaderStage::Compute;
 
-#if MIPMAP_GEN_OPTION == B
-	bindings.resize(3);
-	// Extra binding to access the output in read mode
-	bindings[2].binding = 2;
-	bindings[2].texture.sampleType = TextureSampleType::Float;
-	bindings[2].texture.viewDimension = TextureViewDimension::_2D;
-	bindings[2].visibility = ShaderStage::Compute;
-#endif
-
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
 	bindGroupLayoutDesc.entries = bindings.data();
@@ -315,11 +298,7 @@ void Application::initComputePipeline() {
 	ComputePipelineDescriptor computePipelineDesc;
 	computePipelineDesc.compute.constantCount = 0;
 	computePipelineDesc.compute.constants = nullptr;
-#if MIPMAP_GEN_OPTION == A
-	computePipelineDesc.compute.entryPoint = "computeMipMap_OptionA";
-#else
-	computePipelineDesc.compute.entryPoint = "computeMipMap_OptionB";
-#endif
+	computePipelineDesc.compute.entryPoint = "computeMipMap";
 	computePipelineDesc.compute.module = computeShaderModule;
 	computePipelineDesc.layout = m_pipelineLayout;
 	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
@@ -347,13 +326,8 @@ void Application::onCompute() {
 	computePass.setPipeline(m_pipeline);
 	computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-#if MIPMAP_GEN_OPTION == A
 	uint32_t invocationCountX = m_textureSize.width / 2;
 	uint32_t invocationCountY = m_textureSize.height / 2;
-#else
-	uint32_t invocationCountX = m_textureSize.width;
-	uint32_t invocationCountY = m_textureSize.height;
-#endif
 	uint32_t workgroupSizePerDim = 8;
 	// This ceils invocationCountX / workgroupSizePerDim
 	uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
