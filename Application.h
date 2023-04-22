@@ -72,13 +72,13 @@ private:
 	void initGui();
 	void terminateGui();
 
-	void initTexture();
-	void terminateTexture();
+	void initTextures();
+	void terminateTextures();
 
 	void initTextureViews();
 	void terminateTextureViews();
 
-	void initBindGroup(uint32_t nextMipLevel);
+	void initBindGroup();
 	void terminateBindGroup();
 
 	void initBindGroupLayout();
@@ -96,20 +96,26 @@ private:
 	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
 	wgpu::SwapChain m_swapChain = nullptr;
+	wgpu::BindGroup m_bindGroup = nullptr;
+	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	wgpu::PipelineLayout m_pipelineLayout = nullptr;
 	wgpu::ComputePipeline m_pipeline = nullptr;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
 
 	bool m_shouldCompute = true;
-	wgpu::Texture m_texture = nullptr;
-	std::vector<wgpu::TextureView> m_textureMipViews;
-	std::vector<wgpu::Extent3D> m_textureMipSizes;
-	wgpu::BindGroup m_bindGroup = nullptr;
-	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
+	wgpu::Texture m_inputTexture = nullptr;
+	wgpu::Texture m_outputTexture = nullptr;
+	wgpu::TextureView m_inputTextureView = nullptr;
+	wgpu::TextureView m_outputTextureView = nullptr;
 
-	struct Parameters {
+	struct Uniforms {
 		float test = 0.5f;
 	};
-	Parameters m_parameters;
+	Uniforms m_uniforms;
+
+	struct Settings {
+		float scale = 0.5f;
+	};
+	Settings m_settings;
 };

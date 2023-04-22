@@ -89,14 +89,16 @@ bool Application::onInit() {
 	initGui();
 	initBindGroupLayout();
 	initComputePipeline();
-	initTexture();
+	initTextures();
 	initTextureViews();
+	initBindGroup();
 	return true;
 }
 
 void Application::onFinish() {
+	terminateBindGroup();
 	terminateTextureViews();
-	terminateTexture();
+	terminateTextures();
 	terminateComputePipeline();
 	terminateBindGroupLayout();
 	terminateGui();
@@ -266,7 +268,7 @@ void Application::terminateGui() {
 	ImGui_ImplGlfw_Shutdown();
 }
 
-void Application::initTexture() {
+void Application::initTextures() {
 	// Load image data
 	int width, height, channels;
 	uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
@@ -281,23 +283,26 @@ void Application::initTexture() {
 	textureDesc.sampleCount = 1;
 	textureDesc.viewFormatCount = 0;
 	textureDesc.viewFormats = nullptr;
+	textureDesc.mipLevelCount = 1;
 
+	textureDesc.label = "Input";
 	textureDesc.usage = (
-		TextureUsage::TextureBinding | // to read the texture in a shader
-		TextureUsage::StorageBinding | // to write the texture in a shader
-		TextureUsage::CopyDst | // to upload the input data
-		TextureUsage::CopySrc   // to save the output data
+		TextureUsage::TextureBinding | // to bind the texture in a shader
+		TextureUsage::CopyDst // to upload the input data
 	);
+	m_inputTexture = m_device.createTexture(textureDesc);
 
-	textureDesc.mipLevelCount = getMaxMipLevelCount(textureSize);
-	m_textureMipSizes.resize(textureDesc.mipLevelCount);
-	m_textureMipSizes[0] = textureSize;
-
-	m_texture = m_device.createTexture(textureDesc);
+	textureDesc.label = "Output";
+	textureDesc.usage = (
+		TextureUsage::TextureBinding | // to bind the texture in a shader
+		TextureUsage::StorageBinding | // to write the texture in a shader
+		TextureUsage::CopySrc // to save the output data
+	);
+	m_outputTexture = m_device.createTexture(textureDesc);
 
 	// Upload texture data for MIP level 0 to the GPU
 	ImageCopyTexture destination;
-	destination.texture = m_texture;
+	destination.texture = m_inputTexture;
 	destination.origin = { 0, 0, 0 };
 	destination.aspect = TextureAspect::All;
 	destination.mipLevel = 0;
@@ -311,9 +316,12 @@ void Application::initTexture() {
 	stbi_image_free(pixelData);
 }
 
-void Application::terminateTexture() {
-	m_texture.destroy();
-	wgpuTextureRelease(m_texture);
+void Application::terminateTextures() {
+	m_inputTexture.destroy();
+	wgpuTextureRelease(m_inputTexture);
+
+	m_outputTexture.destroy();
+	wgpuTextureRelease(m_outputTexture);
 }
 
 void Application::initTextureViews() {
@@ -323,47 +331,32 @@ void Application::initTextureViews() {
 	textureViewDesc.arrayLayerCount = 1;
 	textureViewDesc.dimension = TextureViewDimension::_2D;
 	textureViewDesc.format = TextureFormat::RGBA8Unorm;
-
-	// Each view must correspond to only 1 MIP level at a time
 	textureViewDesc.mipLevelCount = 1;
+	textureViewDesc.baseMipLevel = 0;
 
-	m_textureMipViews.reserve(m_textureMipSizes.size());
-	for (uint32_t level = 0; level < m_textureMipSizes.size(); ++level) {
-		std::string label = "MIP level #" + std::to_string(level);
-		textureViewDesc.label = label.c_str();
-		textureViewDesc.baseMipLevel = level;
-		m_textureMipViews.push_back(m_texture.createView(textureViewDesc));
+	textureViewDesc.label = "Input";
+	m_inputTextureView = m_inputTexture.createView(textureViewDesc);
 
-		if (level > 0) {
-			Extent3D previousSize = m_textureMipSizes[level - 1];
-			m_textureMipSizes[level] = {
-				previousSize.width / 2,
-				previousSize.height / 2,
-				previousSize.depthOrArrayLayers / 2
-			};
-		}
-	}
+	textureViewDesc.label = "Output";
+	m_outputTextureView = m_outputTexture.createView(textureViewDesc);
 }
 
 void Application::terminateTextureViews() {
-	for (TextureView v : m_textureMipViews) {
-		wgpuTextureViewRelease(v);
-	}
-	m_textureMipViews.clear();
-	m_textureMipSizes.clear();
+	wgpuTextureViewRelease(m_inputTextureView);
+	wgpuTextureViewRelease(m_outputTextureView);
 }
 
-void Application::initBindGroup(uint32_t nextMipLevel) {
+void Application::initBindGroup() {
 	// Create compute bind group
 	std::vector<BindGroupEntry> entries(2, Default);
 
 	// Input buffer
 	entries[0].binding = 0;
-	entries[0].textureView = m_textureMipViews[nextMipLevel - 1];
+	entries[0].textureView = m_inputTextureView;
 
 	// Output buffer
 	entries[1].binding = 1;
-	entries[1].textureView = m_textureMipViews[nextMipLevel];
+	entries[1].textureView = m_outputTextureView;
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
@@ -475,23 +468,43 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
-	drawList->AddRectFilled({ 0, 0 }, { 20, 20 }, ImColor(255, 0, 0));
-	drawList->AddImage((ImTextureID)m_textureMipViews[0],{ 20, 0 }, { 220, 200 });
+	// Display images
+	{
+		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+		float offset = 0.0f;
+		float width = 0.0f;
+
+		// Input image
+		width = m_inputTexture.getWidth() * m_settings.scale;
+		drawList->AddImage((ImTextureID)m_inputTextureView, { offset, 0 }, {
+			offset + width,
+			m_inputTexture.getHeight() * m_settings.scale
+		});
+		offset += width;
+
+		// Output image
+		width = m_outputTexture.getWidth() * m_settings.scale;
+		drawList->AddImage((ImTextureID)m_outputTextureView, { offset, 0 }, {
+			offset + width,
+			m_outputTexture.getHeight() * m_settings.scale
+		});
+		offset += width;
+	}
 
 	bool changed = false;
-	ImGui::Begin("Parameters");
-	changed = ImGui::SliderFloat("Test", &m_parameters.test, 0.0f, 1.0f) || changed;
-	if (ImGui::Button("Save MIP levels")) {
-		// Save all MIP levels
-		for (uint32_t nextLevel = 0; nextLevel < m_textureMipSizes.size(); ++nextLevel) {
-			std::filesystem::path path = RESOURCE_DIR "/output.mip" + std::to_string(nextLevel) + ".png";
-			saveTexture(path, m_device, m_texture, nextLevel);
-		}
-	}
+	ImGui::Begin("Uniforms");
+	changed = ImGui::SliderFloat("Test", &m_uniforms.test, 0.0f, 1.0f) || changed;
 	ImGui::End();
 
 	m_shouldCompute = changed;
+
+	ImGui::Begin("Settings");
+	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
+	if (ImGui::Button("Save MIP levels")) {
+		std::filesystem::path path = RESOURCE_DIR "/output.png";
+		saveTexture(path, m_device, m_outputTexture, 0);
+	}
+	ImGui::End();
 
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
@@ -512,19 +525,16 @@ void Application::onCompute() {
 
 	computePass.setPipeline(m_pipeline);
 
-	for (uint32_t nextLevel = 1; nextLevel < m_textureMipSizes.size(); ++nextLevel) {
-		initBindGroup(nextLevel);
+	for (uint32_t i = 0; i < 1; ++i) {
 		computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-		uint32_t invocationCountX = m_textureMipSizes[nextLevel].width;
-		uint32_t invocationCountY = m_textureMipSizes[nextLevel].height;
+		uint32_t invocationCountX = m_inputTexture.getWidth();
+		uint32_t invocationCountY = m_inputTexture.getHeight();
 		uint32_t workgroupSizePerDim = 8;
 		// This ceils invocationCountX / workgroupSizePerDim
 		uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
 		uint32_t workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;
 		computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY, 1);
-
-		terminateBindGroup();
 	}
 
 	// Finalize compute pass
