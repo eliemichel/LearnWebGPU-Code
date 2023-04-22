@@ -50,7 +50,7 @@ private:
 	void initTextureViews();
 	void terminateTextureViews();
 
-	void initBindGroup();
+	void initBindGroup(uint32_t nextMipLevel);
 	void terminateBindGroup();
 
 	void initBindGroupLayout();
@@ -67,9 +67,8 @@ private:
 	wgpu::PipelineLayout m_pipelineLayout = nullptr;
 	wgpu::ComputePipeline m_pipeline = nullptr;
 	wgpu::Texture m_texture = nullptr;
-	wgpu::Extent3D m_textureSize;
-	wgpu::TextureView m_inputTextureView = nullptr;
-	wgpu::TextureView m_outputTextureView = nullptr;
+	std::vector<wgpu::TextureView> m_textureMipViews;
+	std::vector<wgpu::Extent3D> m_textureMipSizes;
 	wgpu::BindGroup m_bindGroup = nullptr;
 	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
