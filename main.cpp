@@ -30,7 +30,13 @@ int main(int, char**) {
 	Application app;
 	app.onInit();
 
-	app.onCompute();
+	while (app.isRunning()) {
+		app.onFrame();
+
+		if (app.shouldCompute()) {
+			app.onCompute();
+		}
+	}
 
 	app.onFinish();
 	return 0;

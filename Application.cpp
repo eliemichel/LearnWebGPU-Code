@@ -31,9 +31,15 @@
 
 #include "stb_image.h"
 
+#include <glfw3webgpu/glfw3webgpu.h>
+
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+
+#include <imgui.h>
+#include <backends/imgui_impl_wgpu.h>
+#include <backends/imgui_impl_glfw.h>
 
 #include <webgpu/webgpu.hpp>
 #include "webgpu-release.h"
@@ -54,6 +60,8 @@ using glm::vec4;
 using glm::vec3;
 using glm::vec2;
 
+// == Utils == //
+
 // Equivalent of std::bit_width that is available from C++20 onward
 uint32_t bit_width(uint32_t m) {
 	if (m == 0) return 0;
@@ -64,9 +72,21 @@ uint32_t getMaxMipLevelCount(const Extent3D& textureSize) {
 	return bit_width(std::max(textureSize.width, textureSize.height));
 }
 
+// == GLFW Callbacks == //
+
+void onWindowResize(GLFWwindow* window, int width, int height) {
+	(void)width; (void)height;
+	auto pApp = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+	if (pApp != nullptr) pApp->onResize();
+}
+
+// == Application == //
+
 bool Application::onInit() {
-	m_bufferSize = 64 * sizeof(float);
+	if (!initWindow()) return false;
 	if (!initDevice()) return false;
+	initSwapChain();
+	initGui();
 	initBindGroupLayout();
 	initComputePipeline();
 	initTexture();
@@ -79,7 +99,18 @@ void Application::onFinish() {
 	terminateTexture();
 	terminateComputePipeline();
 	terminateBindGroupLayout();
+	terminateGui();
+	terminateSwapChain();
 	terminateDevice();
+	terminateWindow();
+}
+
+bool Application::isRunning() {
+	return !glfwWindowShouldClose(m_window);
+}
+
+bool Application::shouldCompute() {
+	return m_shouldCompute;
 }
 
 bool Application::initDevice() {
@@ -92,8 +123,10 @@ bool Application::initDevice() {
 
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
+	m_surface = glfwGetWGPUSurface(m_instance, m_window);
 	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = nullptr;
+	adapterOpts.compatibleSurface = m_surface;
 	Adapter adapter = m_instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
@@ -107,7 +140,7 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
-	requiredLimits.limits.maxBufferSize = m_bufferSize;
+	requiredLimits.limits.maxBufferSize = 0;
 	requiredLimits.limits.maxTextureDimension1D = 4096;
 	requiredLimits.limits.maxTextureDimension2D = 4096;
 	requiredLimits.limits.maxTextureDimension3D = 4096;
@@ -122,7 +155,7 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxComputeWorkgroupSizeZ = 1;
 	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 32;
 	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 2;
-	requiredLimits.limits.maxStorageBufferBindingSize = m_bufferSize;
+	requiredLimits.limits.maxStorageBufferBindingSize = 0;
 
 	// Create device
 	DeviceDescriptor deviceDesc{};
@@ -146,8 +179,10 @@ bool Application::initDevice() {
 		std::cout << std::endl;
 	});
 
+	m_queue = m_device.getQueue();
+
 #ifdef WEBGPU_BACKEND_WGPU
-	m_device.getQueue().submit(0, nullptr);
+	m_queue.submit(0, nullptr);
 #else
 	m_instance.processEvents();
 #endif
@@ -156,8 +191,79 @@ bool Application::initDevice() {
 }
 
 void Application::terminateDevice() {
+#ifndef WEBGPU_BACKEND_WGPU
+	wgpuQueueRelease(m_queue);
+#endif WEBGPU_BACKEND_WGPU
 	wgpuDeviceRelease(m_device);
 	wgpuInstanceRelease(m_instance);
+}
+
+bool Application::initWindow() {
+	if (!glfwInit()) {
+		std::cerr << "Could not initialize GLFW!" << std::endl;
+		return false;
+	}
+
+	// Create window
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	if (!m_window) {
+		std::cerr << "Could not open window!" << std::endl;
+		return false;
+	}
+
+	// Add window callbacks
+	glfwSetWindowUserPointer(m_window, this);
+	glfwSetFramebufferSizeCallback(m_window, onWindowResize);
+	return true;
+}
+
+void Application::terminateWindow() {
+	glfwDestroyWindow(m_window);
+	glfwTerminate();
+}
+
+
+void Application::initSwapChain() {
+#ifdef WEBGPU_BACKEND_DAWN
+	m_swapChainFormat = TextureFormat::BGRA8Unorm;
+#else
+	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#endif
+
+	int width, height;
+	glfwGetFramebufferSize(m_window, &width, &height);
+
+	std::cout << "Creating swapchain..." << std::endl;
+	m_swapChainDesc = {};
+	m_swapChainDesc.width = (uint32_t)width;
+	m_swapChainDesc.height = (uint32_t)height;
+	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
+	m_swapChainDesc.format = m_swapChainFormat;
+	m_swapChainDesc.presentMode = PresentMode::Fifo;
+	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
+	std::cout << "Swapchain: " << m_swapChain << std::endl;
+}
+
+void Application::terminateSwapChain() {
+	wgpuSwapChainRelease(m_swapChain);
+}
+
+void Application::initGui() {
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplGlfw_InitForOther(m_window, true);
+	ImGui_ImplWGPU_Init(m_device, 3, m_swapChainFormat, TextureFormat::Undefined);
+}
+
+void Application::terminateGui() {
+	ImGui_ImplWGPU_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
 }
 
 void Application::initTexture() {
@@ -189,8 +295,6 @@ void Application::initTexture() {
 
 	m_texture = m_device.createTexture(textureDesc);
 
-	Queue queue = m_device.getQueue();
-
 	// Upload texture data for MIP level 0 to the GPU
 	ImageCopyTexture destination;
 	destination.texture = m_texture;
@@ -201,11 +305,7 @@ void Application::initTexture() {
 	source.offset = 0;
 	source.bytesPerRow = 4 * textureSize.width;
 	source.rowsPerImage = textureSize.height;
-	queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, textureSize);
-
-#if !defined(WEBGPU_BACKEND_WGPU)
-	wgpuQueueRelease(queue);
-#endif
+	m_queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, textureSize);
 
 	// Free CPU-side data
 	stbi_image_free(pixelData);
@@ -328,8 +428,77 @@ void Application::terminateComputePipeline() {
 	wgpuPipelineLayoutRelease(m_pipelineLayout);
 }
 
+void Application::onFrame() {
+	glfwPollEvents();
+
+	TextureView nextTexture = m_swapChain.getCurrentTextureView();
+	if (!nextTexture) {
+		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
+		return;
+	}
+
+	RenderPassDescriptor renderPassDesc = Default;
+	WGPURenderPassColorAttachment renderPassColorAttachment{};
+	renderPassColorAttachment.view = nextTexture;
+	renderPassColorAttachment.resolveTarget = nullptr;
+	renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
+	renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
+	renderPassColorAttachment.clearValue = WGPUColor{ 0.0, 0.0, 0.0, 1.0 };
+	renderPassDesc.colorAttachmentCount = 1;
+	renderPassDesc.colorAttachments = &renderPassColorAttachment;
+
+	CommandEncoder encoder = m_device.createCommandEncoder(Default);
+	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+	onGui(renderPass);
+	renderPass.end();
+
+	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
+	m_queue.submit(command);
+
+	m_swapChain.present();
+#if !defined(WEBGPU_BACKEND_WGPU)
+	wgpuCommandBufferRelease(command);
+	wgpuCommandEncoderRelease(encoder);
+	wgpuRenderPassEncoderRelease(renderPass);
+#endif
+
+	wgpuTextureViewRelease(nextTexture);
+#ifdef WEBGPU_BACKEND_WGPU
+	wgpuQueueSubmit(m_queue, 0, nullptr);
+#else
+	wgpuDeviceTick(m_device);
+#endif
+}
+
+void Application::onGui(RenderPassEncoder renderPass) {
+	ImGui_ImplWGPU_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+	drawList->AddRectFilled({ 0, 0 }, { 20, 20 }, ImColor(255, 0, 0));
+	drawList->AddImage((ImTextureID)m_textureMipViews[0],{ 20, 0 }, { 220, 200 });
+
+	bool changed = false;
+	ImGui::Begin("Parameters");
+	changed = ImGui::SliderFloat("Test", &m_parameters.test, 0.0f, 1.0f) || changed;
+	if (ImGui::Button("Save MIP levels")) {
+		// Save all MIP levels
+		for (uint32_t nextLevel = 0; nextLevel < m_textureMipSizes.size(); ++nextLevel) {
+			std::filesystem::path path = RESOURCE_DIR "/output.mip" + std::to_string(nextLevel) + ".png";
+			saveTexture(path, m_device, m_texture, nextLevel);
+		}
+	}
+	ImGui::End();
+
+	m_shouldCompute = changed;
+
+	ImGui::Render();
+	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
+}
+
 void Application::onCompute() {
-	Queue queue = m_device.getQueue();
+	std::cout << "Computing..." << std::endl;
 
 	// Initialize a command encoder
 	CommandEncoderDescriptor encoderDesc = Default;
@@ -363,18 +532,18 @@ void Application::onCompute() {
 
 	// Encode and submit the GPU commands
 	CommandBuffer commands = encoder.finish(CommandBufferDescriptor{});
-	queue.submit(commands);
-
-	// Save all MIP levels
-	for (uint32_t nextLevel = 0; nextLevel < m_textureMipSizes.size(); ++nextLevel) {
-		std::filesystem::path path = RESOURCE_DIR "/output.mip" + std::to_string(nextLevel) + ".png";
-		saveTexture(path, m_device, m_texture, nextLevel);
-	}
+	m_queue.submit(commands);
 
 #if !defined(WEBGPU_BACKEND_WGPU)
 	wgpuCommandBufferRelease(commands);
 	wgpuCommandEncoderRelease(encoder);
 	wgpuComputePassEncoderRelease(computePass);
-	wgpuQueueRelease(queue);
 #endif
+
+	m_shouldCompute = false;
+}
+
+void Application::onResize() {
+	terminateSwapChain();
+	initSwapChain();
 }
