@@ -521,13 +521,23 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	}
 
 	bool changed = false;
-	ImGui::Begin("Uniforms");
-	changed = ImGui::SliderFloat3("Kernel X", glm::value_ptr(m_uniforms.kernel[0]), -2.0f, 2.0f) || changed;
-	changed = ImGui::SliderFloat3("Kernel Y", glm::value_ptr(m_uniforms.kernel[1]), -2.0f, 2.0f) || changed;
-	changed = ImGui::SliderFloat3("Kernel Z", glm::value_ptr(m_uniforms.kernel[2]), -2.0f, 2.0f) || changed;
-	changed = ImGui::SliderFloat("Test", &m_uniforms.test, 0.0f, 1.0f) || changed;
+	ImGui::Begin("Parameters");
+	float minimum = m_parameters.normalize  ? 0.0f : -2.0f;
+	float maximum = m_parameters.normalize ? 4.0f : 2.0f;
+	changed = ImGui::Combo("Filter Type", (int*)&m_parameters.filterType, "Sum\0Maximum\0Minimum\0") || changed;
+	changed = ImGui::SliderFloat3("Kernel X", glm::value_ptr(m_parameters.kernel[0]), minimum, maximum) || changed;
+	changed = ImGui::SliderFloat3("Kernel Y", glm::value_ptr(m_parameters.kernel[1]), minimum, maximum) || changed;
+	changed = ImGui::SliderFloat3("Kernel Z", glm::value_ptr(m_parameters.kernel[2]), minimum, maximum) || changed;
+	changed = ImGui::Checkbox("Normalize", &m_parameters.normalize) || changed;
 	ImGui::End();
 
+	if (changed) {
+		float sum = dot(vec4(1.0, 1.0, 1.0, 0.0), m_parameters.kernel * vec3(1.0));
+		m_uniforms.kernel = m_parameters.normalize && std::abs(sum) > 1e-6
+			? m_parameters.kernel / sum
+			: m_parameters.kernel;
+		m_uniforms.filterType = (uint32_t)m_parameters.filterType;
+	}
 	m_shouldCompute = changed;
 
 	ImGui::Begin("Settings");
