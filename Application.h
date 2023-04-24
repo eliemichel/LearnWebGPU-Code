@@ -30,6 +30,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include <glm/glm.hpp>
+
 class Application {
 public:
 	// A function called only once at the beginning. Returns false is init failed.
@@ -72,6 +74,9 @@ private:
 	void initGui();
 	void terminateGui();
 
+	void initBuffers();
+	void terminateBuffers();
+
 	void initTextures();
 	void terminateTextures();
 
@@ -104,14 +109,18 @@ private:
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
 
 	bool m_shouldCompute = true;
+	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::Texture m_inputTexture = nullptr;
 	wgpu::Texture m_outputTexture = nullptr;
 	wgpu::TextureView m_inputTextureView = nullptr;
 	wgpu::TextureView m_outputTextureView = nullptr;
 
 	struct Uniforms {
+		glm::mat3x4 kernel = glm::mat3x4(0.0);
 		float test = 0.5f;
+		float _pad[3];
 	};
+	static_assert(sizeof(Uniforms) % 16 == 0);
 	Uniforms m_uniforms;
 
 	struct Settings {

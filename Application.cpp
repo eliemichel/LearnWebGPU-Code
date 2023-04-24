@@ -36,6 +36,7 @@
 #define GLM_FORCE_LEFT_HANDED
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+#include <glm/ext.hpp>
 
 #include <imgui.h>
 #include <backends/imgui_impl_wgpu.h>
@@ -89,6 +90,7 @@ bool Application::onInit() {
 	initGui();
 	initBindGroupLayout();
 	initComputePipeline();
+	initBuffers();
 	initTextures();
 	initTextureViews();
 	initBindGroup();
@@ -99,6 +101,7 @@ void Application::onFinish() {
 	terminateBindGroup();
 	terminateTextureViews();
 	terminateTextures();
+	terminateBuffers();
 	terminateComputePipeline();
 	terminateBindGroupLayout();
 	terminateGui();
@@ -268,6 +271,20 @@ void Application::terminateGui() {
 	ImGui_ImplGlfw_Shutdown();
 }
 
+void Application::initBuffers() {
+	BufferDescriptor desc;
+	desc.label = "Uniforms";
+	desc.mappedAtCreation = false;
+	desc.size = sizeof(Uniforms);
+	desc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	m_uniformBuffer = m_device.createBuffer(desc);
+}
+
+void Application::terminateBuffers() {
+	m_uniformBuffer.destroy();
+	wgpuBufferRelease(m_uniformBuffer);
+}
+
 void Application::initTextures() {
 	// Load image data
 	int width, height, channels;
@@ -348,7 +365,7 @@ void Application::terminateTextureViews() {
 
 void Application::initBindGroup() {
 	// Create compute bind group
-	std::vector<BindGroupEntry> entries(2, Default);
+	std::vector<BindGroupEntry> entries(3, Default);
 
 	// Input buffer
 	entries[0].binding = 0;
@@ -357,6 +374,12 @@ void Application::initBindGroup() {
 	// Output buffer
 	entries[1].binding = 1;
 	entries[1].textureView = m_outputTextureView;
+
+	// Uniforms
+	entries[2].binding = 2;
+	entries[2].buffer = m_uniformBuffer;
+	entries[2].offset = 0;
+	entries[2].size = sizeof(Uniforms);
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
@@ -371,7 +394,7 @@ void Application::terminateBindGroup() {
 
 void Application::initBindGroupLayout() {
 	// Create bind group layout
-	std::vector<BindGroupLayoutEntry> bindings(2, Default);
+	std::vector<BindGroupLayoutEntry> bindings(3, Default);
 
 	// Input image: MIP level 0 of the texture
 	bindings[0].binding = 0;
@@ -385,6 +408,12 @@ void Application::initBindGroupLayout() {
 	bindings[1].storageTexture.format = TextureFormat::RGBA8Unorm;
 	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2D;
 	bindings[1].visibility = ShaderStage::Compute;
+
+	// Uniforms
+	bindings[2].binding = 2;
+	bindings[2].buffer.type = BufferBindingType::Uniform;
+	bindings[2].buffer.minBindingSize = sizeof(Uniforms);
+	bindings[2].visibility = ShaderStage::Compute;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
@@ -410,7 +439,7 @@ void Application::initComputePipeline() {
 	ComputePipelineDescriptor computePipelineDesc;
 	computePipelineDesc.compute.constantCount = 0;
 	computePipelineDesc.compute.constants = nullptr;
-	computePipelineDesc.compute.entryPoint = "computeMipMap";
+	computePipelineDesc.compute.entryPoint = "computeFilter";
 	computePipelineDesc.compute.module = computeShaderModule;
 	computePipelineDesc.layout = m_pipelineLayout;
 	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
@@ -493,6 +522,9 @@ void Application::onGui(RenderPassEncoder renderPass) {
 
 	bool changed = false;
 	ImGui::Begin("Uniforms");
+	changed = ImGui::SliderFloat3("Kernel X", glm::value_ptr(m_uniforms.kernel[0]), -2.0f, 2.0f) || changed;
+	changed = ImGui::SliderFloat3("Kernel Y", glm::value_ptr(m_uniforms.kernel[1]), -2.0f, 2.0f) || changed;
+	changed = ImGui::SliderFloat3("Kernel Z", glm::value_ptr(m_uniforms.kernel[2]), -2.0f, 2.0f) || changed;
 	changed = ImGui::SliderFloat("Test", &m_uniforms.test, 0.0f, 1.0f) || changed;
 	ImGui::End();
 
@@ -500,7 +532,7 @@ void Application::onGui(RenderPassEncoder renderPass) {
 
 	ImGui::Begin("Settings");
 	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
-	if (ImGui::Button("Save MIP levels")) {
+	if (ImGui::Button("Save Output")) {
 		std::filesystem::path path = RESOURCE_DIR "/output.png";
 		saveTexture(path, m_device, m_outputTexture, 0);
 	}
@@ -512,6 +544,9 @@ void Application::onGui(RenderPassEncoder renderPass) {
 
 void Application::onCompute() {
 	std::cout << "Computing..." << std::endl;
+
+	// Update uniforms
+	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(Uniforms));
 
 	// Initialize a command encoder
 	CommandEncoderDescriptor encoderDesc = Default;
