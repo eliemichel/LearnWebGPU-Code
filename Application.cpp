@@ -310,6 +310,7 @@ void Application::initTextures() {
 	);
 	m_inputTexture = m_device.createTexture(textureDesc);
 
+	textureDesc.size = { (uint32_t)height, (uint32_t)height, 6 };
 	textureDesc.label = "Output";
 	textureDesc.usage = (
 		TextureUsage::TextureBinding | // to bind the texture in a shader
@@ -355,13 +356,33 @@ void Application::initTextureViews() {
 	textureViewDesc.label = "Input";
 	m_inputTextureView = m_inputTexture.createView(textureViewDesc);
 
-	textureViewDesc.label = "Output";
+	const char* outputLabels[] = {
+		"Output Positive X",
+		"Output Negative X",
+		"Output Positive Y",
+		"Output Negative Y",
+		"Output Positive Z",
+		"Output Negative Z",
+	};
+
+	for (uint32_t i = 0; i < 6; ++i) {
+		textureViewDesc.label = outputLabels[i];
+		textureViewDesc.baseArrayLayer = i;
+		m_outputTextureLayers[i] = m_outputTexture.createView(textureViewDesc);
+	}
+
+	textureViewDesc.baseArrayLayer = 0;
+	textureViewDesc.arrayLayerCount = 6;
+	textureViewDesc.dimension = TextureViewDimension::_2DArray;
 	m_outputTextureView = m_outputTexture.createView(textureViewDesc);
 }
 
 void Application::terminateTextureViews() {
 	wgpuTextureViewRelease(m_inputTextureView);
 	wgpuTextureViewRelease(m_outputTextureView);
+	for (TextureView v : m_outputTextureLayers) {
+		wgpuTextureViewRelease(v);
+	}
 }
 
 void Application::initBindGroup() {
@@ -397,17 +418,17 @@ void Application::initBindGroupLayout() {
 	// Create bind group layout
 	std::vector<BindGroupLayoutEntry> bindings(3, Default);
 
-	// Input image: MIP level 0 of the texture
+	// Input image: Equidirectional map
 	bindings[0].binding = 0;
 	bindings[0].texture.sampleType = TextureSampleType::Float;
 	bindings[0].texture.viewDimension = TextureViewDimension::_2D;
 	bindings[0].visibility = ShaderStage::Compute;
 
-	// Output image: MIP level 1 of the texture
+	// Output image: Cube Map
 	bindings[1].binding = 1;
 	bindings[1].storageTexture.access = StorageTextureAccess::WriteOnly;
 	bindings[1].storageTexture.format = TextureFormat::RGBA8Unorm;
-	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2D;
+	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2DArray;
 	bindings[1].visibility = ShaderStage::Compute;
 
 	// Uniforms
@@ -440,7 +461,7 @@ void Application::initComputePipeline() {
 	ComputePipelineDescriptor computePipelineDesc;
 	computePipelineDesc.compute.constantCount = 0;
 	computePipelineDesc.compute.constants = nullptr;
-	computePipelineDesc.compute.entryPoint = "computeFilter";
+	computePipelineDesc.compute.entryPoint = "computeCubeMapFace";
 	computePipelineDesc.compute.module = computeShaderModule;
 	computePipelineDesc.layout = m_pipelineLayout;
 	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
@@ -513,12 +534,14 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		offset += width;
 
 		// Output image
-		width = m_outputTexture.getWidth() * m_settings.scale;
-		drawList->AddImage((ImTextureID)m_outputTextureView, { offset, 0 }, {
-			offset + width,
-			m_outputTexture.getHeight() * m_settings.scale
-		});
-		offset += width;
+		for (uint32_t layer = 0; layer < 6; ++layer) {
+			width = m_outputTexture.getWidth() * m_settings.scale;
+			drawList->AddImage((ImTextureID)m_outputTextureLayers[layer], { offset, 0 }, {
+				offset + width,
+				m_outputTexture.getHeight() * m_settings.scale
+				});
+			offset += width;
+		}
 	}
 
 	bool changed = false;
@@ -574,9 +597,9 @@ void Application::onCompute() {
 	for (uint32_t i = 0; i < 1; ++i) {
 		computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-		uint32_t invocationCountX = m_inputTexture.getWidth();
-		uint32_t invocationCountY = m_inputTexture.getHeight();
-		uint32_t workgroupSizePerDim = 8;
+		uint32_t invocationCountX = m_outputTexture.getWidth();
+		uint32_t invocationCountY = m_outputTexture.getHeight();
+		uint32_t workgroupSizePerDim = 4;
 		// This ceils invocationCountX / workgroupSizePerDim
 		uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
 		uint32_t workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;

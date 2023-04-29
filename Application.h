@@ -32,6 +32,9 @@
 
 #include <glm/glm.hpp>
 
+#include <array>
+#include <memory>
+
 class Application {
 public:
 	// A function called only once at the beginning. Returns false is init failed.
@@ -115,6 +118,7 @@ private:
 	wgpu::Texture m_outputTexture = nullptr;
 	wgpu::TextureView m_inputTextureView = nullptr;
 	wgpu::TextureView m_outputTextureView = nullptr;
+	std::array<wgpu::TextureView, 6> m_outputTextureLayers = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 
 	// Values exposed to the UI
 	enum class FilterType {
