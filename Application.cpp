@@ -288,7 +288,7 @@ void Application::terminateBuffers() {
 void Application::initTextures() {
 	// Load image data
 	int width, height, channels;
-	uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
+	uint8_t* pixelData = stbi_load(RESOURCE_DIR "/equirectangular.jpg", &width, &height, &channels, 4 /* force 4 channels */);
 	if (nullptr == pixelData) throw std::runtime_error("Could not load input texture!");
 	Extent3D textureSize = { (uint32_t)width, (uint32_t)height, 1 };
 
@@ -543,7 +543,7 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	ImGui::Begin("Settings");
 	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
 	if (ImGui::Button("Save Output")) {
-		std::filesystem::path path = RESOURCE_DIR "/output.png";
+		std::filesystem::path path = RESOURCE_DIR "/cubemap.png";
 		saveTexture(path, m_device, m_outputTexture, 0);
 	}
 	ImGui::End();
