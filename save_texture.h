@@ -5,6 +5,10 @@
 #include <filesystem>
 #include <string>
 
+#ifdef WEBGPU_BACKEND_WGPU
+#include <webgpu/wgpu.h>
+#endif
+
 bool saveTexture(const std::filesystem::path path, wgpu::Device device, wgpu::Texture texture, int mipLevel) {
 	using namespace wgpu;
 	

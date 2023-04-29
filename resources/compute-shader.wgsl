@@ -11,12 +11,12 @@ struct Uniforms {
 @compute @workgroup_size(8, 8)
 fn computeSobelX(@builtin(global_invocation_id) id: vec3<u32>) {
     let color = abs(
-          1 * textureLoad(inputTexture, vec2<u32>(id.x - 1, id.y - 1), 0).rgb
-        + 2 * textureLoad(inputTexture, vec2<u32>(id.x - 1, id.y + 0), 0).rgb
-        + 1 * textureLoad(inputTexture, vec2<u32>(id.x - 1, id.y + 1), 0).rgb
-        - 1 * textureLoad(inputTexture, vec2<u32>(id.x + 1, id.y - 1), 0).rgb
-        - 2 * textureLoad(inputTexture, vec2<u32>(id.x + 1, id.y + 0), 0).rgb
-        - 1 * textureLoad(inputTexture, vec2<u32>(id.x + 1, id.y + 1), 0).rgb
+          1.0 * textureLoad(inputTexture, vec2<u32>(id.x - 1u, id.y - 1u), 0).rgb
+        + 2.0 * textureLoad(inputTexture, vec2<u32>(id.x - 1u, id.y + 0u), 0).rgb
+        + 1.0 * textureLoad(inputTexture, vec2<u32>(id.x - 1u, id.y + 1u), 0).rgb
+        - 1.0 * textureLoad(inputTexture, vec2<u32>(id.x + 1u, id.y - 1u), 0).rgb
+        - 2.0 * textureLoad(inputTexture, vec2<u32>(id.x + 1u, id.y + 0u), 0).rgb
+        - 1.0 * textureLoad(inputTexture, vec2<u32>(id.x + 1u, id.y + 1u), 0).rgb
     );
     textureStore(outputTexture, id.xy, vec4<f32>(color, 1.0));
 }
@@ -41,15 +41,15 @@ fn reduce(v0: vec3<f32>, v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, v4: vec3<f
 @compute @workgroup_size(8, 8)
 fn computeFilter(@builtin(global_invocation_id) id: vec3<u32>) {
     let color = reduce(
-        uniforms.kernel[0][0] * textureLoad(inputTexture, vec2<u32>(id.x - 1, id.y - 1), 0).rgb,
-        uniforms.kernel[1][0] * textureLoad(inputTexture, vec2<u32>(id.x - 1, id.y + 0), 0).rgb,
-        uniforms.kernel[2][0] * textureLoad(inputTexture, vec2<u32>(id.x - 1, id.y + 1), 0).rgb,
-        uniforms.kernel[0][1] * textureLoad(inputTexture, vec2<u32>(id.x + 0, id.y - 1), 0).rgb,
-        uniforms.kernel[1][1] * textureLoad(inputTexture, vec2<u32>(id.x + 0, id.y + 0), 0).rgb,
-        uniforms.kernel[2][1] * textureLoad(inputTexture, vec2<u32>(id.x + 0, id.y + 1), 0).rgb,
-        uniforms.kernel[0][2] * textureLoad(inputTexture, vec2<u32>(id.x + 1, id.y - 1), 0).rgb,
-        uniforms.kernel[1][2] * textureLoad(inputTexture, vec2<u32>(id.x + 1, id.y + 0), 0).rgb,
-        uniforms.kernel[2][2] * textureLoad(inputTexture, vec2<u32>(id.x + 1, id.y + 1), 0).rgb
+        uniforms.kernel[0][0] * textureLoad(inputTexture, vec2<u32>(id.x - 1u, id.y - 1u), 0).rgb,
+        uniforms.kernel[1][0] * textureLoad(inputTexture, vec2<u32>(id.x - 1u, id.y + 0u), 0).rgb,
+        uniforms.kernel[2][0] * textureLoad(inputTexture, vec2<u32>(id.x - 1u, id.y + 1u), 0).rgb,
+        uniforms.kernel[0][1] * textureLoad(inputTexture, vec2<u32>(id.x + 0u, id.y - 1u), 0).rgb,
+        uniforms.kernel[1][1] * textureLoad(inputTexture, vec2<u32>(id.x + 0u, id.y + 0u), 0).rgb,
+        uniforms.kernel[2][1] * textureLoad(inputTexture, vec2<u32>(id.x + 0u, id.y + 1u), 0).rgb,
+        uniforms.kernel[0][2] * textureLoad(inputTexture, vec2<u32>(id.x + 1u, id.y - 1u), 0).rgb,
+        uniforms.kernel[1][2] * textureLoad(inputTexture, vec2<u32>(id.x + 1u, id.y + 0u), 0).rgb,
+        uniforms.kernel[2][2] * textureLoad(inputTexture, vec2<u32>(id.x + 1u, id.y + 1u), 0).rgb
     );
     textureStore(outputTexture, id.xy, vec4<f32>(color, 1.0));
 }

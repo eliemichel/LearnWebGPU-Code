@@ -132,12 +132,12 @@ bool Application::initDevice() {
 	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = nullptr;
 	adapterOpts.compatibleSurface = m_surface;
-	Adapter adapter = m_instance.requestAdapter(adapterOpts);
-	std::cout << "Got adapter: " << adapter << std::endl;
+	m_adapter = m_instance.requestAdapter(adapterOpts);
+	std::cout << "Got adapter: " << m_adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
 	SupportedLimits supportedLimits;
-	adapter.getLimits(&supportedLimits);
+	m_adapter.getLimits(&supportedLimits);
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 6;
 	requiredLimits.limits.maxVertexBuffers = 1;
@@ -145,7 +145,7 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
-	requiredLimits.limits.maxBufferSize = 0;
+	requiredLimits.limits.maxBufferSize = 80;
 	requiredLimits.limits.maxTextureDimension1D = 4096;
 	requiredLimits.limits.maxTextureDimension2D = 4096;
 	requiredLimits.limits.maxTextureDimension3D = 4096;
@@ -155,12 +155,13 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxVertexBufferArrayStride = 68;
 	requiredLimits.limits.maxInterStageShaderComponents = 17;
 	requiredLimits.limits.maxStorageBuffersPerShaderStage = 2;
-	requiredLimits.limits.maxComputeWorkgroupSizeX = 32;
-	requiredLimits.limits.maxComputeWorkgroupSizeY = 1;
+	requiredLimits.limits.maxComputeWorkgroupSizeX = 8;
+	requiredLimits.limits.maxComputeWorkgroupSizeY = 8;
 	requiredLimits.limits.maxComputeWorkgroupSizeZ = 1;
-	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 32;
+	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 64;
 	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 2;
 	requiredLimits.limits.maxStorageBufferBindingSize = 0;
+	requiredLimits.limits.maxStorageTexturesPerShaderStage = 1;
 
 	// Create device
 	DeviceDescriptor deviceDesc{};
@@ -168,7 +169,7 @@ bool Application::initDevice() {
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
-	m_device = adapter.requestDevice(deviceDesc);
+	m_device = m_adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
@@ -234,7 +235,7 @@ void Application::initSwapChain() {
 #ifdef WEBGPU_BACKEND_DAWN
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #else
-	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+	m_swapChainFormat = m_surface.getPreferredFormat(m_adapter);
 #endif
 
 	int width, height;
