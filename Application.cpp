@@ -117,12 +117,13 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxVertexBufferArrayStride = 68;
 	requiredLimits.limits.maxInterStageShaderComponents = 17;
 	requiredLimits.limits.maxStorageBuffersPerShaderStage = 2;
-	requiredLimits.limits.maxComputeWorkgroupSizeX = 32;
-	requiredLimits.limits.maxComputeWorkgroupSizeY = 1;
+	requiredLimits.limits.maxComputeWorkgroupSizeX = 8;
+	requiredLimits.limits.maxComputeWorkgroupSizeY = 8;
 	requiredLimits.limits.maxComputeWorkgroupSizeZ = 1;
-	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 32;
+	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 64;
 	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 2;
 	requiredLimits.limits.maxStorageBufferBindingSize = m_bufferSize;
+	requiredLimits.limits.maxStorageTexturesPerShaderStage = 1;
 
 	// Create device
 	DeviceDescriptor deviceDesc{};
