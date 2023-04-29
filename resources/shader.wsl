@@ -55,7 +55,7 @@ fn brdf(
 	// == Diffuse lobe ==
 	let diffuseColor = (1.0 - material.metallic) * material.baseColor;
 	var f_d = vec3<f32>(0.0);
-	if (material.highQuality != 0) {
+	if (material.highQuality != 0u) {
 		f_d = diffuseColor * Fd_Burley(NoV, NoL, LoH, alpha);
 	} else {
 		f_d = diffuseColor * Fd_Lambert();

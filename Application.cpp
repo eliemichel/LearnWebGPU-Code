@@ -126,7 +126,7 @@ bool Application::onInit() {
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
-	requiredLimits.limits.maxBufferSize = 1024 * 1024 * sizeof(float);
+	requiredLimits.limits.maxBufferSize = 4 * 1024 * 1024 * sizeof(float);
 	requiredLimits.limits.maxTextureDimension1D = 4096;
 	requiredLimits.limits.maxTextureDimension2D = 4096;
 	requiredLimits.limits.maxTextureDimension3D = 4096;
@@ -134,7 +134,7 @@ bool Application::onInit() {
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
 	requiredLimits.limits.maxSamplersPerShaderStage = 1;
 	requiredLimits.limits.maxVertexBufferArrayStride = 68;
-	requiredLimits.limits.maxInterStageShaderComponents = 17;
+	requiredLimits.limits.maxInterStageShaderComponents = 18;
 
 	// Create device
 	DeviceDescriptor deviceDesc{};

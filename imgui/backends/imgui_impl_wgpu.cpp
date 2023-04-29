@@ -32,12 +32,7 @@
 #include <limits.h>
 #include <webgpu/webgpu.h>
 
-// Temporary fix until wgpu-native fixes the regression
-#ifdef WEBGPU_BACKEND_WGPU
-#define WGPU_ANY_SIZE WGPU_WHOLE_SIZE
-#else
 #define WGPU_ANY_SIZE 0
-#endif
 
 // These differences of implementation should vanish as soon as WebGPU gets in version 1.0 stable
 #ifdef WEBGPU_BACKEND_WGPU
