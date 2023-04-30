@@ -523,25 +523,34 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	{
 		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 		float offset = 0.0f;
-		float width = 0.0f;
 
 		// Input image
-		width = m_inputTexture.getWidth() * m_settings.scale;
-		drawList->AddImage((ImTextureID)m_inputTextureView, { offset, 0 }, {
-			offset + width,
+		drawList->AddImage((ImTextureID)m_inputTextureView, { 0, 0 }, {
+			m_inputTexture.getWidth()* m_settings.scale,
 			m_inputTexture.getHeight() * m_settings.scale
 		});
-		offset += width;
+		offset += m_inputTexture.getWidth() * m_settings.scale;
 
-		// Output image
-		for (uint32_t layer = 0; layer < 6; ++layer) {
-			width = m_outputTexture.getWidth() * m_settings.scale;
-			drawList->AddImage((ImTextureID)m_outputTextureLayers[layer], { offset, 0 }, {
-				offset + width,
-				m_outputTexture.getHeight() * m_settings.scale
-				});
-			offset += width;
-		}
+		float s = m_outputTexture.getWidth() * m_settings.scale;
+
+		ImTextureID view;
+		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::NegativeX];
+		drawList->AddImage(view, { offset + 0 * s, s }, { offset + 1 * s, 2 * s });
+
+		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::PositiveY];
+		drawList->AddImage(view, { offset + 1 * s, s }, { offset + 2 * s, 2 * s });
+
+		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::PositiveX];
+		drawList->AddImage(view, { offset + 2 * s, s }, { offset + 3 * s, 2 * s });
+
+		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::NegativeY];
+		drawList->AddImage(view, { offset + 3 * s, s }, { offset + 4 * s, 2 * s });
+
+		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::PositiveZ];
+		drawList->AddImage(view, { offset + 1 * s, 0 * s }, { offset + 2 * s, 1 * s });
+
+		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::NegativeZ];
+		drawList->AddImage(view, { offset + 1 * s, 2 * s }, { offset + 2 * s,  3 * s });
 	}
 
 	bool changed = false;

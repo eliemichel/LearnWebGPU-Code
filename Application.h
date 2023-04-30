@@ -120,6 +120,15 @@ private:
 	wgpu::TextureView m_outputTextureView = nullptr;
 	std::array<wgpu::TextureView, 6> m_outputTextureLayers = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 
+	enum class CubeFace {
+		PositiveX = 0,
+		NegativeX = 1,
+		PositiveY = 2,
+		NegativeY = 3,
+		PositiveZ = 4,
+		NegativeZ = 5,
+	};
+
 	// Values exposed to the UI
 	enum class FilterType {
 		Sum,
