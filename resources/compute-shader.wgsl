@@ -11,6 +11,7 @@ struct Uniforms {
 @group(0) @binding(2) var outputEquirectangularTexture: texture_storage_2d<rgba8unorm,write>;
 @group(0) @binding(3) var outputCubemapTexture: texture_storage_2d_array<rgba8unorm,write>;
 @group(0) @binding(4) var<uniform> uniforms: Uniforms;
+@group(0) @binding(5) var textureSampler: sampler;
 
 const CUBE_FACE_TRANSFORM = array<mat3x3<f32>,6>(
     mat3x3<f32>(
@@ -77,9 +78,23 @@ fn computeEquirectangular(@builtin(global_invocation_id) id: vec3<u32>) {
         cos(theta),
     );
 
-    //let footprint = textureGather(0, inputCubemapTexture, direction, 0);
+    let samples = array<vec4<f32>, 4>(
+        textureGather(0, inputCubemapTexture, textureSampler, direction),
+        textureGather(1, inputCubemapTexture, textureSampler, direction),
+        textureGather(2, inputCubemapTexture, textureSampler, direction),
+        textureGather(3, inputCubemapTexture, textureSampler, direction),
+    );
 
-    //let color = textureLoad(inputCubemapTexture, id.xyz, 0);
-    let color = vec4<f32>(1.0);
+    // TODO: compute weights properly
+    // see https://www.reedbeta.com/blog/texture-gathers-and-coordinate-precision/
+    let u = 0.5;
+    let v = 0.5;
+    // TODO: could be represented as a matrix/vector product
+    let color = vec4<f32>(
+        mix(mix(samples[0].x, samples[0].y, u), mix(samples[0].w, samples[0].z, u), v),
+        mix(mix(samples[1].x, samples[1].y, u), mix(samples[1].w, samples[1].z, u), v),
+        mix(mix(samples[2].x, samples[2].y, u), mix(samples[2].w, samples[2].z, u), v),
+        mix(mix(samples[3].x, samples[3].y, u), mix(samples[3].w, samples[3].z, u), v),
+    );
     textureStore(outputEquirectangularTexture, id.xy, color);
 }

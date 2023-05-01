@@ -88,6 +88,9 @@ private:
 	void initTextureViews();
 	void terminateTextureViews();
 
+	void initSampler();
+	void terminateSampler();
+
 	void initBindGroup();
 	void terminateBindGroup();
 
@@ -123,6 +126,7 @@ private:
 	wgpu::TextureView m_equirectangularTextureView = nullptr;
 	wgpu::TextureView m_cubemapTextureView = nullptr;
 	std::array<wgpu::TextureView, 6> m_cubemapTextureLayers = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+	wgpu::Sampler m_sampler = nullptr;
 
 	enum class CubeFace {
 		PositiveX = 0,

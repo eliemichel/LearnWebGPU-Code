@@ -105,12 +105,14 @@ bool Application::onInit() {
 	initBuffers();
 	initTextures();
 	initTextureViews();
+	initSampler();
 	initBindGroup();
 	return true;
 }
 
 void Application::onFinish() {
 	terminateBindGroup();
+	terminateSampler();
 	terminateTextureViews();
 	terminateTextures();
 	terminateBuffers();
@@ -477,9 +479,22 @@ void Application::terminateTextureViews() {
 	}
 }
 
+void Application::initSampler() {
+	SamplerDescriptor desc;
+	desc.magFilter = FilterMode::Linear;
+	desc.minFilter = FilterMode::Linear;
+	desc.mipmapFilter = FilterMode::Linear;
+	desc.maxAnisotropy = 16;
+	m_sampler = m_device.createSampler(desc);
+}
+
+void Application::terminateSampler() {
+	wgpuSamplerRelease(m_sampler);
+}
+
 void Application::initBindGroup() {
 	// Create compute bind group
-	std::vector<BindGroupEntry> entries(3, Default);
+	std::vector<BindGroupEntry> entries(4, Default);
 
 	// Equirectangular texture
 	entries[0].binding = m_settings.mode == Mode::EquirectToCubemap ? 0 : 2;
@@ -495,6 +510,10 @@ void Application::initBindGroup() {
 	entries[2].offset = 0;
 	entries[2].size = sizeof(Uniforms);
 
+	// Uniforms
+	entries[3].binding = 5;
+	entries[3].sampler = m_sampler;
+
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
 	bindGroupDesc.entryCount = (uint32_t)entries.size();
@@ -508,7 +527,7 @@ void Application::terminateBindGroup() {
 
 void Application::initBindGroupLayout() {
 	// Create bind group layout
-	std::vector<BindGroupLayoutEntry> bindings(3, Default);
+	std::vector<BindGroupLayoutEntry> bindings(4, Default);
 
 	switch (m_settings.mode) {
 	case Mode::EquirectToCubemap:
@@ -548,6 +567,11 @@ void Application::initBindGroupLayout() {
 	bindings[2].buffer.type = BufferBindingType::Uniform;
 	bindings[2].buffer.minBindingSize = sizeof(Uniforms);
 	bindings[2].visibility = ShaderStage::Compute;
+
+	// Uniforms
+	bindings[3].binding = 5;
+	bindings[3].sampler.type = SamplerBindingType::Filtering;
+	bindings[3].visibility = ShaderStage::Compute;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
@@ -767,17 +791,26 @@ void Application::onCompute() {
 
 	computePass.setPipeline(m_pipeline);
 
-	for (uint32_t i = 0; i < 1; ++i) {
-		computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
-
-		uint32_t invocationCountX = m_cubemapTexture.getWidth();
-		uint32_t invocationCountY = m_cubemapTexture.getHeight();
-		uint32_t workgroupSizePerDim = m_settings.mode == Mode::EquirectToCubemap ? 4 : 8;
-		// This ceils invocationCountX / workgroupSizePerDim
-		uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
-		uint32_t workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;
-		computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY, 1);
+	computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
+	uint32_t invocationCountX = 0, invocationCountY = 0, workgroupSizePerDim = 0;
+	switch (m_settings.mode) {
+	case Mode::EquirectToCubemap:
+		invocationCountX = m_cubemapTexture.getWidth();
+		invocationCountY = m_cubemapTexture.getWidth();
+		workgroupSizePerDim = 4;
+		break;
+	case Mode::CubemapToEquirect:
+		invocationCountX = m_equirectangularTexture.getWidth();
+		invocationCountY = m_equirectangularTexture.getWidth();
+		workgroupSizePerDim = 8;
+		break;
+	default:
+		assert(false);
 	}
+	// This ceils invocationCountX / workgroupSizePerDim
+	uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
+	uint32_t workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;
+	computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY, 1);
 
 	// Finalize compute pass
 	computePass.end();
