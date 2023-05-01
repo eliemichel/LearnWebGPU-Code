@@ -308,7 +308,7 @@ void Application::initTextures() {
 		TextureUsage::TextureBinding | // to bind the texture in a shader
 		TextureUsage::CopyDst // to upload the input data
 	);
-	m_inputTexture = m_device.createTexture(textureDesc);
+	m_equirectangularTexture = m_device.createTexture(textureDesc);
 
 	uint32_t size = (uint32_t)std::pow(2, m_settings.outputSizeLog);
 	textureDesc.size = { size, size, 6 };
@@ -318,11 +318,11 @@ void Application::initTextures() {
 		TextureUsage::StorageBinding | // to write the texture in a shader
 		TextureUsage::CopySrc // to save the output data
 	);
-	m_outputTexture = m_device.createTexture(textureDesc);
+	m_cubemapTexture = m_device.createTexture(textureDesc);
 
 	// Upload texture data for MIP level 0 to the GPU
 	ImageCopyTexture destination;
-	destination.texture = m_inputTexture;
+	destination.texture = m_equirectangularTexture;
 	destination.origin = { 0, 0, 0 };
 	destination.aspect = TextureAspect::All;
 	destination.mipLevel = 0;
@@ -337,11 +337,11 @@ void Application::initTextures() {
 }
 
 void Application::terminateTextures() {
-	m_inputTexture.destroy();
-	wgpuTextureRelease(m_inputTexture);
+	m_equirectangularTexture.destroy();
+	wgpuTextureRelease(m_equirectangularTexture);
 
-	m_outputTexture.destroy();
-	wgpuTextureRelease(m_outputTexture);
+	m_cubemapTexture.destroy();
+	wgpuTextureRelease(m_cubemapTexture);
 }
 
 void Application::initTextureViews() {
@@ -355,7 +355,7 @@ void Application::initTextureViews() {
 	textureViewDesc.baseMipLevel = 0;
 
 	textureViewDesc.label = "Input";
-	m_inputTextureView = m_inputTexture.createView(textureViewDesc);
+	m_equirectangularTextureView = m_equirectangularTexture.createView(textureViewDesc);
 
 	const char* outputLabels[] = {
 		"Output Positive X",
@@ -369,19 +369,19 @@ void Application::initTextureViews() {
 	for (uint32_t i = 0; i < 6; ++i) {
 		textureViewDesc.label = outputLabels[i];
 		textureViewDesc.baseArrayLayer = i;
-		m_outputTextureLayers[i] = m_outputTexture.createView(textureViewDesc);
+		m_cubemapTextureLayers[i] = m_cubemapTexture.createView(textureViewDesc);
 	}
 
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = 6;
 	textureViewDesc.dimension = TextureViewDimension::_2DArray;
-	m_outputTextureView = m_outputTexture.createView(textureViewDesc);
+	m_cubemapTextureView = m_cubemapTexture.createView(textureViewDesc);
 }
 
 void Application::terminateTextureViews() {
-	wgpuTextureViewRelease(m_inputTextureView);
-	wgpuTextureViewRelease(m_outputTextureView);
-	for (TextureView v : m_outputTextureLayers) {
+	wgpuTextureViewRelease(m_equirectangularTextureView);
+	wgpuTextureViewRelease(m_cubemapTextureView);
+	for (TextureView v : m_cubemapTextureLayers) {
 		wgpuTextureViewRelease(v);
 	}
 }
@@ -392,11 +392,11 @@ void Application::initBindGroup() {
 
 	// Input buffer
 	entries[0].binding = 0;
-	entries[0].textureView = m_inputTextureView;
+	entries[0].textureView = m_equirectangularTextureView;
 
 	// Output buffer
 	entries[1].binding = 1;
-	entries[1].textureView = m_outputTextureView;
+	entries[1].textureView = m_cubemapTextureView;
 
 	// Uniforms
 	entries[2].binding = 2;
@@ -526,31 +526,31 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		float offset = 0.0f;
 
 		// Input image
-		drawList->AddImage((ImTextureID)m_inputTextureView, { 0, 0 }, {
-			m_inputTexture.getWidth()* m_settings.scale,
-			m_inputTexture.getHeight() * m_settings.scale
+		drawList->AddImage((ImTextureID)m_equirectangularTextureView, { 0, 0 }, {
+			m_equirectangularTexture.getWidth()* m_settings.scale,
+			m_equirectangularTexture.getHeight() * m_settings.scale
 		});
-		offset += m_inputTexture.getWidth() * m_settings.scale;
+		offset += m_equirectangularTexture.getWidth() * m_settings.scale;
 
-		float s = m_outputTexture.getWidth() * m_settings.scale;
+		float s = m_cubemapTexture.getWidth() * m_settings.scale;
 
 		ImTextureID view;
-		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::NegativeX];
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeX];
 		drawList->AddImage(view, { offset + 0 * s, s }, { offset + 1 * s, 2 * s });
 
-		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::PositiveY];
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveY];
 		drawList->AddImage(view, { offset + 1 * s, s }, { offset + 2 * s, 2 * s });
 
-		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::PositiveX];
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveX];
 		drawList->AddImage(view, { offset + 2 * s, s }, { offset + 3 * s, 2 * s });
 
-		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::NegativeY];
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeY];
 		drawList->AddImage(view, { offset + 3 * s, s }, { offset + 4 * s, 2 * s });
 
-		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::PositiveZ];
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveZ];
 		drawList->AddImage(view, { offset + 1 * s, 0 * s }, { offset + 2 * s, 1 * s });
 
-		view = (ImTextureID)m_outputTextureLayers[(int)CubeFace::NegativeZ];
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeZ];
 		drawList->AddImage(view, { offset + 1 * s, 2 * s }, { offset + 2 * s,  3 * s });
 	}
 
@@ -591,7 +591,7 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		};
 
 		for (uint32_t layer = 0; layer < 6; ++layer) {
-			saveTexture(outputPaths[layer], m_device, m_outputTexture, 0, layer);
+			saveTexture(outputPaths[layer], m_device, m_cubemapTexture, 0, layer);
 		}
 	}
 	ImGui::End();
@@ -631,8 +631,8 @@ void Application::onCompute() {
 	for (uint32_t i = 0; i < 1; ++i) {
 		computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-		uint32_t invocationCountX = m_outputTexture.getWidth();
-		uint32_t invocationCountY = m_outputTexture.getHeight();
+		uint32_t invocationCountX = m_cubemapTexture.getWidth();
+		uint32_t invocationCountY = m_cubemapTexture.getHeight();
 		uint32_t workgroupSizePerDim = 4;
 		// This ceils invocationCountX / workgroupSizePerDim
 		uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;

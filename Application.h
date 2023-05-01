@@ -115,11 +115,11 @@ private:
 	bool m_shouldCompute = true;
 	bool m_shouldReallocateTextures = false;
 	wgpu::Buffer m_uniformBuffer = nullptr;
-	wgpu::Texture m_inputTexture = nullptr;
-	wgpu::Texture m_outputTexture = nullptr;
-	wgpu::TextureView m_inputTextureView = nullptr;
-	wgpu::TextureView m_outputTextureView = nullptr;
-	std::array<wgpu::TextureView, 6> m_outputTextureLayers = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+	wgpu::Texture m_equirectangularTexture = nullptr;
+	wgpu::Texture m_cubemapTexture = nullptr;
+	wgpu::TextureView m_equirectangularTextureView = nullptr;
+	wgpu::TextureView m_cubemapTextureView = nullptr;
+	std::array<wgpu::TextureView, 6> m_cubemapTextureLayers = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 
 	enum class CubeFace {
 		PositiveX = 0,
