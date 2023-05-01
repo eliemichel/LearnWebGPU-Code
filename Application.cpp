@@ -55,11 +55,23 @@
 
 constexpr float PI = 3.14159265358979323846f;
 
+namespace fs = std::filesystem;
 using namespace wgpu;
 using glm::mat4x4;
 using glm::vec4;
 using glm::vec3;
 using glm::vec2;
+
+const fs::path cubemapPaths[] = {
+	RESOURCE_DIR "/cubemap-posX.png",
+	RESOURCE_DIR "/cubemap-negX.png",
+	RESOURCE_DIR "/cubemap-posY.png",
+	RESOURCE_DIR "/cubemap-negY.png",
+	RESOURCE_DIR "/cubemap-posZ.png",
+	RESOURCE_DIR "/cubemap-negZ.png",
+};
+
+const fs::path equirectangularPath = RESOURCE_DIR "/equirectangular.jpg";
 
 // == Utils == //
 
@@ -165,10 +177,8 @@ bool Application::initDevice() {
 
 	// Create device
 	DeviceDescriptor deviceDesc{};
-	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
-	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = m_adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << m_device << std::endl;
 
@@ -287,38 +297,41 @@ void Application::terminateBuffers() {
 }
 
 void Application::initTextures() {
+	switch (m_settings.mode) {
+	case Mode::EquirectToCubemap:
+		initTexturesEquirectToCubemap();
+		break;
+	case Mode::CubemapToEquirect:
+		initTexturesCubemapToEquirect();
+		break;
+	default:
+		assert(false);
+	}
+}
+
+void Application::initTexturesEquirectToCubemap() {
 	// Load image data
 	int width, height, channels;
-	uint8_t* pixelData = stbi_load(RESOURCE_DIR "/equirectangular.jpg", &width, &height, &channels, 4 /* force 4 channels */);
+	uint8_t* pixelData = stbi_load(equirectangularPath.string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
 	if (nullptr == pixelData) throw std::runtime_error("Could not load input texture!");
-	Extent3D textureSize = { (uint32_t)width, (uint32_t)height, 1 };
+	Extent3D equirectangulareSize = { (uint32_t)width, (uint32_t)height, 1 };
 
-	// Create texture
+	// Create equirectangular texture
 	TextureDescriptor textureDesc;
 	textureDesc.dimension = TextureDimension::_2D;
 	textureDesc.format = TextureFormat::RGBA8Unorm;
-	textureDesc.size = textureSize;
+	textureDesc.size = equirectangulareSize;
 	textureDesc.sampleCount = 1;
 	textureDesc.viewFormatCount = 0;
 	textureDesc.viewFormats = nullptr;
 	textureDesc.mipLevelCount = 1;
 
-	textureDesc.label = "Input";
+	textureDesc.label = "Equirectangular";
 	textureDesc.usage = (
 		TextureUsage::TextureBinding | // to bind the texture in a shader
 		TextureUsage::CopyDst // to upload the input data
 	);
 	m_equirectangularTexture = m_device.createTexture(textureDesc);
-
-	uint32_t size = (uint32_t)std::pow(2, m_settings.outputSizeLog);
-	textureDesc.size = { size, size, 6 };
-	textureDesc.label = "Output";
-	textureDesc.usage = (
-		TextureUsage::TextureBinding | // to bind the texture in a shader
-		TextureUsage::StorageBinding | // to write the texture in a shader
-		TextureUsage::CopySrc // to save the output data
-	);
-	m_cubemapTexture = m_device.createTexture(textureDesc);
 
 	// Upload texture data for MIP level 0 to the GPU
 	ImageCopyTexture destination;
@@ -328,12 +341,90 @@ void Application::initTextures() {
 	destination.mipLevel = 0;
 	TextureDataLayout source;
 	source.offset = 0;
-	source.bytesPerRow = 4 * textureSize.width;
-	source.rowsPerImage = textureSize.height;
-	m_queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, textureSize);
+	source.bytesPerRow = 4 * equirectangulareSize.width;
+	source.rowsPerImage = equirectangulareSize.height;
+	m_queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, equirectangulareSize);
 
 	// Free CPU-side data
 	stbi_image_free(pixelData);
+
+	// Create cubemap texture
+	uint32_t size = (uint32_t)std::pow(2, m_settings.outputSizeLog);
+	textureDesc.size = { size, size, 6 };
+	textureDesc.label = "Cubemap";
+	textureDesc.usage = (
+		TextureUsage::TextureBinding | // to bind the texture in a shader
+		TextureUsage::StorageBinding | // to write the texture in a shader
+		TextureUsage::CopySrc // to save the output data
+	);
+	m_cubemapTexture = m_device.createTexture(textureDesc);
+}
+
+void Application::initTexturesCubemapToEquirect() {
+	// Load image data
+	Extent3D cubemapSize = { 0, 0, 6 };
+	std::array<uint8_t*, 6> pixelData;
+	for (uint32_t layer = 0; layer < 6; ++layer) {
+		int width, height, channels;
+		pixelData[layer] = stbi_load(cubemapPaths[layer].string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
+		if (nullptr == pixelData[layer]) throw std::runtime_error("Could not load input texture!");
+		if (layer == 0) {
+			cubemapSize.width = (uint32_t)width;
+			cubemapSize.height = (uint32_t)height;
+		}
+		else {
+			if (cubemapSize.width != (uint32_t)width || cubemapSize.height != (uint32_t)height)
+				throw std::runtime_error("All cubemap faces must have the same size!");
+		}
+	}
+
+	// Create cubemap texture
+	TextureDescriptor textureDesc;
+	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.format = TextureFormat::RGBA8Unorm;
+	textureDesc.size = cubemapSize;
+	textureDesc.sampleCount = 1;
+	textureDesc.viewFormatCount = 0;
+	textureDesc.viewFormats = nullptr;
+	textureDesc.mipLevelCount = 1;
+
+	textureDesc.label = "Cubemap";
+	textureDesc.usage = (
+		TextureUsage::TextureBinding | // to bind the texture in a shader
+		TextureUsage::CopyDst // to upload the input data
+		);
+	 m_cubemapTexture = m_device.createTexture(textureDesc);
+
+	 // Upload texture data for MIP level 0 to the GPU
+	 ImageCopyTexture destination;
+	 destination.texture = m_cubemapTexture;
+	 destination.aspect = TextureAspect::All;
+	 destination.mipLevel = 0;
+
+	 TextureDataLayout source;
+	 source.offset = 0;
+	 source.bytesPerRow = 4 * cubemapSize.width;
+	 source.rowsPerImage = cubemapSize.height;
+
+	 Extent3D cubemapLayerSize = { cubemapSize.width , cubemapSize.height , 1 };
+	 for (uint32_t layer = 0; layer < 6; ++layer) {
+		 destination.origin = { 0, 0, layer };
+		 m_queue.writeTexture(destination, pixelData[layer], (size_t)(4 * cubemapSize.width * cubemapSize.height), source, cubemapLayerSize);
+
+		 // Free CPU-side data
+		 stbi_image_free(pixelData[layer]);
+	 }
+
+	// Create equirectangular texture
+	uint32_t size = (uint32_t)std::pow(2, m_settings.outputSizeLog);
+	textureDesc.size = { 2 * size, size, 1 };
+	textureDesc.label = "Equirectangular";
+	textureDesc.usage = (
+		TextureUsage::TextureBinding | // to bind the texture in a shader
+		TextureUsage::StorageBinding | // to write the texture in a shader
+		TextureUsage::CopySrc // to save the output data
+		);
+	m_equirectangularTexture = m_device.createTexture(textureDesc);
 }
 
 void Application::terminateTextures() {
@@ -354,16 +445,16 @@ void Application::initTextureViews() {
 	textureViewDesc.mipLevelCount = 1;
 	textureViewDesc.baseMipLevel = 0;
 
-	textureViewDesc.label = "Input";
+	textureViewDesc.label = "Equirectangular";
 	m_equirectangularTextureView = m_equirectangularTexture.createView(textureViewDesc);
 
 	const char* outputLabels[] = {
-		"Output Positive X",
-		"Output Negative X",
-		"Output Positive Y",
-		"Output Negative Y",
-		"Output Positive Z",
-		"Output Negative Z",
+		"CubeMap Positive X",
+		"CubeMap Negative X",
+		"CubeMap Positive Y",
+		"CubeMap Negative Y",
+		"CubeMap Positive Z",
+		"CubeMap Negative Z",
 	};
 
 	for (uint32_t i = 0; i < 6; ++i) {
@@ -374,7 +465,7 @@ void Application::initTextureViews() {
 
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = 6;
-	textureViewDesc.dimension = TextureViewDimension::_2DArray;
+	textureViewDesc.dimension = m_settings.mode == Mode::EquirectToCubemap ? TextureViewDimension::_2DArray : TextureViewDimension::Cube;
 	m_cubemapTextureView = m_cubemapTexture.createView(textureViewDesc);
 }
 
@@ -390,16 +481,16 @@ void Application::initBindGroup() {
 	// Create compute bind group
 	std::vector<BindGroupEntry> entries(3, Default);
 
-	// Input buffer
-	entries[0].binding = 0;
+	// Equirectangular texture
+	entries[0].binding = m_settings.mode == Mode::EquirectToCubemap ? 0 : 2;
 	entries[0].textureView = m_equirectangularTextureView;
 
-	// Output buffer
-	entries[1].binding = 1;
+	// CubeMap texture
+	entries[1].binding = m_settings.mode == Mode::EquirectToCubemap ? 3 : 1;
 	entries[1].textureView = m_cubemapTextureView;
 
 	// Uniforms
-	entries[2].binding = 2;
+	entries[2].binding = 4;
 	entries[2].buffer = m_uniformBuffer;
 	entries[2].offset = 0;
 	entries[2].size = sizeof(Uniforms);
@@ -419,21 +510,41 @@ void Application::initBindGroupLayout() {
 	// Create bind group layout
 	std::vector<BindGroupLayoutEntry> bindings(3, Default);
 
-	// Input image: Equidirectional map
-	bindings[0].binding = 0;
-	bindings[0].texture.sampleType = TextureSampleType::Float;
-	bindings[0].texture.viewDimension = TextureViewDimension::_2D;
-	bindings[0].visibility = ShaderStage::Compute;
+	switch (m_settings.mode) {
+	case Mode::EquirectToCubemap:
+		// Equidirectional map as input
+		bindings[0].binding = 0;
+		bindings[0].texture.sampleType = TextureSampleType::Float;
+		bindings[0].texture.viewDimension = TextureViewDimension::_2D;
+		bindings[0].visibility = ShaderStage::Compute;
 
-	// Output image: Cube Map
-	bindings[1].binding = 1;
-	bindings[1].storageTexture.access = StorageTextureAccess::WriteOnly;
-	bindings[1].storageTexture.format = TextureFormat::RGBA8Unorm;
-	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2DArray;
-	bindings[1].visibility = ShaderStage::Compute;
+		// CubeMap as output
+		bindings[1].binding = 3;
+		bindings[1].storageTexture.access = StorageTextureAccess::WriteOnly;
+		bindings[1].storageTexture.format = TextureFormat::RGBA8Unorm;
+		bindings[1].storageTexture.viewDimension = TextureViewDimension::_2DArray;
+		bindings[1].visibility = ShaderStage::Compute;
+		break;
+	case Mode::CubemapToEquirect:
+		// Equidirectional as output
+		bindings[0].binding = 2;
+		bindings[0].storageTexture.access = StorageTextureAccess::WriteOnly;
+		bindings[0].storageTexture.format = TextureFormat::RGBA8Unorm;
+		bindings[0].storageTexture.viewDimension = TextureViewDimension::_2D;
+		bindings[0].visibility = ShaderStage::Compute;
+
+		// CubeMap as input
+		bindings[1].binding = 1;
+		bindings[1].texture.sampleType = TextureSampleType::Float;
+		bindings[1].texture.viewDimension = TextureViewDimension::Cube;
+		bindings[1].visibility = ShaderStage::Compute;
+		break;
+	default:
+		assert(false);
+	}
 
 	// Uniforms
-	bindings[2].binding = 2;
+	bindings[2].binding = 4;
 	bindings[2].buffer.type = BufferBindingType::Uniform;
 	bindings[2].buffer.minBindingSize = sizeof(Uniforms);
 	bindings[2].visibility = ShaderStage::Compute;
@@ -462,9 +573,18 @@ void Application::initComputePipeline() {
 	ComputePipelineDescriptor computePipelineDesc;
 	computePipelineDesc.compute.constantCount = 0;
 	computePipelineDesc.compute.constants = nullptr;
-	computePipelineDesc.compute.entryPoint = "computeCubeMapFace";
 	computePipelineDesc.compute.module = computeShaderModule;
 	computePipelineDesc.layout = m_pipelineLayout;
+	switch (m_settings.mode) {
+	case Mode::EquirectToCubemap:
+		computePipelineDesc.compute.entryPoint = "computeCubeMap";
+		break;
+	case Mode::CubemapToEquirect:
+		computePipelineDesc.compute.entryPoint = "computeEquirectangular";
+		break;
+	default:
+		assert(false);
+	}
 	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
 }
 
@@ -575,23 +695,27 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	m_shouldCompute = m_shouldCompute || changed;
 
 	ImGui::Begin("Settings");
+	if (ImGui::Combo("Mode", (int*)&m_settings.mode, "EquirectToCubemap\0CubemapToEquirect\0")) {
+		m_shouldRebuildPipeline = true;
+		m_shouldCompute = true;
+	}
 	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
 	if (ImGui::SliderInt("Output Size (log)", &m_settings.outputSizeLog, 2, 11)) {
 		m_shouldReallocateTextures = true;
 		m_shouldCompute = true;
 	}
 	if (ImGui::Button("Save Output")) {
-		const std::filesystem::path outputPaths[] = {
-			RESOURCE_DIR "/cubemap-posX.png",
-			RESOURCE_DIR "/cubemap-negX.png",
-			RESOURCE_DIR "/cubemap-posY.png",
-			RESOURCE_DIR "/cubemap-negY.png",
-			RESOURCE_DIR "/cubemap-posZ.png",
-			RESOURCE_DIR "/cubemap-negZ.png",
-		};
-
-		for (uint32_t layer = 0; layer < 6; ++layer) {
-			saveTexture(outputPaths[layer], m_device, m_cubemapTexture, 0, layer);
+		switch (m_settings.mode) {
+		case Mode::EquirectToCubemap:
+			for (uint32_t layer = 0; layer < 6; ++layer) {
+				saveTexture(cubemapPaths[layer], m_device, m_cubemapTexture, 0, layer);
+			}
+			break;
+		case Mode::CubemapToEquirect:
+			saveTexture(equirectangularPath, m_device, m_equirectangularTexture, 0);
+			break;
+		default:
+			assert(false);
 		}
 	}
 	ImGui::End();
@@ -602,6 +726,21 @@ void Application::onGui(RenderPassEncoder renderPass) {
 
 void Application::onCompute() {
 	std::cout << "Computing..." << std::endl;
+
+	if (m_shouldRebuildPipeline) {
+		terminateBindGroup();
+		terminateTextureViews();
+		terminateTextures();
+		terminateComputePipeline();
+		terminateBindGroupLayout();
+		initBindGroupLayout();
+		initComputePipeline();
+		initTextures();
+		initTextureViews();
+		initBindGroup();
+		m_shouldRebuildPipeline = false;
+		m_shouldReallocateTextures = false;
+	}
 
 	if (m_shouldReallocateTextures) {
 		terminateBindGroup();
@@ -633,7 +772,7 @@ void Application::onCompute() {
 
 		uint32_t invocationCountX = m_cubemapTexture.getWidth();
 		uint32_t invocationCountY = m_cubemapTexture.getHeight();
-		uint32_t workgroupSizePerDim = 4;
+		uint32_t workgroupSizePerDim = m_settings.mode == Mode::EquirectToCubemap ? 4 : 8;
 		// This ceils invocationCountX / workgroupSizePerDim
 		uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
 		uint32_t workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;

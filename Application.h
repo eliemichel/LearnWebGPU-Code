@@ -81,6 +81,8 @@ private:
 	void terminateBuffers();
 
 	void initTextures();
+	void initTexturesEquirectToCubemap();
+	void initTexturesCubemapToEquirect();
 	void terminateTextures();
 
 	void initTextureViews();
@@ -114,6 +116,7 @@ private:
 
 	bool m_shouldCompute = true;
 	bool m_shouldReallocateTextures = false;
+	bool m_shouldRebuildPipeline = false;
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::Texture m_equirectangularTexture = nullptr;
 	wgpu::Texture m_cubemapTexture = nullptr;
@@ -153,10 +156,15 @@ private:
 	static_assert(sizeof(Uniforms) % 16 == 0);
 	Uniforms m_uniforms;
 
+	enum class Mode {
+		EquirectToCubemap,
+		CubemapToEquirect,
+	};
 	// Similar to parameters, but do not trigger recomputation of the effect
 	struct Settings {
 		float scale = 0.5f;
 		int outputSizeLog = 9;
+		Mode mode = Mode::EquirectToCubemap;
 	};
 	Settings m_settings;
 };
