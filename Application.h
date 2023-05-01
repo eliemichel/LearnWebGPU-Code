@@ -113,6 +113,7 @@ private:
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
 
 	bool m_shouldCompute = true;
+	bool m_shouldReallocateTextures = false;
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::Texture m_inputTexture = nullptr;
 	wgpu::Texture m_outputTexture = nullptr;
@@ -155,6 +156,7 @@ private:
 	// Similar to parameters, but do not trigger recomputation of the effect
 	struct Settings {
 		float scale = 0.5f;
+		int outputSizeLog = 9;
 	};
 	Settings m_settings;
 };

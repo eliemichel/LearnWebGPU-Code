@@ -9,7 +9,7 @@
 #include <webgpu/wgpu.h>
 #endif
 
-bool saveTexture(const std::filesystem::path path, wgpu::Device device, wgpu::Texture texture, int mipLevel) {
+bool saveTexture(const std::filesystem::path path, wgpu::Device device, wgpu::Texture texture, uint32_t mipLevel, uint32_t layer = 0) {
 	using namespace wgpu;
 	
 	if (texture.getDimension() != TextureDimension::_2D) {
@@ -40,6 +40,7 @@ bool saveTexture(const std::filesystem::path path, wgpu::Device device, wgpu::Te
 	ImageCopyTexture source = Default;
 	source.texture = texture;
 	source.mipLevel = mipLevel;
+	source.origin = { 0, 0, layer };
 	ImageCopyBuffer destination = Default;
 	destination.buffer = pixelBuffer;
 	destination.layout.bytesPerRow = paddedBytesPerRow;

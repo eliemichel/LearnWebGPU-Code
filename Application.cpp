@@ -310,7 +310,8 @@ void Application::initTextures() {
 	);
 	m_inputTexture = m_device.createTexture(textureDesc);
 
-	textureDesc.size = { (uint32_t)height, (uint32_t)height, 6 };
+	uint32_t size = (uint32_t)std::pow(2, m_settings.outputSizeLog);
+	textureDesc.size = { size, size, 6 };
 	textureDesc.label = "Output";
 	textureDesc.usage = (
 		TextureUsage::TextureBinding | // to bind the texture in a shader
@@ -571,13 +572,27 @@ void Application::onGui(RenderPassEncoder renderPass) {
 			: m_parameters.kernel;
 		m_uniforms.filterType = (uint32_t)m_parameters.filterType;
 	}
-	m_shouldCompute = changed;
+	m_shouldCompute = m_shouldCompute || changed;
 
 	ImGui::Begin("Settings");
 	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
+	if (ImGui::SliderInt("Output Size (log)", &m_settings.outputSizeLog, 2, 11)) {
+		m_shouldReallocateTextures = true;
+		m_shouldCompute = true;
+	}
 	if (ImGui::Button("Save Output")) {
-		std::filesystem::path path = RESOURCE_DIR "/cubemap.png";
-		saveTexture(path, m_device, m_outputTexture, 0);
+		const std::filesystem::path outputPaths[] = {
+			RESOURCE_DIR "/cubemap-posX.png",
+			RESOURCE_DIR "/cubemap-negX.png",
+			RESOURCE_DIR "/cubemap-posY.png",
+			RESOURCE_DIR "/cubemap-negY.png",
+			RESOURCE_DIR "/cubemap-posZ.png",
+			RESOURCE_DIR "/cubemap-negZ.png",
+		};
+
+		for (uint32_t layer = 0; layer < 6; ++layer) {
+			saveTexture(outputPaths[layer], m_device, m_outputTexture, 0, layer);
+		}
 	}
 	ImGui::End();
 
@@ -587,6 +602,16 @@ void Application::onGui(RenderPassEncoder renderPass) {
 
 void Application::onCompute() {
 	std::cout << "Computing..." << std::endl;
+
+	if (m_shouldReallocateTextures) {
+		terminateBindGroup();
+		terminateTextureViews();
+		terminateTextures();
+		initTextures();
+		initTextureViews();
+		initBindGroup();
+		m_shouldReallocateTextures = false;
+	}
 
 	// Update uniforms
 	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(Uniforms));
