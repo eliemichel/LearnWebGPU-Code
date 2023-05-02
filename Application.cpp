@@ -678,24 +678,29 @@ void Application::onGui(RenderPassEncoder renderPass) {
 
 		float s = m_cubemapTexture.getWidth() * m_settings.scale;
 
-		ImTextureID view;
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeX];
-		drawList->AddImage(view, { offset + 0 * s, s }, { offset + 1 * s, 2 * s });
+		// Same as drawList->AddImage but with U and V flipped
+		auto AddFlippedImage = [drawList](ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max) {
+			drawList->AddImageQuad(user_texture_id, p_min, { p_max.x, p_min.y }, { p_max.x, p_max.y }, { p_min.x, p_max.y }, { uv_min.y, uv_min.x }, { uv_min.y, uv_max.x }, { uv_max.y, uv_max.x }, { uv_max.y, uv_min.x });
+		};
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveY];
-		drawList->AddImage(view, { offset + 1 * s, s }, { offset + 2 * s, 2 * s });
+		ImTextureID view;
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeY];
+		drawList->AddImage(view, { offset + 0 * s, s }, { offset + 1 * s, 2 * s }, { 0, 0 }, {1, 1});
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveX];
-		drawList->AddImage(view, { offset + 2 * s, s }, { offset + 3 * s, 2 * s });
+		AddFlippedImage(view, { offset + 1 * s, s }, { offset + 2 * s, 2 * s }, { 1, 0 }, { 0, 1 });
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeY];
-		drawList->AddImage(view, { offset + 3 * s, s }, { offset + 4 * s, 2 * s });
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveY];
+		drawList->AddImage(view, { offset + 2 * s, s }, { offset + 3 * s, 2 * s }, { 1, 1 }, { 0, 0 });
+
+		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeX];
+		AddFlippedImage(view, { offset + 3 * s, s }, { offset + 4 * s, 2 * s }, { 0, 1 }, { 1, 0 });
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveZ];
-		drawList->AddImage(view, { offset + 1 * s, 0 * s }, { offset + 2 * s, 1 * s });
+		AddFlippedImage(view, { offset + 1 * s, 0 * s }, { offset + 2 * s, 1 * s }, { 1, 0 }, { 0, 1 });
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeZ];
-		drawList->AddImage(view, { offset + 1 * s, 2 * s }, { offset + 2 * s,  3 * s });
+		AddFlippedImage(view, { offset + 1 * s, 2 * s }, { offset + 2 * s,  3 * s }, { 1, 0 }, { 0, 1 });
 	}
 
 	bool changed = false;
