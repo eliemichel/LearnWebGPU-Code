@@ -483,7 +483,11 @@ void Application::initSampler() {
 	SamplerDescriptor desc;
 	desc.magFilter = FilterMode::Linear;
 	desc.minFilter = FilterMode::Linear;
+#ifdef WEBGPU_BACKEND_WGPU
+	desc.mipmapFilter = MipmapFilterMode::Linear;
+#else
 	desc.mipmapFilter = FilterMode::Linear;
+#endif
 	desc.maxAnisotropy = 16;
 	m_sampler = m_device.createSampler(desc);
 }
@@ -668,22 +672,23 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	{
 		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 		float offset = 0.0f;
+		float s = m_cubemapTexture.getWidth() * m_settings.scale;
 
-		// Input image
+		// Equirectangular image
 		drawList->AddImage((ImTextureID)m_equirectangularTextureView, { 0, 0 }, {
 			m_equirectangularTexture.getWidth()* m_settings.scale,
 			m_equirectangularTexture.getHeight() * m_settings.scale
 		});
 		offset += m_equirectangularTexture.getWidth() * m_settings.scale;
 
-		float s = m_cubemapTexture.getWidth() * m_settings.scale;
+		// CubeMap faces
+		ImTextureID view;
 
 		// Same as drawList->AddImage but with U and V flipped
 		auto AddFlippedImage = [drawList](ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max) {
 			drawList->AddImageQuad(user_texture_id, p_min, { p_max.x, p_min.y }, { p_max.x, p_max.y }, { p_min.x, p_max.y }, { uv_min.y, uv_min.x }, { uv_min.y, uv_max.x }, { uv_max.y, uv_max.x }, { uv_max.y, uv_min.x });
 		};
 
-		ImTextureID view;
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeY];
 		drawList->AddImage(view, { offset + 0 * s, s }, { offset + 1 * s, 2 * s }, { 0, 0 }, {1, 1});
 
