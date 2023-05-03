@@ -13,6 +13,7 @@ add_subdirectory(glfw3webgpu)
 
 add_executable(App
 	main.cpp
+	webgpu-release.h
 )
 
 target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)

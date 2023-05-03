@@ -1,9 +1,9 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
- *   https://github.com/eliemichel/LearnWebGPU
+ *   https://eliemichel.github.io/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022 Elie Michel
+ * Copyright (c) 2022-2023 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -28,11 +28,12 @@
 #include <GLFW/glfw3.h>
 
 #define WEBGPU_CPP_IMPLEMENTATION
-#include <webgpu.hpp>
-#include <wgpu.h> // wgpuTextureViewDrop
+#include <webgpu/webgpu.hpp>
 
 #include <iostream>
 #include <cassert>
+
+#include "webgpu-release.h"
 
 using namespace wgpu;
 
@@ -58,13 +59,13 @@ int main (int, char**) {
 
 	std::cout << "Requesting adapter..." << std::endl;
 	Surface surface = glfwGetWGPUSurface(instance, window);
-	RequestAdapterOptions adapterOpts{};
+	RequestAdapterOptions adapterOpts;
 	adapterOpts.compatibleSurface = surface;
 	Adapter adapter = instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
-	DeviceDescriptor deviceDesc{};
+	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = nullptr;
@@ -73,27 +74,21 @@ int main (int, char**) {
 	std::cout << "Got device: " << device << std::endl;
 
 	// Add an error callback for more debug info
-	// (TODO: fix the callback in the webgpu.hpp wrapper)
-	auto myCallback = [](ErrorType type, char const* message) {
+	auto h = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
-	};
-	struct Context {
-		decltype(myCallback) theCallback;
-	};
-	Context ctx = { myCallback };
-	static auto cCallback = [](WGPUErrorType type, char const* message, void* userdata) -> void {
-		Context& ctx = *reinterpret_cast<Context*>(userdata);
-		ctx.theCallback(static_cast<ErrorType>(type), message);
-	};
-	wgpuDeviceSetUncapturedErrorCallback(device, cCallback, reinterpret_cast<void*>(&ctx));
+	});
 
 	Queue queue = device.getQueue();
 
 	std::cout << "Creating swapchain..." << std::endl;
+#ifdef WEBGPU_BACKEND_WGPU
 	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
-	SwapChainDescriptor swapChainDesc = {};
+#else
+	TextureFormat swapChainFormat = TextureFormat::BGRA8Unorm;
+#endif
+	SwapChainDescriptor swapChainDesc;
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
 	swapChainDesc.usage = TextureUsage::RenderAttachment;
@@ -106,29 +101,31 @@ int main (int, char**) {
 	const char* shaderSource = R"(
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4<f32> {
-	var p = vec2<f32>(0.0, 0.0);
+	var p = vec2f(0.0, 0.0);
 	if (in_vertex_index == 0u) {
-		p = vec2<f32>(-0.5, -0.5);
+		p = vec2f(-0.5, -0.5);
 	} else if (in_vertex_index == 1u) {
-		p = vec2<f32>(0.5, -0.5);
+		p = vec2f(0.5, -0.5);
 	} else {
-		p = vec2<f32>(0.0, 0.5);
+		p = vec2f(0.0, 0.5);
 	}
-	return vec4<f32>(p, 0.0, 1.0);
+	return vec4f(p, 0.0, 1.0);
 }
 
 @fragment
-fn fs_main() -> @location(0) vec4<f32> {
-    return vec4<f32>(0.0, 0.4, 1.0, 1.0);
+fn fs_main() -> @location(0) vec4f {
+    return vec4f(0.0, 0.4, 1.0, 1.0);
 }
 )";
 
-	ShaderModuleDescriptor shaderDesc{};
+	ShaderModuleDescriptor shaderDesc;
+#ifdef WEBGPU_BACKEND_WGPU
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
+#endif
 
 	// Use the extension mechanism to load a WGSL shader source code
-	ShaderModuleWGSLDescriptor shaderCodeDesc{};
+	ShaderModuleWGSLDescriptor shaderCodeDesc;
 	// Set the chained struct's header
 	shaderCodeDesc.chain.next = nullptr;
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
@@ -136,13 +133,17 @@ fn fs_main() -> @location(0) vec4<f32> {
 	shaderDesc.nextInChain = &shaderCodeDesc.chain;
 
 	// Setup the actual payload of the shader code descriptor
+#ifdef WEBGPU_BACKEND_WGPU
 	shaderCodeDesc.code = shaderSource;
+#else
+	shaderCodeDesc.source = shaderSource;
+#endif
 
 	ShaderModule shaderModule = device.createShaderModule(shaderDesc);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
 	std::cout << "Creating render pipeline..." << std::endl;
-	RenderPipelineDescriptor pipelineDesc{};
+	RenderPipelineDescriptor pipelineDesc;
 
 	// Vertex fetch
 	// (We don't use any input buffer so far)
@@ -171,7 +172,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 	pipelineDesc.primitive.cullMode = CullMode::None;
 
 	// Fragment shader
-	FragmentState fragmentState{};
+	FragmentState fragmentState;
 	pipelineDesc.fragment = &fragmentState;
 	fragmentState.module = shaderModule;
 	fragmentState.entryPoint = "fs_main";
@@ -179,7 +180,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 	fragmentState.constants = nullptr;
 
 	// Configure blend state
-	BlendState blendState{};
+	BlendState blendState;
 	// Usual alpha blending for the color:
 	blendState.color.srcFactor = BlendFactor::SrcAlpha;
 	blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
@@ -189,7 +190,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 	blendState.alpha.dstFactor = BlendFactor::One;
 	blendState.alpha.operation = BlendOperation::Add;
 
-	ColorTargetState colorTarget{};
+	ColorTargetState colorTarget;
 	colorTarget.format = swapChainFormat;
 	colorTarget.blend = &blendState;
 	colorTarget.writeMask = ColorWriteMask::All; // We could write to only some of the color channels.
@@ -211,12 +212,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
 	// Pipeline layout
-	// (Our example does not use any resource)
-	PipelineLayoutDescriptor layoutDesc{};
-	layoutDesc.bindGroupLayoutCount = 0;
-	layoutDesc.bindGroupLayouts = nullptr;
-	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
-	pipelineDesc.layout = layout;
+	pipelineDesc.layout = nullptr;
 
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
@@ -230,13 +226,13 @@ fn fs_main() -> @location(0) vec4<f32> {
 			return 1;
 		}
 
-		CommandEncoderDescriptor commandEncoderDesc{};
+		CommandEncoderDescriptor commandEncoderDesc;
 		commandEncoderDesc.label = "Command Encoder";
 		CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
 		
-		RenderPassDescriptor renderPassDesc{};
+		RenderPassDescriptor renderPassDesc;
 
-		WGPURenderPassColorAttachment renderPassColorAttachment = {};
+		WGPURenderPassColorAttachment renderPassColorAttachment;
 		renderPassColorAttachment.view = nextTexture;
 		renderPassColorAttachment.resolveTarget = nullptr;
 		renderPassColorAttachment.loadOp = LoadOp::Clear;
@@ -258,9 +254,9 @@ fn fs_main() -> @location(0) vec4<f32> {
 
 		renderPass.end();
 		
-		wgpuTextureViewDrop(nextTexture);
+		wgpuTextureViewRelease(nextTexture);
 
-		CommandBufferDescriptor cmdBufferDescriptor{};
+		CommandBufferDescriptor cmdBufferDescriptor;
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 		queue.submit(command);
@@ -268,6 +264,10 @@ fn fs_main() -> @location(0) vec4<f32> {
 		swapChain.present();
 	}
 
+	wgpuSwapChainRelease(swapChain);
+	wgpuDeviceRelease(device);
+	wgpuAdapterRelease(adapter);
+	wgpuInstanceRelease(instance);
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
