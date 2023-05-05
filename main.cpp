@@ -24,12 +24,13 @@
  * SOFTWARE.
  */
 
+#include "webgpu-release.h"
+
 #include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
 
 #define WEBGPU_CPP_IMPLEMENTATION
-#include <webgpu.hpp>
-#include <wgpu.h> // wgpuTextureViewDrop
+#include <webgpu/webgpu.hpp>
 
 #include <iostream>
 #include <cassert>
@@ -46,7 +47,7 @@ namespace fs = std::filesystem;
  * The same structure as in the shader, replicated in C++
  */
 struct MyUniforms {
-	// offset = 0 * sizeof(vec4<f32>) -> OK
+	// offset = 0 * sizeof(vec4f) -> OK
 	std::array<float, 4> color;
 
 	// offset = 16 = 4 * sizeof(f32) -> OK
@@ -88,10 +89,17 @@ int main (int, char**) {
 	Adapter adapter = instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
+	SupportedLimits supportedLimits;
+	adapter.getLimits(&supportedLimits);
+
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 2;
 	requiredLimits.limits.maxVertexBuffers = 1;
+	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
+	requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
+	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+	requiredLimits.limits.maxInterStageShaderComponents = 3;
 	// We use at most 1 bind group for now
 	requiredLimits.limits.maxBindGroups = 1;
 	// We use at most 1 uniform buffer per stage
@@ -99,7 +107,7 @@ int main (int, char**) {
 	// Uniform structs have a size of maximum 16 float
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
 
-	DeviceDescriptor deviceDesc{};
+	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
@@ -108,27 +116,21 @@ int main (int, char**) {
 	std::cout << "Got device: " << device << std::endl;
 
 	// Add an error callback for more debug info
-	// (TODO: fix the callback in the webgpu.hpp wrapper)
-	auto myCallback = [](ErrorType type, char const* message) {
+	auto h = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
-	};
-	struct Context {
-		decltype(myCallback) theCallback;
-	};
-	Context ctx = { myCallback };
-	static auto cCallback = [](WGPUErrorType type, char const* message, void* userdata) -> void {
-		Context& ctx = *reinterpret_cast<Context*>(userdata);
-		ctx.theCallback(static_cast<ErrorType>(type), message);
-	};
-	wgpuDeviceSetUncapturedErrorCallback(device, cCallback, reinterpret_cast<void*>(&ctx));
+	});
 
 	Queue queue = device.getQueue();
 
 	std::cout << "Creating swapchain..." << std::endl;
+#ifdef WEBGPU_BACKEND_WGPU
 	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
-	SwapChainDescriptor swapChainDesc = {};
+#else
+	TextureFormat swapChainFormat = TextureFormat::BGRA8Unorm;
+#endif
+	SwapChainDescriptor swapChainDesc;
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
 	swapChainDesc.usage = TextureUsage::RenderAttachment;
@@ -138,11 +140,11 @@ int main (int, char**) {
 	std::cout << "Swapchain: " << swapChain << std::endl;
 
 	std::cout << "Creating shader module..." << std::endl;
-	ShaderModule shaderModule = loadShaderModule(RESOURCE_DIR "/shader.wsl", device);
+	ShaderModule shaderModule = loadShaderModule(RESOURCE_DIR "/shader.wgsl", device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
 	std::cout << "Creating render pipeline..." << std::endl;
-	RenderPipelineDescriptor pipelineDesc{};
+	RenderPipelineDescriptor pipelineDesc;
 
 	// Vertex fetch
 	std::vector<VertexAttribute> vertexAttribs(2);
@@ -176,14 +178,14 @@ int main (int, char**) {
 	pipelineDesc.primitive.frontFace = FrontFace::CCW;
 	pipelineDesc.primitive.cullMode = CullMode::None;
 
-	FragmentState fragmentState{};
+	FragmentState fragmentState;
 	pipelineDesc.fragment = &fragmentState;
 	fragmentState.module = shaderModule;
 	fragmentState.entryPoint = "fs_main";
 	fragmentState.constantCount = 0;
 	fragmentState.constants = nullptr;
 
-	BlendState blendState{};
+	BlendState blendState;
 	blendState.color.srcFactor = BlendFactor::SrcAlpha;
 	blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
 	blendState.color.operation = BlendOperation::Add;
@@ -191,7 +193,7 @@ int main (int, char**) {
 	blendState.alpha.dstFactor = BlendFactor::One;
 	blendState.alpha.operation = BlendOperation::Add;
 
-	ColorTargetState colorTarget{};
+	ColorTargetState colorTarget;
 	colorTarget.format = swapChainFormat;
 	colorTarget.blend = &blendState;
 	colorTarget.writeMask = ColorWriteMask::All;
@@ -283,7 +285,7 @@ int main (int, char**) {
 	binding.size = sizeof(MyUniforms);
 
 	// A bind group contains one or multiple bindings
-	BindGroupDescriptor bindGroupDesc{};
+	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = bindGroupLayout;
 	// There must be as many bindings as declared in the layout!
 	bindGroupDesc.entryCount = bindGroupLayoutDesc.entryCount;
@@ -304,13 +306,13 @@ int main (int, char**) {
 			return 1;
 		}
 
-		CommandEncoderDescriptor commandEncoderDesc{};
+		CommandEncoderDescriptor commandEncoderDesc;
 		commandEncoderDesc.label = "Command Encoder";
 		CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
 		
 		RenderPassDescriptor renderPassDesc{};
 
-		WGPURenderPassColorAttachment renderPassColorAttachment = {};
+		WGPURenderPassColorAttachment renderPassColorAttachment;
 		renderPassColorAttachment.view = nextTexture;
 		renderPassColorAttachment.resolveTarget = nullptr;
 		renderPassColorAttachment.loadOp = LoadOp::Clear;
@@ -336,7 +338,7 @@ int main (int, char**) {
 
 		renderPass.end();
 		
-		wgpuTextureViewDrop(nextTexture);
+		wgpuTextureViewRelease(nextTexture);
 
 		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
@@ -346,6 +348,15 @@ int main (int, char**) {
 		swapChain.present();
 	}
 
+	vertexBuffer.destroy();
+	wgpuBufferRelease(vertexBuffer);
+	indexBuffer.destroy();
+	wgpuBufferRelease(indexBuffer);
+
+	wgpuSwapChainRelease(swapChain);
+	wgpuDeviceRelease(device);
+	wgpuAdapterRelease(adapter);
+	wgpuInstanceRelease(instance);
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
@@ -363,14 +374,20 @@ ShaderModule loadShaderModule(const fs::path& path, Device device) {
 	file.seekg(0);
 	file.read(shaderSource.data(), size);
 
-	ShaderModuleWGSLDescriptor shaderCodeDesc{};
+	ShaderModuleWGSLDescriptor shaderCodeDesc;
 	shaderCodeDesc.chain.next = nullptr;
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
-	shaderCodeDesc.code = shaderSource.c_str();
-	ShaderModuleDescriptor shaderDesc{};
+	ShaderModuleDescriptor shaderDesc;
+	shaderDesc.nextInChain = &shaderCodeDesc.chain;
+
+#ifdef WEBGPU_BACKEND_WGPU
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
-	shaderDesc.nextInChain = &shaderCodeDesc.chain;
+	shaderCodeDesc.code = shaderSource.c_str();
+#else
+	shaderCodeDesc.source = shaderSource.c_str();
+#endif
+
 	return device.createShaderModule(shaderDesc);
 }
 
