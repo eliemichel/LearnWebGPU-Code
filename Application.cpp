@@ -671,15 +671,16 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	// Display images
 	{
 		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
-		float offset = 0.0f;
 		float s = m_cubemapTexture.getWidth() * m_settings.scale;
 
+		glm::vec2 of = m_settings.offset * m_settings.scale * 1000.0f;
+
 		// Equirectangular image
-		drawList->AddImage((ImTextureID)m_equirectangularTextureView, { 0, 0 }, {
-			m_equirectangularTexture.getWidth()* m_settings.scale,
-			m_equirectangularTexture.getHeight() * m_settings.scale
+		drawList->AddImage((ImTextureID)m_equirectangularTextureView, { of.x, of.y }, {
+			of.x + m_equirectangularTexture.getWidth()* m_settings.scale,
+			of.y + m_equirectangularTexture.getHeight() * m_settings.scale
 		});
-		offset += m_equirectangularTexture.getWidth() * m_settings.scale;
+		of.x += m_equirectangularTexture.getWidth() * m_settings.scale;
 
 		// CubeMap faces
 		ImTextureID view;
@@ -690,22 +691,22 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		};
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeY];
-		drawList->AddImage(view, { offset + 0 * s, s }, { offset + 1 * s, 2 * s }, { 0, 0 }, {1, 1});
+		drawList->AddImage(view, { of.x + 0 * s, of.y + s }, { of.x + 1 * s, of.y + 2 * s }, { 0, 0 }, {1, 1});
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveX];
-		AddFlippedImage(view, { offset + 1 * s, s }, { offset + 2 * s, 2 * s }, { 1, 0 }, { 0, 1 });
+		AddFlippedImage(view, { of.x + 1 * s, of.y + s }, { of.x + 2 * s, of.y + 2 * s }, { 1, 0 }, { 0, 1 });
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveY];
-		drawList->AddImage(view, { offset + 2 * s, s }, { offset + 3 * s, 2 * s }, { 1, 1 }, { 0, 0 });
+		drawList->AddImage(view, { of.x + 2 * s, of.y + s }, { of.x + 3 * s, of.y + 2 * s }, { 1, 1 }, { 0, 0 });
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeX];
-		AddFlippedImage(view, { offset + 3 * s, s }, { offset + 4 * s, 2 * s }, { 0, 1 }, { 1, 0 });
+		AddFlippedImage(view, { of.x + 3 * s, of.y + s }, { of.x + 4 * s, of.y + 2 * s }, { 0, 1 }, { 1, 0 });
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveZ];
-		AddFlippedImage(view, { offset + 1 * s, 0 * s }, { offset + 2 * s, 1 * s }, { 1, 0 }, { 0, 1 });
+		AddFlippedImage(view, { of.x + 1 * s, of.y + 0 * s }, { of.x + 2 * s, of.y + 1 * s }, { 1, 0 }, { 0, 1 });
 
 		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeZ];
-		AddFlippedImage(view, { offset + 1 * s, 2 * s }, { offset + 2 * s,  3 * s }, { 1, 0 }, { 0, 1 });
+		AddFlippedImage(view, { of.x + 1 * s, of.y + 2 * s }, { of.x + 2 * s,  of.y + 3 * s }, { 1, 0 }, { 0, 1 });
 	}
 
 	bool changed = false;
@@ -734,6 +735,7 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		m_shouldCompute = true;
 	}
 	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
+	ImGui::SliderFloat2("Offset", glm::value_ptr(m_settings.offset), -2.0f, 2.0f);
 	if (ImGui::SliderInt("Output Size (log)", &m_settings.outputSizeLog, 2, 11)) {
 		m_shouldReallocateTextures = true;
 		m_shouldCompute = true;

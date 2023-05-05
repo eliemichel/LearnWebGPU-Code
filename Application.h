@@ -167,6 +167,7 @@ private:
 	// Similar to parameters, but do not trigger recomputation of the effect
 	struct Settings {
 		float scale = 0.5f;
+		glm::vec2 offset = { 0.0f, 0.0f };
 		int outputSizeLog = 9;
 		Mode mode = Mode::EquirectToCubemap;
 	};
