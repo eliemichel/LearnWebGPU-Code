@@ -28,7 +28,7 @@
 
 int main(int, char**) {
 	Application app;
-	app.onInit();
+	if (!app.onInit()) return 1;
 
 	while (app.isRunning()) {
 		app.onFrame();

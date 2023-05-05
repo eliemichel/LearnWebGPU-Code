@@ -163,7 +163,7 @@ bool Application::onInit() {
 	buildSwapChain();
 	
 	std::cout << "Creating shader module..." << std::endl;
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
 	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
@@ -277,7 +277,7 @@ bool Application::onInit() {
 
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
 	if (!initTexture(RESOURCE_DIR "/fourareen2K_normals.png")) return false;
-	if (!initTexture(RESOURCE_DIR "/autumn_park_4k.jpg")) return false;
+	if (!initTexture(RESOURCE_DIR "/autumn_park_4k", true /* isCubemap */)) return false;
 	initLighting();
 
 	std::cout << "Creating render pipeline..." << std::endl;
@@ -395,7 +395,7 @@ bool Application::onInit() {
 	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
 	initGui();
-	
+
 	return true;
 }
 
@@ -658,10 +658,13 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 }
 
-bool Application::initTexture(const std::filesystem::path &path) {
+bool Application::initTexture(const std::filesystem::path &path, bool isCubemap) {
 	// Create a texture
 	TextureView textureView = nullptr;
-	Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
+	Texture texture =
+		isCubemap
+		? ResourceManager::loadCubemapTexture(path, m_device, &textureView)
+		: ResourceManager::loadTexture(path, m_device, &textureView);
 	if (!texture) {
 		std::cerr << "Could not load texture!" << std::endl;
 		return false;
@@ -674,7 +677,10 @@ bool Application::initTexture(const std::filesystem::path &path) {
 	bindingLayout.binding = bindingIndex;
 	bindingLayout.visibility = ShaderStage::Fragment;
 	bindingLayout.texture.sampleType = TextureSampleType::Float;
-	bindingLayout.texture.viewDimension = TextureViewDimension::_2D;
+	bindingLayout.texture.viewDimension =
+		isCubemap
+		? TextureViewDimension::Cube
+		: TextureViewDimension::_2D;
 	m_bindingLayoutEntries.push_back(bindingLayout);
 
 	BindGroupEntry binding = Default;

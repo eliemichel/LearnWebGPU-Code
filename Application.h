@@ -67,7 +67,7 @@ private:
 	void initGui(); // called in onInit
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
 
-	bool initTexture(const std::filesystem::path& path);
+	bool initTexture(const std::filesystem::path& path, bool isCubemap = false);
 
 	void initLighting();
 	void updateLighting();

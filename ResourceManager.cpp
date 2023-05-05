@@ -30,6 +30,7 @@
 #include "stb_image.h"
 
 #include <fstream>
+#include <array>
 
 using namespace wgpu;
 
@@ -159,14 +160,15 @@ static void writeMipMaps(
 	Texture texture,
 	Extent3D textureSize,
 	uint32_t mipLevelCount,
-	const component_t* pixelData
+	const component_t* pixelData,
+	Origin3D origin = { 0, 0, 0 }
 ) {
 	Queue queue = device.getQueue();
 
 	// Arguments telling which part of the texture we upload to
 	ImageCopyTexture destination;
 	destination.texture = texture;
-	destination.origin = { 0, 0, 0 };
+	destination.origin = origin;
 	destination.aspect = TextureAspect::All;
 
 	// Arguments telling how the C++ side pixel memory is laid out
@@ -244,6 +246,70 @@ Texture ResourceManager::loadTexture(const path& path, Device device, TextureVie
 		textureViewDesc.baseMipLevel = 0;
 		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
 		textureViewDesc.dimension = TextureViewDimension::_2D;
+		textureViewDesc.format = textureDesc.format;
+		*pTextureView = texture.createView(textureViewDesc);
+	}
+
+	return texture;
+}
+
+Texture ResourceManager::loadCubemapTexture(const path& path, Device device, TextureView* pTextureView) {
+	const char* cubemapPaths[] = {
+		"cubemap-posX.png",
+		"cubemap-negX.png",
+		"cubemap-posY.png",
+		"cubemap-negY.png",
+		"cubemap-posZ.png",
+		"cubemap-negZ.png",
+	};
+
+	// Load image data for each of the 6 layers
+	Extent3D cubemapSize = { 0, 0, 6 };
+	std::array<uint8_t*, 6> pixelData;
+	for (uint32_t layer = 0; layer < 6; ++layer) {
+		int width, height, channels;
+		auto p = path / cubemapPaths[layer];
+		pixelData[layer] = stbi_load(p.string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
+		if (nullptr == pixelData[layer]) throw std::runtime_error("Could not load input texture!");
+		if (layer == 0) {
+			cubemapSize.width = (uint32_t)width;
+			cubemapSize.height = (uint32_t)height;
+		}
+		else {
+			if (cubemapSize.width != (uint32_t)width || cubemapSize.height != (uint32_t)height)
+				throw std::runtime_error("All cubemap faces must have the same size!");
+		}
+	}
+
+	TextureDescriptor textureDesc;
+	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.format = TextureFormat::RGBA8Unorm;
+	textureDesc.size = cubemapSize;
+	textureDesc.mipLevelCount = bit_width(std::max(textureDesc.size.width, textureDesc.size.height));
+	textureDesc.sampleCount = 1;
+	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
+	textureDesc.viewFormatCount = 0;
+	textureDesc.viewFormats = nullptr;
+	Texture texture = device.createTexture(textureDesc);
+
+	Extent3D cubemapLayerSize = { cubemapSize.width , cubemapSize.height , 1 };
+	for (uint32_t layer = 0; layer < 6; ++layer) {
+		Origin3D origin = { 0, 0, layer };
+
+		writeMipMaps(device, texture, cubemapLayerSize, textureDesc.mipLevelCount, pixelData[layer], origin);
+
+		// Free CPU-side data
+		stbi_image_free(pixelData[layer]);
+	}
+
+	if (pTextureView) {
+		TextureViewDescriptor textureViewDesc;
+		textureViewDesc.aspect = TextureAspect::All;
+		textureViewDesc.baseArrayLayer = 0;
+		textureViewDesc.arrayLayerCount = 6;
+		textureViewDesc.baseMipLevel = 0;
+		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
+		textureViewDesc.dimension = TextureViewDimension::Cube;
 		textureViewDesc.format = textureDesc.format;
 		*pTextureView = texture.createView(textureViewDesc);
 	}

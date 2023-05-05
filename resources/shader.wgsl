@@ -1,31 +1,31 @@
 struct VertexInput {
-	@location(0) position: vec3<f32>,
-	@location(4) tangent: vec3<f32>,
-	@location(5) bitangent: vec3<f32>,
-	@location(1) normal: vec3<f32>,
-	@location(2) color: vec3<f32>,
-	@location(3) uv: vec2<f32>,
+	@location(0) position: vec3f,
+	@location(4) tangent: vec3f,
+	@location(5) bitangent: vec3f,
+	@location(1) normal: vec3f,
+	@location(2) color: vec3f,
+	@location(3) uv: vec2f,
 }
 
 struct VertexOutput {
-	@builtin(position) position: vec4<f32>,
-	@location(0) color: vec3<f32>,
-	@location(4) tangent: vec3<f32>,
-	@location(5) bitangent: vec3<f32>,
-	@location(1) normal: vec3<f32>,
-	@location(2) uv: vec2<f32>,
-	@location(3) viewDirection: vec3<f32>,
+	@builtin(position) position: vec4f,
+	@location(0) color: vec3f,
+	@location(4) tangent: vec3f,
+	@location(5) bitangent: vec3f,
+	@location(1) normal: vec3f,
+	@location(2) uv: vec2f,
+	@location(3) viewDirection: vec3f,
 }
 
 /**
  * A structure holding the value of our uniforms
  */
 struct MyUniforms {
-	projectionMatrix: mat4x4<f32>,
-	viewMatrix: mat4x4<f32>,
-	modelMatrix: mat4x4<f32>,
-	color: vec4<f32>,
-	cameraWorldPosition: vec3<f32>,
+	projectionMatrix: mat4x4f,
+	viewMatrix: mat4x4f,
+	modelMatrix: mat4x4f,
+	color: vec4f,
+	cameraWorldPosition: vec3f,
 	time: f32,
 	gamma: f32,
 }
@@ -34,8 +34,8 @@ struct MyUniforms {
  * A structure holding the lighting settings
  */
 struct LightingUniforms {
-	directions: array<vec4<f32>, 2>,
-	colors: array<vec4<f32>, 2>,
+	directions: array<vec4f, 2>,
+	colors: array<vec4f, 2>,
 	hardness: f32,
 	kd: f32,
 	ks: f32,
@@ -49,28 +49,28 @@ struct LightingUniforms {
 @group(0) @binding(1) var textureSampler: sampler;
 @group(0) @binding(2) var baseColorTexture: texture_2d<f32>;
 @group(0) @binding(3) var normalTexture: texture_2d<f32>;
-@group(0) @binding(4) var environmentTexture: texture_2d<f32>;
+@group(0) @binding(4) var cubemapTexture: texture_cube<f32>;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	let worldPosition = uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
+	let worldPosition = uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
 	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * worldPosition;
 	out.color = in.color;
-	out.tangent = (uMyUniforms.modelMatrix * vec4<f32>(in.tangent, 0.0)).xyz;
-	out.bitangent = (uMyUniforms.modelMatrix * vec4<f32>(in.bitangent, 0.0)).xyz;
-	out.normal = (uMyUniforms.modelMatrix * vec4<f32>(in.normal, 0.0)).xyz;
+	out.tangent = (uMyUniforms.modelMatrix * vec4f(in.tangent, 0.0)).xyz;
+	out.bitangent = (uMyUniforms.modelMatrix * vec4f(in.bitangent, 0.0)).xyz;
+	out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
 	out.uv = in.uv;
 	out.viewDirection = uMyUniforms.cameraWorldPosition - worldPosition.xyz;
 	return out;
 }
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	// Sample normal
 	let encodedN = textureSample(normalTexture, textureSampler, in.uv).rgb;
 	let localN = encodedN - 0.5;
-	let rotation = mat3x3<f32>(
+	let rotation = mat3x3f(
 		normalize(in.tangent),
 		normalize(in.bitangent),
 		normalize(in.normal),
@@ -84,13 +84,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	// Instead of looping over the light sources, we sample the environment map
 	// in the reflected direction to get the specular shading.
 	let ibl_direction = -reflect(V, N);
-	let Pi = 3.14159266;
-	let theta = acos(ibl_direction.z / length(ibl_direction));
-	let phi = atan2(length(ibl_direction.xy), ibl_direction.x);
-	let ibl_uv = vec2<f32>(phi / (2.0 * Pi), theta / Pi + 0.5);
-	let ibl_sample = textureSample(environmentTexture, textureSampler, ibl_uv).rgb;
+	let roughness = pow(1.0 - uLighting.hardness / 128.0, 1.0); // ad-hoc remapping to [0,1]
+	let bias = mix(0.0, 10.0, roughness);
+	let ibl_sample = textureSampleBias(cubemapTexture, textureSampler, ibl_direction, bias).rgb;
 
-	var diffuse = vec3<f32>(0.0);
+	var diffuse = vec3f(0.0);
 	let specular = ibl_sample;
 	
 	// Sample texture
@@ -103,6 +101,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	//let color = N * 0.5 + 0.5;
 
 	// Gamma-correction
-	let corrected_color = pow(color, vec3<f32>(uMyUniforms.gamma));
-	return vec4<f32>(corrected_color, uMyUniforms.color.a);
+	let corrected_color = pow(color, vec3f(uMyUniforms.gamma));
+	return vec4f(corrected_color, uMyUniforms.color.a);
 }
