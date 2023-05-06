@@ -247,25 +247,8 @@ static WGPUBindGroup ImGui_ImplWGPU_CreateImageBindGroup(WGPUBindGroupLayout lay
     return wgpuDeviceCreateBindGroup(g_wgpuDevice, &image_bg_descriptor);
 }
 
-static void ImGui_ImplWGPU_SetupRenderState(ImDrawData* draw_data, WGPURenderPassEncoder ctx, FrameResources* fr)
-{
-    // Setup orthographic projection matrix into our constant buffer
-    // Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right).
-    {
-        float L = draw_data->DisplayPos.x;
-        float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
-        float T = draw_data->DisplayPos.y;
-        float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
-        float mvp[4][4] =
-        {
-            { 2.0f/(R-L),   0.0f,           0.0f,       0.0f },
-            { 0.0f,         2.0f/(T-B),     0.0f,       0.0f },
-            { 0.0f,         0.0f,           0.5f,       0.0f },
-            { (R+L)/(L-R),  (T+B)/(B-T),    0.5f,       1.0f },
-        };
-        wgpuQueueWriteBuffer(g_defaultQueue, g_resources.Uniforms, offsetof(Uniforms, MVP), mvp, sizeof(Uniforms::MVP));
-        float gamma;
-        switch (g_renderTargetFormat) {
+static constexpr float ImGui_ImplWGPU_gamma_for_render_target_format(WGPUTextureFormat fmt) {
+    switch (fmt) {
         case WGPUTextureFormat_ASTC10x10UnormSrgb:
         case WGPUTextureFormat_ASTC10x5UnormSrgb:
         case WGPUTextureFormat_ASTC10x6UnormSrgb:
@@ -288,12 +271,34 @@ static void ImGui_ImplWGPU_SetupRenderState(ImDrawData* draw_data, WGPURenderPas
         case WGPUTextureFormat_ETC2RGB8UnormSrgb:
         case WGPUTextureFormat_ETC2RGBA8UnormSrgb:
         case WGPUTextureFormat_RGBA8UnormSrgb:
-            gamma = 2.2f;
+            return 2.2f;
             break;
         default:
-            gamma = 1.0f;
-        }
-        wgpuQueueWriteBuffer(g_defaultQueue, g_resources.Uniforms, offsetof(Uniforms, gamma), &gamma, sizeof(Uniforms::gamma));
+            return 1.0f;
+    }
+}
+static void ImGui_ImplWGPU_SetupRenderState(ImDrawData* draw_data, WGPURenderPassEncoder ctx, FrameResources* fr)
+{
+    // Setup orthographic projection matrix into our constant buffer
+    // Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right).
+    {
+        float L = draw_data->DisplayPos.x;
+        float R = draw_data->DisplayPos.x + draw_data->DisplaySize.x;
+        float T = draw_data->DisplayPos.y;
+        float B = draw_data->DisplayPos.y + draw_data->DisplaySize.y;
+
+        auto uniforms = Uniforms {
+            .MVP =
+            {
+                { 2.0f/(R-L),   0.0f,           0.0f,       0.0f },
+                { 0.0f,         2.0f/(T-B),     0.0f,       0.0f },
+                { 0.0f,         0.0f,           0.5f,       0.0f },
+                { (R+L)/(L-R),  (T+B)/(B-T),    0.5f,       1.0f },
+            },
+            .gamma = ImGui_ImplWGPU_gamma_for_render_target_format(g_renderTargetFormat)
+        };
+
+        wgpuQueueWriteBuffer(g_defaultQueue, g_resources.Uniforms, 0, &uniforms, sizeof(Uniforms));
     }
 
     // Setup viewport
