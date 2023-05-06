@@ -119,6 +119,51 @@ fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3f {
 	return normalize(mix(in.normal, rotatedN, normalMapStrength));
 }
 
+/* **************** IBL **************** */
+
+/**
+ * Evaluate the diffuse irradiance of teh environment light coming from the
+ * hemisphere oriented towards n.
+ */
+fn irradianceSH(sphericalHarmonics: array<vec3f, 9>, n: vec3f) -> vec3f {
+    // NB: We may use only the first 2 bands for better performance
+    return
+          sphericalHarmonics[0]
+        + sphericalHarmonics[1] * (n.y)
+        + sphericalHarmonics[2] * (n.z)
+        + sphericalHarmonics[3] * (n.x)
+        + sphericalHarmonics[4] * (n.y * n.x)
+        + sphericalHarmonics[5] * (n.y * n.z)
+        + sphericalHarmonics[6] * (3.0 * n.z * n.z - 1.0)
+        + sphericalHarmonics[7] * (n.z * n.x)
+        + sphericalHarmonics[8] * (n.x * n.x - n.y * n.y);
+}
+
+fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
+	return uLighting.prefilteredEnvMapLodLevelCount * perceptualRoughness;
+}
+
+fn ibl(
+	N: vec3f,
+	V: vec3f,
+	diffuseColor: vec3f,
+	f0: vec3f,
+	f90: vec3f,
+	perceptualRoughness: f32
+) -> vec3f {
+	let R = -reflect(V, N);
+	let irradiance = irradianceSH(uLighting.sphericalHarmonics, R);
+	let ibl_diffuse = diffuseColor / PI * max(irradiance, vec3f(0.0));
+
+	let lod = computeLODFromRoughness(perceptualRoughness);
+	let ld = textureSampleLevel(prefilteredEnvMap, R, lod);
+	let dfg = textureSampleLevel(dfgLut, vec2f(dot(N, V), perceptualRoughness), 0.0);
+	let specularColor = f0 * dfg.x + f90 * dfg.y;
+	let ibl_specular = specularColor * ld;
+
+	return ibl_diffuse + ibl_specular;
+}
+
 /* **************** BINDINGS **************** */
 
 struct VertexInput {
@@ -212,20 +257,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	// Compute shading
 	let V = normalize(in.viewDirection);
 
-	/*
-	// Instead of looping over the light sources, we sample the environment map
-	// in the reflected direction to get the specular shading.
-	let ibl_direction = -reflect(V, N);
-	let Pi = 3.14159266;
-	let theta = acos(ibl_direction.z / length(ibl_direction));
-	let phi = atan2(length(ibl_direction.xy), ibl_direction.x);
-	let ibl_uv = vec2f(phi / (2.0 * Pi), theta / Pi + 0.5);
-	let ibl_sample = textureSample(environmentTexture, textureSampler, ibl_uv).rgb;
-
-	var diffuse = vec3f(0.0);
-	let specular = ibl_sample;
-	*/
-	
 	// Sample texture
 	let baseColor = textureSample(baseColorTexture, textureSampler, in.uv).rgb;
 
