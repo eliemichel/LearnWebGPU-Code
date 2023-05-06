@@ -120,12 +120,13 @@ bool Application::onInit() {
 	SupportedLimits supportedLimits;
 	adapter.getLimits(&supportedLimits);
 	RequiredLimits requiredLimits = Default;
-	requiredLimits.limits = supportedLimits.limits;
 	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBindGroups = 2;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
+	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
+	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 
 	// Create device
 	DeviceDescriptor deviceDesc{};
