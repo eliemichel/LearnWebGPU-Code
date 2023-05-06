@@ -120,6 +120,7 @@ bool Application::onInit() {
 	SupportedLimits supportedLimits;
 	adapter.getLimits(&supportedLimits);
 	RequiredLimits requiredLimits = Default;
+	requiredLimits.limits = supportedLimits.limits;
 	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBindGroups = 2;
