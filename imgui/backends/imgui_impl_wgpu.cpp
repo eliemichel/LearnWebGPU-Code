@@ -84,6 +84,7 @@ static unsigned int     g_frameIndex = UINT_MAX;
 struct Uniforms
 {
     float MVP[4][4];
+    char _align[256-sizeof(MVP)];
     float gamma;
 };
 
