@@ -352,6 +352,9 @@ void Application::buildSwapChain() {
 	m_swapChainDesc.format = m_swapChainFormat;
 	m_swapChainDesc.presentMode = PresentMode::Fifo;
 	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
+	if (!m_swapChain) {
+		throw std::runtime_error("Failed to create swapchain");
+	}
 	std::cout << "Swapchain: " << m_swapChain << std::endl;
 }
 
