@@ -81,10 +81,12 @@ static FrameResources*  g_pFrameResources = nullptr;
 static unsigned int     g_numFramesInFlight = 0;
 static unsigned int     g_frameIndex = UINT_MAX;
 
-struct Uniforms
+struct alignas(256) Uniforms
 {
     float MVP[4][4];
-    float gamma;
+    struct alignas(256) {
+        float gamma;
+    } gamma;
 };
 
 //-----------------------------------------------------------------------------
@@ -522,7 +524,7 @@ static void ImGui_ImplWGPU_CreateUniformBuffer()
         nullptr,
         "Dear ImGui Uniform buffer",
         WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform,
-        (sizeof(Uniforms) + 3) & ~3,
+        sizeof(Uniforms),
         false
     };
     g_resources.Uniforms = wgpuDeviceCreateBuffer(g_wgpuDevice, &ub_desc);
