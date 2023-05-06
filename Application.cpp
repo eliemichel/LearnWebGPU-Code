@@ -319,7 +319,7 @@ bool Application::onInit() {
 	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
+	layoutDesc.bindGroupLayouts = &static_cast<WGPUBindGroupLayout&>(bindGroupLayout);
 	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
@@ -343,7 +343,7 @@ void Application::buildSwapChain() {
 	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
-	m_swapChainDesc = {};
+	m_swapChainDesc = SwapChainDescriptor{};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
 	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
