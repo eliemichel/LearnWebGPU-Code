@@ -7,7 +7,7 @@ const PI = 3.14159265359;
  * (Describe all the properties of a surface needed to shade it)
  */
 struct MaterialProperties {
-	baseColor: vec3<f32>,
+	baseColor: vec3f,
 	roughness: f32,
 	metallic: f32,
 	reflectance: f32,
@@ -23,10 +23,10 @@ struct MaterialProperties {
  */
 fn brdf(
 	material: MaterialProperties,
-	normal: vec3<f32>, // assumed to be normalized
-	incomingDirection: vec3<f32>, // assumed to be normalized
-	outgoingDirection: vec3<f32>, // assumed to be normalized
-) -> vec3<f32> {
+	normal: vec3f, // assumed to be normalized
+	incomingDirection: vec3f, // assumed to be normalized
+	outgoingDirection: vec3f, // assumed to be normalized
+) -> vec3f {
 	// Switch to compact notations used in math formulas
 	// (notations of https://google.github.io/filament/Filament.html)
 	let L = incomingDirection;
@@ -46,7 +46,7 @@ fn brdf(
 	// Self-shadowing
 	let Vis = V_SmithGGXCorrelatedFast(NoV, NoL, alpha);
 	// Fresnel
-	let f0_dielectric = vec3<f32>(0.16 * material.reflectance * material.reflectance);
+	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance);
 	let f0_conductor = material.baseColor;
 	let f0 = mix(f0_dielectric, f0_conductor, material.metallic);
 	let F = F_Schlick_vec3f(LoH, f0, 1.0);
@@ -54,7 +54,7 @@ fn brdf(
 
 	// == Diffuse lobe ==
 	let diffuseColor = (1.0 - material.metallic) * material.baseColor;
-	var f_d = vec3<f32>(0.0);
+	var f_d = vec3f(0.0);
 	if (material.highQuality != 0u) {
 		f_d = diffuseColor * Fd_Burley(NoV, NoL, LoH, alpha);
 	} else {
@@ -78,11 +78,11 @@ fn V_SmithGGXCorrelatedFast(NoV: f32, NoL: f32, roughness: f32) -> f32 {
 }
 
 // f90 is 1.0 for specular
-fn F_Schlick_vec3f(u: f32, f0: vec3<f32>, f90: f32) -> vec3<f32> {
+fn F_Schlick_vec3f(u: f32, f0: vec3f, f90: f32) -> vec3f {
 	let v_pow_1 = 1.0 - u;
 	let v_pow_2 = v_pow_1 * v_pow_1;
 	let v_pow_5 = v_pow_2 * v_pow_2 * v_pow_1;
-	return f0 * (1.0 - v_pow_5) + vec3<f32>(f90) * v_pow_5;
+	return f0 * (1.0 - v_pow_5) + vec3f(f90) * v_pow_5;
 }
 fn F_Schlick_f32(u: f32, f0: f32, f90: f32) -> f32 {
 	let v_pow_1 = 1.0 - u;
@@ -107,10 +107,10 @@ fn Fd_Burley(NoV: f32, NoL: f32, LoH: f32, roughness: f32) -> f32 {
  * Sample a local normal from the normal map and rotate it using the normal
  * frame to get a global normal.
  */
-fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3<f32> {
+fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3f {
 	let encodedN = textureSample(normalTexture, textureSampler, in.uv).rgb;
 	let localN = encodedN - 0.5;
-	let rotation = mat3x3<f32>(
+	let rotation = mat3x3f(
 		normalize(in.tangent),
 		normalize(in.bitangent),
 		normalize(in.normal),
@@ -123,22 +123,22 @@ fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3<f32> {
 
 struct VertexInput {
 	@builtin(instance_index) instance_index: u32,
-	@location(0) position: vec3<f32>,
-	@location(4) tangent: vec3<f32>,
-	@location(5) bitangent: vec3<f32>,
-	@location(1) normal: vec3<f32>,
-	@location(2) color: vec3<f32>,
-	@location(3) uv: vec2<f32>,
+	@location(0) position: vec3f,
+	@location(4) tangent: vec3f,
+	@location(5) bitangent: vec3f,
+	@location(1) normal: vec3f,
+	@location(2) color: vec3f,
+	@location(3) uv: vec2f,
 }
 
 struct VertexOutput {
-	@builtin(position) position: vec4<f32>,
-	@location(0) color: vec3<f32>,
-	@location(4) tangent: vec3<f32>,
-	@location(5) bitangent: vec3<f32>,
-	@location(1) normal: vec3<f32>,
-	@location(2) uv: vec2<f32>,
-	@location(3) viewDirection: vec3<f32>,
+	@builtin(position) position: vec4f,
+	@location(0) color: vec3f,
+	@location(4) tangent: vec3f,
+	@location(5) bitangent: vec3f,
+	@location(1) normal: vec3f,
+	@location(2) uv: vec2f,
+	@location(3) viewDirection: vec3f,
 	@location(6) instance: f32,
 }
 
@@ -146,11 +146,11 @@ struct VertexOutput {
  * A structure holding the value of our uniforms
  */
 struct MyUniforms {
-	projectionMatrix: mat4x4<f32>,
-	viewMatrix: mat4x4<f32>,
-	modelMatrix: mat4x4<f32>,
-	color: vec4<f32>,
-	cameraWorldPosition: vec3<f32>,
+	projectionMatrix: mat4x4f,
+	viewMatrix: mat4x4f,
+	modelMatrix: mat4x4f,
+	color: vec4f,
+	cameraWorldPosition: vec3f,
 	time: f32,
 	gamma: f32,
 }
@@ -159,8 +159,8 @@ struct MyUniforms {
  * A structure holding the lighting settings
  */
 struct LightingUniforms {
-	directions: array<vec4<f32>, 2>,
-	colors: array<vec4<f32>, 2>,
+	directions: array<vec4f, 2>,
+	colors: array<vec4f, 2>,
 	roughness: f32,
 	metallic: f32,
 	reflectance: f32,
@@ -186,8 +186,8 @@ struct LightingUniforms {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	let worldPosition = uMyUniforms.modelMatrix * vec4<f32>(in.position, 1.0);
-	out.instance = f32(in.instance_index) / 8.0;
+	let worldPosition = uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
+	out.instance = (f32(in.instance_index) + 0.5) / 8.0;
 	
 	// A trick to offset instances without changing their perspective
 	var proj = uMyUniforms.projectionMatrix;
@@ -195,9 +195,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 	out.position = proj * uMyUniforms.viewMatrix * worldPosition;
 	out.color = in.color;
-	out.tangent = (uMyUniforms.modelMatrix * vec4<f32>(in.tangent, 0.0)).xyz;
-	out.bitangent = (uMyUniforms.modelMatrix * vec4<f32>(in.bitangent, 0.0)).xyz;
-	out.normal = (uMyUniforms.modelMatrix * vec4<f32>(in.normal, 0.0)).xyz;
+	out.tangent = (uMyUniforms.modelMatrix * vec4f(in.tangent, 0.0)).xyz;
+	out.bitangent = (uMyUniforms.modelMatrix * vec4f(in.bitangent, 0.0)).xyz;
+	out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
 	out.uv = in.uv;
 	out.viewDirection = uMyUniforms.cameraWorldPosition - worldPosition.xyz;
 	return out;
@@ -206,7 +206,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 /* **************** FRAGMENT MAIN **************** */
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	let N = sampleNormal(in, uLighting.normalMapStrength);
 
 	// Compute shading
@@ -219,10 +219,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	let Pi = 3.14159266;
 	let theta = acos(ibl_direction.z / length(ibl_direction));
 	let phi = atan2(length(ibl_direction.xy), ibl_direction.x);
-	let ibl_uv = vec2<f32>(phi / (2.0 * Pi), theta / Pi + 0.5);
+	let ibl_uv = vec2f(phi / (2.0 * Pi), theta / Pi + 0.5);
 	let ibl_sample = textureSample(environmentTexture, textureSampler, ibl_uv).rgb;
 
-	var diffuse = vec3<f32>(0.0);
+	var diffuse = vec3f(0.0);
 	let specular = ibl_sample;
 	*/
 	
@@ -242,7 +242,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 		mix(uLighting.reflectance, uLighting.reflectance2, in.instance),
 		uLighting.highQuality,
 	);
-	var color = vec3<f32>(0.0);
+	var color = vec3f(0.0);
 	for (var i: i32 = 0; i < 2; i++) {
 		let L = normalize(uLighting.directions[i].xyz);
 		let lightEnergy = uLighting.colors[i].rgb * 2.0;
@@ -250,6 +250,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 	}
 
 	// Gamma-correction
-	let corrected_color = pow(color, vec3<f32>(uMyUniforms.gamma));
-	return vec4<f32>(corrected_color, uMyUniforms.color.a);
+	let corrected_color = pow(color, vec3f(uMyUniforms.gamma));
+	return vec4f(corrected_color, uMyUniforms.color.a);
 }

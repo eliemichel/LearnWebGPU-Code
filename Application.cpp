@@ -26,6 +26,7 @@
 
 #include "Application.h"
 #include "ResourceManager.h"
+#include "webgpu-release.h"
 
 #include <GLFW/glfw3.h>
 #include "glfw3webgpu.h"
@@ -41,7 +42,6 @@
 #include <backends/imgui_impl_glfw.h>
 
 #include <webgpu/webgpu.hpp>
-#include "webgpu-release.h"
 
 #include <iostream>
 #include <cassert>
@@ -137,11 +137,9 @@ bool Application::onInit() {
 	requiredLimits.limits.maxInterStageShaderComponents = 18;
 
 	// Create device
-	DeviceDescriptor deviceDesc{};
-	deviceDesc.label = "My Device";
+	DeviceDescriptor deviceDesc;
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
-	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << m_device << std::endl;
 
@@ -169,7 +167,7 @@ bool Application::onInit() {
 	buildSwapChain();
 	
 	std::cout << "Creating shader module..." << std::endl;
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
+	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
 	std::cout << "Shader module: " << shaderModule << std::endl;
 
 	//bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
