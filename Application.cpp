@@ -348,7 +348,7 @@ void Application::buildSwapChain() {
 	m_swapChainDesc = SwapChainDescriptor{};
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
-	m_swapChainDesc.usage = TextureUsage::RenderAttachment | TextureUsage::TextureBinding;
+	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
 	m_swapChainDesc.format = m_swapChainFormat;
 	m_swapChainDesc.presentMode = PresentMode::Fifo;
 	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
