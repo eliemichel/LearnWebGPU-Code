@@ -247,7 +247,36 @@ fn computeEquirectangular(@builtin(global_invocation_id) id: vec3u) {
 
 @compute @workgroup_size(4, 4, 6)
 fn prefilterCubeMap(@builtin(global_invocation_id) id: vec3u) {
+    let outputDimensions = textureDimensions(outputCubemapTexture).xy;
+
     let layer = id.z;
-    let color = vec4f(1.0, 0.5, 0.0, 1.0);
+    var color = vec4f(0.0);
+
+    let uv = vec2f(id.xy) / vec2f(outputDimensions - 1u);
+    let baseDirection = directionFromCubeMapUVL(CubeMapUVL(uv, layer));
+
+    for (var i = 0u ; i < 10u ; i++) {
+        // This is for DEBUG only:
+        let direction = normalize(baseDirection + vec3f(f32(i), 0, 0));
+
+        let samples = array<vec4f, 4>(
+            textureGather(0, inputCubemapTexture, textureSampler, direction),
+            textureGather(1, inputCubemapTexture, textureSampler, direction),
+            textureGather(2, inputCubemapTexture, textureSampler, direction),
+            textureGather(3, inputCubemapTexture, textureSampler, direction),
+        );
+
+        let w = textureGatherWeights_cubef(inputCubemapTexture, direction);
+        
+        let mean = vec4f(
+            mix(mix(samples[0].w, samples[0].z, w.x), mix(samples[0].x, samples[0].y, w.x), w.y),
+            mix(mix(samples[1].w, samples[1].z, w.x), mix(samples[1].x, samples[1].y, w.x), w.y),
+            mix(mix(samples[2].w, samples[2].z, w.x), mix(samples[2].x, samples[2].y, w.x), w.y),
+            mix(mix(samples[3].w, samples[3].z, w.x), mix(samples[3].x, samples[3].y, w.x), w.y),
+        );
+
+        color += 0.1 * mean;
+    }
+
     textureStore(outputCubemapTexture, id.xy, layer, color);
 }
