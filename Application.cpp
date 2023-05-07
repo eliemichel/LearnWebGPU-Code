@@ -101,24 +101,24 @@ bool Application::onInit() {
 	if (!initDevice()) return false;
 	initSwapChain();
 	initGui();
-	initBindGroupLayout();
-	initComputePipeline();
+	initBindGroupLayouts();
+	initComputePipelines();
 	initBuffers();
 	initTextures();
 	initTextureViews();
 	initSampler();
-	initBindGroup();
+	initBindGroups();
 	return true;
 }
 
 void Application::onFinish() {
-	terminateBindGroup();
+	terminateBindGroups();
 	terminateSampler();
 	terminateTextureViews();
 	terminateTextures();
 	terminateBuffers();
-	terminateComputePipeline();
-	terminateBindGroupLayout();
+	terminateComputePipelines();
+	terminateBindGroupLayouts();
 	terminateGui();
 	terminateSwapChain();
 	terminateDevice();
@@ -476,18 +476,35 @@ void Application::initTextureViews() {
 
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = 6;
-	textureViewDesc.baseMipLevel = 0;
 	textureViewDesc.dimension = m_settings.mode == Mode::EquirectToCubemap ? TextureViewDimension::_2DArray : TextureViewDimension::Cube;
-	m_cubemapTextureView = m_cubemapTexture.createView(textureViewDesc);
+	m_cubemapTextureMips.resize(levelCount, nullptr);
+	for (uint32_t level = 0; level < levelCount; ++level) {
+		std::string label = "MIP level #" + std::to_string(level);
+		textureViewDesc.baseMipLevel = level;
+		textureViewDesc.label = label.c_str();
+		m_cubemapTextureMips[level] = m_cubemapTexture.createView(textureViewDesc);
+	}
+
+	textureViewDesc.dimension = TextureViewDimension::Cube;
+	std::string label = "MIP level #0 as Cube";
+	textureViewDesc.baseMipLevel = 0;
+	textureViewDesc.label = label.c_str();
+	textureViewDesc.dimension = TextureViewDimension::Cube;
+	m_cubemapTextureCubeView = m_cubemapTexture.createView(textureViewDesc);
 }
 
 void Application::terminateTextureViews() {
 	wgpuTextureViewRelease(m_equirectangularTextureView);
-	wgpuTextureViewRelease(m_cubemapTextureView);
+	for (TextureView v : m_cubemapTextureMips) {
+		wgpuTextureViewRelease(v);
+	}
 	for (auto& mipLevel : m_cubemapTextureLayers) {
 		for (TextureView v : mipLevel) {
 			wgpuTextureViewRelease(v);
 		}
+	}
+	if (m_cubemapTextureCubeView) {
+		wgpuTextureViewRelease(m_cubemapTextureCubeView);
 	}
 }
 
@@ -508,8 +525,11 @@ void Application::terminateSampler() {
 	wgpuSamplerRelease(m_sampler);
 }
 
-void Application::initBindGroup() {
-	// Create compute bind group
+void Application::initBindGroups() {
+	uint32_t levelCount = m_cubemapTexture.getMipLevelCount();
+	m_bindGroups.resize(m_settings.mode == Mode::EquirectToCubemap ? levelCount : 1, nullptr);
+
+	// Create MIP-0 bind group
 	std::vector<BindGroupEntry> entries(4, Default);
 
 	// Equirectangular texture
@@ -518,7 +538,7 @@ void Application::initBindGroup() {
 
 	// CubeMap texture
 	entries[1].binding = m_settings.mode == Mode::EquirectToCubemap ? 3 : 1;
-	entries[1].textureView = m_cubemapTextureView;
+	entries[1].textureView = m_cubemapTextureMips[0];
 
 	// Uniforms
 	entries[2].binding = 4;
@@ -534,14 +554,33 @@ void Application::initBindGroup() {
 	bindGroupDesc.layout = m_bindGroupLayout;
 	bindGroupDesc.entryCount = (uint32_t)entries.size();
 	bindGroupDesc.entries = (WGPUBindGroupEntry*)entries.data();
-	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
+	m_bindGroups[0] = m_device.createBindGroup(bindGroupDesc);
+
+	// Create bind groups for other MIP levels
+	if (m_settings.mode == Mode::EquirectToCubemap) {
+		// MIP level 0
+		entries[0].binding = 1; // inputCubemapTexture
+		entries[0].textureView = m_cubemapTextureCubeView;
+
+		// MIP level `level`
+		entries[1].binding = 3; // outputCubemapTexture
+
+		bindGroupDesc.layout = m_prefilteringBindGroupLayout;
+
+		for (uint32_t level = 1; level < levelCount; ++level) {
+			entries[1].textureView = m_cubemapTextureMips[level];
+			m_bindGroups[level] = m_device.createBindGroup(bindGroupDesc);
+		}
+	}
 }
 
-void Application::terminateBindGroup() {
-	wgpuBindGroupRelease(m_bindGroup);
+void Application::terminateBindGroups() {
+	for (BindGroup bg : m_bindGroups) {
+		wgpuBindGroupRelease(bg);
+	}
 }
 
-void Application::initBindGroupLayout() {
+void Application::initBindGroupLayouts() {
 	// Create bind group layout
 	std::vector<BindGroupLayoutEntry> bindings(4, Default);
 
@@ -593,13 +632,33 @@ void Application::initBindGroupLayout() {
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
 	bindGroupLayoutDesc.entries = bindings.data();
 	m_bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+
+	if (m_settings.mode == Mode::EquirectToCubemap) {
+		// CubeMap as input
+		bindings[0].binding = 1;
+		bindings[0].texture.sampleType = TextureSampleType::Float;
+		bindings[0].texture.viewDimension = TextureViewDimension::Cube;
+		bindings[0].visibility = ShaderStage::Compute;
+
+		// CubeMap as output
+		bindings[1].binding = 3;
+		bindings[1].storageTexture.access = StorageTextureAccess::WriteOnly;
+		bindings[1].storageTexture.format = TextureFormat::RGBA8Unorm;
+		bindings[1].storageTexture.viewDimension = TextureViewDimension::_2DArray;
+		bindings[1].visibility = ShaderStage::Compute;
+
+		m_prefilteringBindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+	}
 }
 
-void Application::terminateBindGroupLayout() {
+void Application::terminateBindGroupLayouts() {
 	wgpuBindGroupLayoutRelease(m_bindGroupLayout);
+	if (m_prefilteringBindGroupLayout) {
+		wgpuBindGroupLayoutRelease(m_prefilteringBindGroupLayout);
+	}
 }
 
-void Application::initComputePipeline() {
+void Application::initComputePipelines() {
 	// Load compute shader
 	ShaderModule computeShaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/compute-shader.wgsl", m_device);
 
@@ -608,6 +667,14 @@ void Application::initComputePipeline() {
 	pipelineLayoutDesc.bindGroupLayoutCount = 1;
 	pipelineLayoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&m_bindGroupLayout;
 	m_pipelineLayout = m_device.createPipelineLayout(pipelineLayoutDesc);
+
+	if (m_settings.mode == Mode::EquirectToCubemap) {
+		pipelineLayoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&m_prefilteringBindGroupLayout;
+		m_prefilteringPipelineLayout = m_device.createPipelineLayout(pipelineLayoutDesc);
+	}
+	else {
+		m_prefilteringPipelineLayout = nullptr;
+	}
 
 	// Create compute pipeline
 	ComputePipelineDescriptor computePipelineDesc;
@@ -618,19 +685,30 @@ void Application::initComputePipeline() {
 	switch (m_settings.mode) {
 	case Mode::EquirectToCubemap:
 		computePipelineDesc.compute.entryPoint = "computeCubeMap";
+		m_pipeline = m_device.createComputePipeline(computePipelineDesc);
+		computePipelineDesc.compute.entryPoint = "prefilterCubeMap";
+		computePipelineDesc.layout = m_prefilteringPipelineLayout;
+		m_prefilteringPipeline = m_device.createComputePipeline(computePipelineDesc);
 		break;
 	case Mode::CubemapToEquirect:
 		computePipelineDesc.compute.entryPoint = "computeEquirectangular";
+		m_pipeline = m_device.createComputePipeline(computePipelineDesc);
+		m_prefilteringPipeline = nullptr;
 		break;
 	default:
 		assert(false);
 	}
-	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
 }
 
-void Application::terminateComputePipeline() {
+void Application::terminateComputePipelines() {
 	wgpuComputePipelineRelease(m_pipeline);
 	wgpuPipelineLayoutRelease(m_pipelineLayout);
+	if (m_prefilteringPipeline) {
+		wgpuComputePipelineRelease(m_prefilteringPipeline);
+	}
+	if (m_prefilteringPipelineLayout) {
+		wgpuPipelineLayoutRelease(m_prefilteringPipelineLayout);
+	}
 }
 
 void Application::onFrame() {
@@ -772,27 +850,27 @@ void Application::onCompute() {
 	std::cout << "Computing..." << std::endl;
 
 	if (m_shouldRebuildPipeline) {
-		terminateBindGroup();
+		terminateBindGroups();
 		terminateTextureViews();
 		terminateTextures();
-		terminateComputePipeline();
-		terminateBindGroupLayout();
-		initBindGroupLayout();
-		initComputePipeline();
+		terminateComputePipelines();
+		terminateBindGroupLayouts();
+		initBindGroupLayouts();
+		initComputePipelines();
 		initTextures();
 		initTextureViews();
-		initBindGroup();
+		initBindGroups();
 		m_shouldRebuildPipeline = false;
 		m_shouldReallocateTextures = false;
 	}
 
 	if (m_shouldReallocateTextures) {
-		terminateBindGroup();
+		terminateBindGroups();
 		terminateTextureViews();
 		terminateTextures();
 		initTextures();
 		initTextureViews();
-		initBindGroup();
+		initBindGroups();
 		m_shouldReallocateTextures = false;
 	}
 
@@ -810,8 +888,8 @@ void Application::onCompute() {
 	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
 	computePass.setPipeline(m_pipeline);
+	computePass.setBindGroup(0, m_bindGroups[0], 0, nullptr);
 
-	computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 	uint32_t invocationCountX = 0, invocationCountY = 0, workgroupSizePerDim = 0;
 	switch (m_settings.mode) {
 	case Mode::EquirectToCubemap:
@@ -831,6 +909,21 @@ void Application::onCompute() {
 	uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
 	uint32_t workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;
 	computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY, 1);
+
+	// Prefiltering dispatches
+	if (m_settings.mode == Mode::EquirectToCubemap) {
+		uint32_t levelCount = m_cubemapTexture.getMipLevelCount();
+		computePass.setPipeline(m_prefilteringPipeline);
+		for (uint32_t level = 1; level < levelCount; ++level) {
+			computePass.setBindGroup(0, m_bindGroups[level], 0, nullptr);
+
+			invocationCountX = invocationCountX / 2;
+			invocationCountY = invocationCountY / 2;
+			workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;
+			workgroupCountY = (invocationCountY + workgroupSizePerDim - 1) / workgroupSizePerDim;
+			computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY, 1);
+		}
+	}
 
 	// Finalize compute pass
 	computePass.end();

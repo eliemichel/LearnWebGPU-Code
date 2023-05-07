@@ -182,7 +182,7 @@ const CUBE_FACE_TRANSFORM = array<mat3x3f,6>(
 );
 
 @compute @workgroup_size(4, 4, 6)
-fn computeCubeMap(@builtin(global_invocation_id) id: vec3<u32>) {
+fn computeCubeMap(@builtin(global_invocation_id) id: vec3u) {
     let outputDimensions = textureDimensions(outputCubemapTexture).xy;
     let inputDimensions = textureDimensions(inputEquirectangularTexture);
     let layer = id.z;
@@ -215,7 +215,7 @@ fn computeCubeMap(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 
 @compute @workgroup_size(8, 8)
-fn computeEquirectangular(@builtin(global_invocation_id) id: vec3<u32>) {
+fn computeEquirectangular(@builtin(global_invocation_id) id: vec3u) {
     let outputDimensions = textureDimensions(outputEquirectangularTexture).xy;
 
     let uv = (vec2f(id.xy) + 0.5) / vec2f(outputDimensions);
@@ -243,4 +243,11 @@ fn computeEquirectangular(@builtin(global_invocation_id) id: vec3<u32>) {
         mix(mix(samples[3].w, samples[3].z, w.x), mix(samples[3].x, samples[3].y, w.x), w.y),
     );
     textureStore(outputEquirectangularTexture, id.xy, color);
+}
+
+@compute @workgroup_size(4, 4, 6)
+fn prefilterCubeMap(@builtin(global_invocation_id) id: vec3u) {
+    let layer = id.z;
+    let color = vec4f(1.0, 0.5, 0.0, 1.0);
+    textureStore(outputCubemapTexture, id.xy, layer, color);
 }

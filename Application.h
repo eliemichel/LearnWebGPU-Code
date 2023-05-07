@@ -91,14 +91,14 @@ private:
 	void initSampler();
 	void terminateSampler();
 
-	void initBindGroup();
-	void terminateBindGroup();
+	void initBindGroups();
+	void terminateBindGroups();
 
-	void initBindGroupLayout();
-	void terminateBindGroupLayout();
+	void initBindGroupLayouts();
+	void terminateBindGroupLayouts();
 
-	void initComputePipeline();
-	void terminateComputePipeline();
+	void initComputePipelines();
+	void terminateComputePipelines();
 
 private:
 	GLFWwindow* m_window = nullptr;
@@ -110,10 +110,13 @@ private:
 	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
 	wgpu::SwapChain m_swapChain = nullptr;
-	wgpu::BindGroup m_bindGroup = nullptr;
+	std::vector<wgpu::BindGroup> m_bindGroups;
 	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
+	wgpu::BindGroupLayout m_prefilteringBindGroupLayout = nullptr;
 	wgpu::PipelineLayout m_pipelineLayout = nullptr;
+	wgpu::PipelineLayout m_prefilteringPipelineLayout = nullptr;
 	wgpu::ComputePipeline m_pipeline = nullptr;
+	wgpu::ComputePipeline m_prefilteringPipeline = nullptr;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
 
@@ -124,9 +127,11 @@ private:
 	wgpu::Texture m_equirectangularTexture = nullptr;
 	wgpu::Texture m_cubemapTexture = nullptr;
 	wgpu::TextureView m_equirectangularTextureView = nullptr;
-	wgpu::TextureView m_cubemapTextureView = nullptr;
 	// We generate views for each MIP level, and for each cubemap face
 	std::vector<std::array<wgpu::TextureView, 6>> m_cubemapTextureLayers;
+	std::vector<wgpu::TextureView> m_cubemapTextureMips;
+	// Mip level 0, always as a cube (for read only)
+	wgpu::TextureView m_cubemapTextureCubeView = nullptr;
 	wgpu::Sampler m_sampler = nullptr;
 
 	enum class CubeFace {
