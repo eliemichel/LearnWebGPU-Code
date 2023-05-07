@@ -125,7 +125,8 @@ private:
 	wgpu::Texture m_cubemapTexture = nullptr;
 	wgpu::TextureView m_equirectangularTextureView = nullptr;
 	wgpu::TextureView m_cubemapTextureView = nullptr;
-	std::array<wgpu::TextureView, 6> m_cubemapTextureLayers = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+	// We generate views for each MIP level, and for each cubemap face
+	std::vector<std::array<wgpu::TextureView, 6>> m_cubemapTextureLayers;
 	wgpu::Sampler m_sampler = nullptr;
 
 	enum class CubeFace {
@@ -170,6 +171,7 @@ private:
 		glm::vec2 offset = { 0.0f, 0.0f };
 		int outputSizeLog = 9;
 		Mode mode = Mode::EquirectToCubemap;
+		int mipLevel = 0;
 	};
 	Settings m_settings;
 };

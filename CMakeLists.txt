@@ -27,6 +27,8 @@ add_executable(App
 	stb_image.h
 	stb_image_write.h
 	save_texture.h
+	webgpu-utils.h
+	webgpu-utils.cpp
 )
 
 if(DEV_MODE)

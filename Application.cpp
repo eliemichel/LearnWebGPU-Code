@@ -26,6 +26,7 @@
 
 #include "Application.h"
 #include "ResourceManager.h"
+#include "webgpu-utils.h"
 
 #include "save_texture.h"
 
@@ -309,6 +310,8 @@ void Application::initTextures() {
 	default:
 		assert(false);
 	}
+
+	m_settings.mipLevel = glm::clamp(m_settings.mipLevel, 0, (int)m_cubemapTexture.getMipLevelCount() - 1);
 }
 
 void Application::initTexturesEquirectToCubemap() {
@@ -359,6 +362,7 @@ void Application::initTexturesEquirectToCubemap() {
 		TextureUsage::StorageBinding | // to write the texture in a shader
 		TextureUsage::CopySrc // to save the output data
 	);
+	textureDesc.mipLevelCount = wgpuMaxMipLevels2D(textureDesc.size);
 	m_cubemapTexture = m_device.createTexture(textureDesc);
 }
 
@@ -459,14 +463,20 @@ void Application::initTextureViews() {
 		"CubeMap Negative Z",
 	};
 
-	for (uint32_t i = 0; i < 6; ++i) {
-		textureViewDesc.label = outputLabels[i];
-		textureViewDesc.baseArrayLayer = i;
-		m_cubemapTextureLayers[i] = m_cubemapTexture.createView(textureViewDesc);
+	uint32_t levelCount = m_cubemapTexture.getMipLevelCount();
+	m_cubemapTextureLayers.resize(levelCount, {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr});
+	for (uint32_t level = 0; level < levelCount; ++level) {
+		textureViewDesc.baseMipLevel = level;
+		for (uint32_t i = 0; i < 6; ++i) {
+			textureViewDesc.label = outputLabels[i];
+			textureViewDesc.baseArrayLayer = i;
+			m_cubemapTextureLayers[level][i] = m_cubemapTexture.createView(textureViewDesc);
+		}
 	}
 
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = 6;
+	textureViewDesc.baseMipLevel = 0;
 	textureViewDesc.dimension = m_settings.mode == Mode::EquirectToCubemap ? TextureViewDimension::_2DArray : TextureViewDimension::Cube;
 	m_cubemapTextureView = m_cubemapTexture.createView(textureViewDesc);
 }
@@ -474,8 +484,10 @@ void Application::initTextureViews() {
 void Application::terminateTextureViews() {
 	wgpuTextureViewRelease(m_equirectangularTextureView);
 	wgpuTextureViewRelease(m_cubemapTextureView);
-	for (TextureView v : m_cubemapTextureLayers) {
-		wgpuTextureViewRelease(v);
+	for (auto& mipLevel : m_cubemapTextureLayers) {
+		for (TextureView v : mipLevel) {
+			wgpuTextureViewRelease(v);
+		}
 	}
 }
 
@@ -690,34 +702,29 @@ void Application::onGui(RenderPassEncoder renderPass) {
 			drawList->AddImageQuad(user_texture_id, p_min, { p_max.x, p_min.y }, { p_max.x, p_max.y }, { p_min.x, p_max.y }, { uv_min.y, uv_min.x }, { uv_min.y, uv_max.x }, { uv_max.y, uv_max.x }, { uv_max.y, uv_min.x });
 		};
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeY];
+		const auto& mipViews = m_cubemapTextureLayers[m_settings.mipLevel];
+
+		view = (ImTextureID)mipViews[(int)CubeFace::NegativeY];
 		drawList->AddImage(view, { of.x + 0 * s, of.y + s }, { of.x + 1 * s, of.y + 2 * s }, { 0, 0 }, {1, 1});
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveX];
+		view = (ImTextureID)mipViews[(int)CubeFace::PositiveX];
 		AddFlippedImage(view, { of.x + 1 * s, of.y + s }, { of.x + 2 * s, of.y + 2 * s }, { 1, 0 }, { 0, 1 });
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveY];
+		view = (ImTextureID)mipViews[(int)CubeFace::PositiveY];
 		drawList->AddImage(view, { of.x + 2 * s, of.y + s }, { of.x + 3 * s, of.y + 2 * s }, { 1, 1 }, { 0, 0 });
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeX];
+		view = (ImTextureID)mipViews[(int)CubeFace::NegativeX];
 		AddFlippedImage(view, { of.x + 3 * s, of.y + s }, { of.x + 4 * s, of.y + 2 * s }, { 0, 1 }, { 1, 0 });
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::PositiveZ];
+		view = (ImTextureID)mipViews[(int)CubeFace::PositiveZ];
 		AddFlippedImage(view, { of.x + 1 * s, of.y + 0 * s }, { of.x + 2 * s, of.y + 1 * s }, { 1, 0 }, { 0, 1 });
 
-		view = (ImTextureID)m_cubemapTextureLayers[(int)CubeFace::NegativeZ];
+		view = (ImTextureID)mipViews[(int)CubeFace::NegativeZ];
 		AddFlippedImage(view, { of.x + 1 * s, of.y + 2 * s }, { of.x + 2 * s,  of.y + 3 * s }, { 1, 0 }, { 0, 1 });
 	}
 
 	bool changed = false;
 	ImGui::Begin("Parameters");
-	float minimum = m_parameters.normalize  ? 0.0f : -2.0f;
-	float maximum = m_parameters.normalize ? 4.0f : 2.0f;
-	changed = ImGui::Combo("Filter Type", (int*)&m_parameters.filterType, "Sum\0Maximum\0Minimum\0") || changed;
-	changed = ImGui::SliderFloat3("Kernel X", glm::value_ptr(m_parameters.kernel[0]), minimum, maximum) || changed;
-	changed = ImGui::SliderFloat3("Kernel Y", glm::value_ptr(m_parameters.kernel[1]), minimum, maximum) || changed;
-	changed = ImGui::SliderFloat3("Kernel Z", glm::value_ptr(m_parameters.kernel[2]), minimum, maximum) || changed;
-	changed = ImGui::Checkbox("Normalize", &m_parameters.normalize) || changed;
 	ImGui::End();
 
 	if (changed) {
@@ -736,6 +743,7 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	}
 	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
 	ImGui::SliderFloat2("Offset", glm::value_ptr(m_settings.offset), -2.0f, 2.0f);
+	ImGui::SliderInt("MIP Level", &m_settings.mipLevel, 0, m_cubemapTexture.getMipLevelCount() - 1);
 	if (ImGui::SliderInt("Output Size (log)", &m_settings.outputSizeLog, 2, 11)) {
 		m_shouldReallocateTextures = true;
 		m_shouldCompute = true;

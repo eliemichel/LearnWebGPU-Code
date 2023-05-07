@@ -187,12 +187,9 @@ fn computeCubeMap(@builtin(global_invocation_id) id: vec3<u32>) {
     let inputDimensions = textureDimensions(inputEquirectangularTexture);
     let layer = id.z;
 
-    let uv = vec2f(id.xy) / vec2f(outputDimensions);
+    let uv = vec2f(id.xy) / vec2f(outputDimensions - 1u);
 
-    //let direction = CUBE_FACE_TRANSFORM[layer] * vec3f(uv, 1.0);
     let direction = directionFromCubeMapUVL(CubeMapUVL(uv, layer));
-
-    //let direction = vec3f(1.0, 1.0 - 2.0 * uv.x, 1.0 - 2.0 * uv.y);
 
     let theta = acos(direction.z / length(direction));
     let phi = atan2(direction.y, direction.x);
@@ -221,7 +218,7 @@ fn computeCubeMap(@builtin(global_invocation_id) id: vec3<u32>) {
 fn computeEquirectangular(@builtin(global_invocation_id) id: vec3<u32>) {
     let outputDimensions = textureDimensions(outputEquirectangularTexture).xy;
 
-    let uv = vec2f(id.xy) / vec2f(outputDimensions);
+    let uv = (vec2f(id.xy) + 0.5) / vec2f(outputDimensions);
     let phi = (uv.x - 0.5) * 2.0 * PI;
     let theta = uv.y * PI;
     let direction = vec3f(
