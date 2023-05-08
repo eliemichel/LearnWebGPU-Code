@@ -70,6 +70,9 @@ public:
 	// Load a cubemap and all its MIP levels that correspond to various roughnesses
 	static wgpu::Texture loadPrefilteredCubemap(const path& rootPath, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
 
+	// Load the 16-bit float DFG LUT from some ad-hoc binary format
+	static wgpu::Texture loadDFGTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
+
 private:
 	// Compute Tangent and Bitangent attributes from the normal and UVs.
 	static void computeTextureFrameAttributes(std::vector<VertexAttributes>& vertexData);

@@ -356,3 +356,60 @@ Texture ResourceManager::loadPrefilteredCubemap(const path& rootPath, Device dev
 
 	return texture;
 }
+
+wgpu::Texture ResourceManager::loadDFGTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView) {
+	const uint32_t size = 256;
+	const uint32_t componentSize = 2; // f16
+
+	// Create texture
+	TextureDescriptor desc = Default;
+	desc.dimension = TextureDimension::_2D;
+	desc.label = "DFG LUT";
+	desc.format = TextureFormat::RG16Float;
+	desc.mipLevelCount = 1;
+	desc.size = { size, size, 1 };
+	desc.usage = TextureUsage::CopyDst | TextureUsage::TextureBinding;
+	Texture texture = device.createTexture(desc);
+
+	// Generate data
+	std::vector<char> data(2 * size * size * componentSize);
+	std::ifstream ifs(path, std::ios::binary);
+	if (!ifs.is_open()) return nullptr;
+	ifs.read(reinterpret_cast<char*>(data.data()), data.size());
+	ifs.close();
+
+	// Upload data
+	Queue queue = device.getQueue();
+
+	ImageCopyTexture dst;
+	dst.aspect = TextureAspect::All;
+	dst.mipLevel = 0;
+	dst.origin = { 0,0,0 };
+	dst.texture = texture;
+
+	TextureDataLayout layout;
+	layout.offset = 0;
+	layout.bytesPerRow = size * 2 * componentSize;
+	layout.rowsPerImage = size;
+
+	queue.writeTexture(dst, data.data(), data.size(), layout, desc.size);
+
+#ifdef WEBGPU_BACKEND_DAWN
+	wgpuQueueRelease(queue);
+#endif
+
+	if (pTextureView) {
+		TextureViewDescriptor viewDesc;
+		viewDesc.arrayLayerCount = 1;
+		viewDesc.aspect = TextureAspect::All;
+		viewDesc.baseArrayLayer = 0;
+		viewDesc.baseMipLevel = 0;
+		viewDesc.dimension = TextureViewDimension::_2D;
+		viewDesc.format = desc.format;
+		viewDesc.label = desc.label;
+		viewDesc.mipLevelCount = desc.mipLevelCount;
+		*pTextureView = texture.createView(viewDesc);
+	}
+
+	return texture;
+}

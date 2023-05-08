@@ -27,7 +27,6 @@
 #include "Application.h"
 #include "ResourceManager.h"
 #include "webgpu-release.h"
-#include "ibl-utils.h"
 
 #include <GLFW/glfw3.h>
 #include "glfw3webgpu.h"
@@ -407,17 +406,25 @@ bool Application::initTextures() {
 		return true;
 	};
 
+	auto load = [&](const std::filesystem::path& path, auto loader) {
+		TextureView textureView = nullptr;
+		Texture texture = loader(path, m_device, &textureView);
+		if (!texture) {
+			std::cerr << "Could not load prefiltered cubemap!" << std::endl;
+			return false;
+		}
+		m_textures.push_back(texture);
+		m_textureViews.push_back(textureView);
+		return true;
+	};
+
 	if (!(
 		//loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg") &&
 		loadTexture(RESOURCE_DIR "/red.png") &&
 		loadTexture(RESOURCE_DIR "/fourareen2K_normals.png") &&
-		loadPrefilteredCubemap(RESOURCE_DIR "/autumn_park")
+		loadPrefilteredCubemap(RESOURCE_DIR "/autumn_park") &&
+		load(RESOURCE_DIR "/DFG.bin", ResourceManager::loadDFGTexture)
 	)) return false;
-
-	TextureView dfgLutView = nullptr;
-	Texture dfgLut = ibl_utils::createDFGTexture(m_device, 256, &dfgLutView);
-	m_textures.push_back(dfgLut);
-	m_textureViews.push_back(dfgLutView);
 
 	return true;
 }
@@ -906,13 +913,13 @@ void Application::initLighting() {
 		vec4{1.0, 0.9, 0.6, 1.0},
 		vec4{0.6, 0.9, 1.0, 1.0}
 	};
-	m_lightingUniforms.roughness = 0.5f;
+	m_lightingUniforms.roughness = 1.0f;
 	m_lightingUniforms.metallic = 0.0f;
 	m_lightingUniforms.reflectance = 0.5f;
 	m_lightingUniforms.normalMapStrength = 0.5f;
 	m_lightingUniforms.highQuality = true;
-	m_lightingUniforms.roughness2 = 0.5f;
-	m_lightingUniforms.metallic2 = 0.0f;
+	m_lightingUniforms.roughness2 = 0.0f;
+	m_lightingUniforms.metallic2 = 0.1f;
 	m_lightingUniforms.reflectance2 = 0.5f;
 	m_lightingUniforms.instanceSpacing = 2.0f;
 
