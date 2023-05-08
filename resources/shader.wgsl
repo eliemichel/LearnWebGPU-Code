@@ -140,12 +140,6 @@ fn irradianceSH(sphericalHarmonics: array<vec3f, 9>, n: vec3f) -> vec3f {
         + sphericalHarmonics[8] * (n.x * n.x - n.y * n.y);
 }
 
-fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
-	//let count = uLighting.prefilteredEnvMapLodLevelCount;
-	let count = 7; // TODO
-	return count * perceptualRoughness * perceptualRoughness;
-}
-
 fn ibl(
 	N: vec3f,
 	V: vec3f,
@@ -168,11 +162,30 @@ fn ibl(
 }
 */
 
+fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
+	//let count = uLighting.prefilteredEnvMapLodLevelCount;
+	let count = 7; // TODO
+	return f32(count) * perceptualRoughness * perceptualRoughness;
+}
+
 fn eval_ibl(material: MaterialProperties, N: vec3f, V: vec3f) -> vec3f {
+	let L = N; // ?
+	let H = normalize(L + V);
+	let LoH = clamp(dot(L, H), 0.0, 1.0);
+
+	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance);
+	let f0_conductor = material.baseColor;
+	let f0 = mix(f0_dielectric, f0_conductor, material.metallic);
+	let alpha = material.roughness * material.roughness;
+	let f90 = 0.5 + 2.0 * alpha * LoH * LoH;
+
 	let R = -reflect(V, N);
 	let lod = computeLODFromRoughness(material.roughness);
 	let ld = textureSampleLevel(environmentTexture, textureSampler, R, lod).rgb;
-	return ld;
+	let dfg = textureSampleLevel(dfgLut, textureSampler, vec2f(dot(N, V), material.roughness), 0.0).xy;
+	let specularColor = f0 * dfg.x + f90 * dfg.y;
+	let ibl_specular = specularColor * ld;
+	return ibl_specular;
 }
 
 /* **************** BINDINGS **************** */
@@ -236,6 +249,7 @@ struct LightingUniforms {
 @group(0) @binding(3) var baseColorTexture: texture_2d<f32>;
 @group(0) @binding(4) var normalTexture: texture_2d<f32>;
 @group(0) @binding(5) var environmentTexture: texture_cube<f32>;
+@group(0) @binding(6) var dfgLut: texture_2d<f32>;
 
 /* **************** VERTEX MAIN **************** */
 

@@ -27,6 +27,7 @@
 #include "Application.h"
 #include "ResourceManager.h"
 #include "webgpu-release.h"
+#include "ibl-utils.h"
 
 #include <GLFW/glfw3.h>
 #include "glfw3webgpu.h"
@@ -400,11 +401,18 @@ bool Application::initTextures() {
 		return true;
 	};
 
-	return (
+	if (!(
 		loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg") &&
 		loadTexture(RESOURCE_DIR "/fourareen2K_normals.png") &&
 		loadPrefilteredCubemap(RESOURCE_DIR "/autumn_park")
-	);
+	)) return false;
+
+	TextureView dfgLutView = nullptr;
+	Texture dfgLut = ibl_utils::createDFGTexture(m_device, 256, &dfgLutView);
+	m_textures.push_back(dfgLut);
+	m_textureViews.push_back(dfgLutView);
+
+	return true;
 }
 
 void Application::terminateTextures() {
@@ -420,7 +428,7 @@ void Application::terminateTextures() {
 
 void Application::initBindGroupLayouts() {
 	// Create binding layout
-	std::vector<wgpu::BindGroupLayoutEntry> entries(6, Default);
+	std::vector<wgpu::BindGroupLayoutEntry> entries(7, Default);
 
 	BindGroupLayoutEntry& uniformBindingLayout = entries[0];
 	uniformBindingLayout.binding = 0;
@@ -457,6 +465,12 @@ void Application::initBindGroupLayouts() {
 	environmentTextureLayout.texture.sampleType = TextureSampleType::Float;
 	environmentTextureLayout.texture.viewDimension = TextureViewDimension::Cube;
 
+	BindGroupLayoutEntry& dfgLutLayout = entries[6];
+	dfgLutLayout.binding = 6;
+	dfgLutLayout.visibility = ShaderStage::Fragment;
+	dfgLutLayout.texture.sampleType = TextureSampleType::Float;
+	dfgLutLayout.texture.viewDimension = TextureViewDimension::_2D;
+
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)entries.size();
@@ -470,7 +484,7 @@ void Application::terminateBindGroupLayouts() {
 
 void Application::initBindGroups() {
 	// Create bindings
-	std::vector<wgpu::BindGroupEntry> entries(6, Default);
+	std::vector<wgpu::BindGroupEntry> entries(7, Default);
 
 	entries[0].binding = 0;
 	entries[0].buffer = m_uniformBuffer;
@@ -493,6 +507,9 @@ void Application::initBindGroups() {
 
 	entries[5].binding = 5;
 	entries[5].textureView = m_textureViews[2];
+
+	entries[6].binding = 6;
+	entries[6].textureView = m_textureViews[3];
 
 	// Create bind group
 	BindGroupDescriptor bindGroupDesc;

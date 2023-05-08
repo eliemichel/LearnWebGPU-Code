@@ -1,6 +1,9 @@
 #include "ibl-utils.h"
 
+#include "float16_t.hpp"
 #include <glm/glm.hpp>
+
+#include <fstream>
 
 // Most of this comes from https://github.com/google/filament/blob/main/libs/ibl/src/CubemapIBL.cpp
 
@@ -134,3 +137,91 @@ void DFG(Image& dst) {
         }
     }
 }
+
+namespace ibl_utils {
+
+using namespace wgpu;
+using numeric::float16_t;
+
+Texture createDFGTexture(Device device, uint32_t size, wgpu::TextureView* view) {
+    // Create texture
+    TextureDescriptor desc = Default;
+    desc.dimension = TextureDimension::_2D;
+    desc.label = "DFG LUT";
+    desc.format = TextureFormat::RG16Float;
+    desc.mipLevelCount = 1;
+    desc.size = { size, size, 1 };
+    desc.usage = TextureUsage::CopyDst | TextureUsage::TextureBinding;
+    Texture texture = device.createTexture(desc);
+
+    // Generate data
+    std::vector<float16_t> data(2 * size * size);
+    std::ifstream ifs("G:/tmp/DFG.bin");
+    if (ifs.is_open() && false) {
+        ifs.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(float16_t));
+        ifs.close();
+    }
+    else {
+        for (uint32_t y = 0; y < size; ++y) {
+            const float coord = glm::clamp((size - y + 0.5f) / size, 0.0f, 1.0f);
+
+            // map the coordinate in the texture to a linear_roughness,
+            // here we're using ^2, but other mappings are possible.
+            // ==> coord = sqrt(linear_roughness)
+            const float linear_roughness = coord * coord;
+            for (uint32_t x = 0; x < size; ++x) {
+                // const float NoV = float(x) / (width-1);
+                const float NoV = glm::clamp((x + 0.5f) / size, 0.0f, 1.0f);
+                glm::vec3 r = { DFV(NoV, linear_roughness, 1024), 0.0f };
+
+                float16_t* pixel = &data[2 * (y * size + x)];
+                pixel[0] = r.x;
+                pixel[1] = r.y;
+            }
+        }
+    }
+
+    // Upload data
+    Queue queue = device.getQueue();
+
+    ImageCopyTexture dst;
+    dst.aspect = TextureAspect::All;
+    dst.mipLevel = 0;
+    dst.origin = { 0,0,0 };
+    dst.texture = texture;
+
+    TextureDataLayout layout;
+    layout.offset = 0;
+    layout.bytesPerRow = size * 2 * sizeof(float16_t);
+    layout.rowsPerImage = size;
+
+    queue.writeTexture(dst, data.data(), data.size() * sizeof(float16_t), layout, desc.size);
+
+#ifdef WEBGPU_BACKEND_DAWN
+    wgpuQueueRelease(queue);
+#endif
+
+    if (view) {
+        TextureViewDescriptor viewDesc;
+        viewDesc.arrayLayerCount = 1;
+        viewDesc.aspect = TextureAspect::All;
+        viewDesc.baseArrayLayer = 0;
+        viewDesc.baseMipLevel = 0;
+        viewDesc.dimension = TextureViewDimension::_2D;
+        viewDesc.format = desc.format;
+        viewDesc.label = desc.label;
+        viewDesc.mipLevelCount = desc.mipLevelCount;
+        *view = texture.createView(viewDesc);
+    }
+
+    // DEBUG
+    std::ofstream f("G:/tmp/DFG.bin");
+    if(f.is_open() && false) {
+        f.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float16_t));
+        f.close();
+    }
+
+    return texture;
+}
+
+} // namespace ibl_utils
