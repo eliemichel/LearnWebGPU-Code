@@ -156,10 +156,12 @@ Texture createDFGTexture(Device device, uint32_t size, wgpu::TextureView* view) 
 
     // Generate data
     std::vector<float16_t> data(2 * size * size);
-    std::ifstream ifs("G:/tmp/DFG.bin");
-    if (ifs.is_open() && false) {
-        ifs.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(float16_t));
-        ifs.close();
+    if (true) {
+        std::ifstream ifs("G:/tmp/DFG.bin", std::ios::binary);
+        if (ifs.is_open()) {
+            ifs.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(float16_t));
+            ifs.close();
+        }
     }
     else {
         for (uint32_t y = 0; y < size; ++y) {
@@ -215,10 +217,12 @@ Texture createDFGTexture(Device device, uint32_t size, wgpu::TextureView* view) 
     }
 
     // DEBUG
-    std::ofstream f("G:/tmp/DFG.bin");
-    if(f.is_open() && false) {
-        f.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float16_t));
-        f.close();
+    if (false) {
+        std::ofstream f("G:/tmp/DFG.bin", std::ios::binary);
+        if (f.is_open()) {
+            f.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float16_t));
+            f.close();
+        }
     }
 
     return texture;

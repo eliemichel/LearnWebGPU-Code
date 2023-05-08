@@ -302,11 +302,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
 	color += eval_ibl(material, N, V);
 	
+	/*
 	for (var i: i32 = 0; i < 2; i++) {
 		let L = normalize(uLighting.directions[i].xyz);
 		let lightEnergy = uLighting.colors[i].rgb * 0.0;
 		color += brdf(material, N, L, V) * lightEnergy;
 	}
+	*/
 
 	// Gamma-correction
 	let corrected_color = pow(color, vec3f(uniforms.gamma));
