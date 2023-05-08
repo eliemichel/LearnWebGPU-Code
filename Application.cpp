@@ -80,6 +80,45 @@ void onWindowScroll(GLFWwindow* window, double xoffset, double yoffset) {
 }
 
 bool Application::onInit() {
+	if (!initWindow()) return false;
+	if (!initDevice()) return false;
+	initSwapChain();
+	initDepthBuffer();
+	initShaders();
+	initGui();
+	initBindGroupLayouts();
+	initPipelines();
+	if (!initTextures()) return false;
+	if (!initBuffers()) return false;
+	initLighting();
+	initSampler();
+	initBindGroups();
+
+#ifdef WEBGPU_BACKEND_DAWN
+	// Flush error queue
+	m_device.tick();
+#endif
+
+	return true;
+}
+
+void Application::onFinish() {
+	terminateBindGroups();
+	terminateSampler();
+	terminateLighting();
+	terminateBuffers();
+	terminateTextures();
+	terminatePipelines();
+	terminateBindGroupLayouts();
+	terminateGui();
+	terminateShaders();
+	terminateDepthBuffer();
+	terminateSwapChain();
+	terminateDevice();
+	terminateWindow();
+}
+
+bool Application::initDevice() {
 	// Create instance
 	m_instance = createInstance(InstanceDescriptor{});
 	if (!m_instance) {
@@ -87,38 +126,18 @@ bool Application::onInit() {
 		return false;
 	}
 
-	if (!glfwInit()) {
-		std::cerr << "Could not initialize GLFW!" << std::endl;
-		return false;
-	}
-
-	// Create window
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
-	if (!m_window) {
-		std::cerr << "Could not open window!" << std::endl;
-		return false;
-	}
-
-	// Add window callbacks
-	glfwSetWindowUserPointer(m_window, this);
-	glfwSetFramebufferSizeCallback(m_window, onWindowResize);
-	glfwSetCursorPosCallback(m_window, onWindowMouseMove);
-	glfwSetMouseButtonCallback(m_window, onWindowMouseButton);
-	glfwSetScrollCallback(m_window, onWindowScroll);
-
 	// Create surface and adapter
 	std::cout << "Requesting adapter..." << std::endl;
 	m_surface = glfwGetWGPUSurface(m_instance, m_window);
 	RequestAdapterOptions adapterOpts{};
+	adapterOpts.compatibleSurface = nullptr;
 	adapterOpts.compatibleSurface = m_surface;
-	Adapter adapter = m_instance.requestAdapter(adapterOpts);
-	std::cout << "Got adapter: " << adapter << std::endl;
+	m_adapter = m_instance.requestAdapter(adapterOpts);
+	std::cout << "Got adapter: " << m_adapter << std::endl;
 
 	std::cout << "Requesting device..." << std::endl;
 	SupportedLimits supportedLimits;
-	adapter.getLimits(&supportedLimits);
+	m_adapter.getLimits(&supportedLimits);
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 6;
 	requiredLimits.limits.maxVertexBuffers = 1;
@@ -140,7 +159,7 @@ bool Application::onInit() {
 	DeviceDescriptor deviceDesc;
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
-	m_device = adapter.requestDevice(deviceDesc);
+	m_device = m_adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
@@ -151,30 +170,139 @@ bool Application::onInit() {
 	});
 
 	m_deviceLostCallback = m_device.setDeviceLostCallback([](DeviceLostReason reason, char const* message) {
-		std::cout << "Device error: reason " << reason;
+		std::cout << "Device lost: reason " << reason;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
 	});
 
-	Queue queue = m_device.getQueue();
+	m_queue = m_device.getQueue();
 
-	// Create swapchain
+#ifdef WEBGPU_BACKEND_WGPU
+	m_queue.submit(0, nullptr);
+#else
+	m_instance.processEvents();
+#endif
+
+	return true;
+}
+
+void Application::terminateDevice() {
+#ifndef WEBGPU_BACKEND_WGPU
+	wgpuQueueRelease(m_queue);
+#endif WEBGPU_BACKEND_WGPU
+	wgpuDeviceRelease(m_device);
+	wgpuInstanceRelease(m_instance);
+}
+
+bool Application::initWindow() {
+	if (!glfwInit()) {
+		std::cerr << "Could not initialize GLFW!" << std::endl;
+		return false;
+	}
+
+	// Create window
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	if (!m_window) {
+		std::cerr << "Could not open window!" << std::endl;
+		return false;
+	}
+
+	// Add window callbacks
+	glfwSetWindowUserPointer(m_window, this);
+	glfwSetFramebufferSizeCallback(m_window, onWindowResize);
+	glfwSetCursorPosCallback(m_window, onWindowMouseMove);
+	glfwSetMouseButtonCallback(m_window, onWindowMouseButton);
+	glfwSetScrollCallback(m_window, onWindowScroll);
+	return true;
+}
+
+void Application::terminateWindow() {
+	glfwDestroyWindow(m_window);
+	glfwTerminate();
+}
+
+void Application::initSwapChain() {
 #ifdef WEBGPU_BACKEND_DAWN
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #else
-	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+	m_swapChainFormat = m_surface.getPreferredFormat(m_adapter);
 #endif
-	buildSwapChain();
-	
-	std::cout << "Creating shader module..." << std::endl;
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
-	std::cout << "Shader module: " << shaderModule << std::endl;
 
+	int width, height;
+	glfwGetFramebufferSize(m_window, &width, &height);
+
+	std::cout << "Creating swapchain..." << std::endl;
+	m_swapChainDesc = {};
+	m_swapChainDesc.width = (uint32_t)width;
+	m_swapChainDesc.height = (uint32_t)height;
+	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
+	m_swapChainDesc.format = m_swapChainFormat;
+	m_swapChainDesc.presentMode = PresentMode::Fifo;
+	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
+	std::cout << "Swapchain: " << m_swapChain << std::endl;
+}
+
+void Application::terminateSwapChain() {
+	wgpuSwapChainRelease(m_swapChain);
+}
+
+void Application::initGui() {
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplGlfw_InitForOther(m_window, true);
+	ImGui_ImplWGPU_Init(m_device, 3, m_swapChainFormat, m_depthTextureFormat);
+}
+
+void Application::terminateGui() {
+	ImGui_ImplWGPU_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+}
+
+void Application::initShaders() {
+	std::cout << "Creating shader module..." << std::endl;
+	m_shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
+	std::cout << "Shader module: " << m_shaderModule << std::endl;
+}
+
+void Application::terminateShaders() {
+	wgpuShaderModuleRelease(m_shaderModule);
+}
+
+void Application::initSampler() {
+	SamplerDescriptor samplerDesc;
+	samplerDesc.addressModeU = AddressMode::Repeat;
+	samplerDesc.addressModeV = AddressMode::Repeat;
+	samplerDesc.addressModeW = AddressMode::Repeat;
+	samplerDesc.magFilter = FilterMode::Linear;
+	samplerDesc.minFilter = FilterMode::Linear;
+#ifdef WEBGPU_BACKEND_DAWN
+	samplerDesc.mipmapFilter = FilterMode::Linear;
+#else
+	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+#endif
+	samplerDesc.lodMinClamp = 0.0f;
+	samplerDesc.lodMaxClamp = 32.0f;
+	samplerDesc.compare = CompareFunction::Undefined;
+	samplerDesc.maxAnisotropy = 1;
+	m_sampler = m_device.createSampler(samplerDesc);
+}
+
+void Application::terminateSampler() {
+	wgpuSamplerRelease(m_sampler);
+}
+
+bool Application::initBuffers() {
 	//bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
 	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
-		return 1;
+		return false;
 	}
 
 	// Create vertex buffer
@@ -183,12 +311,12 @@ bool Application::onInit() {
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
 	bufferDesc.mappedAtCreation = false;
 	m_vertexBuffer = m_device.createBuffer(bufferDesc);
-	queue.writeBuffer(m_vertexBuffer, 0, m_vertexData.data(), bufferDesc.size);
+	m_queue.writeBuffer(m_vertexBuffer, 0, m_vertexData.data(), bufferDesc.size);
 
 	m_indexCount = static_cast<int>(m_vertexData.size());
 
 	// Create uniform buffer
-	bufferDesc.size = sizeof(MyUniforms);
+	bufferDesc.size = sizeof(Uniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
 	m_uniformBuffer = m_device.createBuffer(bufferDesc);
@@ -232,59 +360,140 @@ bool Application::onInit() {
 		m_uniforms.gamma = 1.0f;
 	}
 
-	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
+	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(Uniforms));
 	updateViewMatrix();
 
-	buildDepthBuffer();
+	return true;
+}
 
-	// Create a sampler
-	SamplerDescriptor samplerDesc;
-	samplerDesc.addressModeU = AddressMode::Repeat;
-	samplerDesc.addressModeV = AddressMode::Repeat;
-	samplerDesc.addressModeW = AddressMode::Repeat;
-	samplerDesc.magFilter = FilterMode::Linear;
-	samplerDesc.minFilter = FilterMode::Linear;
-#ifdef WEBGPU_BACKEND_DAWN
-	samplerDesc.mipmapFilter = FilterMode::Linear;
-#else
-	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
-#endif
-	samplerDesc.lodMinClamp = 0.0f;
-	samplerDesc.lodMaxClamp = 32.0f;
-	samplerDesc.compare = CompareFunction::Undefined;
-	samplerDesc.maxAnisotropy = 1;
-	Sampler sampler = m_device.createSampler(samplerDesc);
+void Application::terminateBuffers() {
+	wgpuShaderModuleRelease(m_shaderModule);
+}
 
+bool Application::initTextures() {
+	m_textures.clear();
+	m_textureViews.clear();
+
+	// Create a texture and its view
+	auto loadTexture = [&](const std::filesystem::path& path) {
+		TextureView textureView = nullptr;
+		Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
+		if (!texture) {
+			std::cerr << "Could not load texture!" << std::endl;
+			return false;
+		}
+		m_textures.push_back(texture);
+		m_textureViews.push_back(textureView);
+		return true;
+	};
+
+	return (
+		loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg") &&
+		loadTexture(RESOURCE_DIR "/fourareen2K_normals.png") &&
+		loadTexture(RESOURCE_DIR "/autumn_park_4k.jpg")
+	);
+}
+
+void Application::terminateTextures() {
+	for (TextureView tv : m_textureViews) {
+		wgpuTextureViewRelease(tv);
+	}
+
+	for (Texture t : m_textures) {
+		t.destroy();
+		wgpuTextureRelease(t);
+	}
+}
+
+void Application::initBindGroupLayouts() {
 	// Create binding layout
-	m_bindingLayoutEntries.resize(2, Default);
+	std::vector<wgpu::BindGroupLayoutEntry> entries(6, Default);
 
-	BindGroupLayoutEntry& bindingLayout = m_bindingLayoutEntries[0];
-	bindingLayout.binding = 0;
-	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
-	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+	BindGroupLayoutEntry& uniformBindingLayout = entries[0];
+	uniformBindingLayout.binding = 0;
+	uniformBindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
+	uniformBindingLayout.buffer.type = BufferBindingType::Uniform;
+	uniformBindingLayout.buffer.minBindingSize = sizeof(Uniforms);
 
-	BindGroupLayoutEntry& samplerBindingLayout = m_bindingLayoutEntries[1];
+	BindGroupLayoutEntry& samplerBindingLayout = entries[1];
 	samplerBindingLayout.binding = 1;
 	samplerBindingLayout.visibility = ShaderStage::Fragment;
 	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
 
+	BindGroupLayoutEntry& lightingBindingLayout = entries[2];
+	lightingBindingLayout.binding = 2;
+	lightingBindingLayout.visibility = ShaderStage::Fragment | ShaderStage::Vertex;
+	lightingBindingLayout.buffer.type = BufferBindingType::Uniform;
+	lightingBindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
+
+	BindGroupLayoutEntry& baseColorTextureLayout = entries[3];
+	baseColorTextureLayout.binding = 3;
+	baseColorTextureLayout.visibility = ShaderStage::Fragment;
+	baseColorTextureLayout.texture.sampleType = TextureSampleType::Float;
+	baseColorTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
+
+	BindGroupLayoutEntry& normalTextureLayout = entries[4];
+	normalTextureLayout.binding = 4;
+	normalTextureLayout.visibility = ShaderStage::Fragment;
+	normalTextureLayout.texture.sampleType = TextureSampleType::Float;
+	normalTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
+
+	BindGroupLayoutEntry& environmentTextureLayout = entries[5];
+	environmentTextureLayout.binding = 5;
+	environmentTextureLayout.visibility = ShaderStage::Fragment;
+	environmentTextureLayout.texture.sampleType = TextureSampleType::Float;
+	environmentTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
+
+	// Create a bind group layout
+	BindGroupLayoutDescriptor bindGroupLayoutDesc;
+	bindGroupLayoutDesc.entryCount = (uint32_t)entries.size();
+	bindGroupLayoutDesc.entries = entries.data();
+	m_bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+}
+
+void Application::terminateBindGroupLayouts() {
+	wgpuBindGroupLayoutRelease(m_bindGroupLayout);
+}
+
+void Application::initBindGroups() {
 	// Create bindings
-	m_bindings.resize(2);
+	std::vector<wgpu::BindGroupEntry> entries(6, Default);
 
-	m_bindings[0].binding = 0;
-	m_bindings[0].buffer = m_uniformBuffer;
-	m_bindings[0].offset = 0;
-	m_bindings[0].size = sizeof(MyUniforms);
+	entries[0].binding = 0;
+	entries[0].buffer = m_uniformBuffer;
+	entries[0].offset = 0;
+	entries[0].size = sizeof(Uniforms);
 
-	m_bindings[1].binding = 1;
-	m_bindings[1].sampler = sampler;
+	entries[1].binding = 1;
+	entries[1].sampler = m_sampler;
 
-	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
-	if (!initTexture(RESOURCE_DIR "/fourareen2K_normals.png")) return false;
-	if (!initTexture(RESOURCE_DIR "/autumn_park_4k.jpg")) return false;
-	initLighting();
+	entries[2].binding = 2;
+	entries[2].buffer = m_lightingUniformBuffer;
+	entries[2].offset = 0;
+	entries[2].size = sizeof(LightingUniforms);
 
+	entries[3].binding = 3;
+	entries[3].textureView = m_textureViews[0];
+
+	entries[4].binding = 4;
+	entries[4].textureView = m_textureViews[1];
+
+	entries[5].binding = 5;
+	entries[5].textureView = m_textureViews[2];
+
+	// Create bind group
+	BindGroupDescriptor bindGroupDesc;
+	bindGroupDesc.layout = m_bindGroupLayout;
+	bindGroupDesc.entryCount = (uint32_t)entries.size();
+	bindGroupDesc.entries = entries.data();
+	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
+}
+
+void Application::terminateBindGroups() {
+	wgpuBindGroupRelease(m_bindGroup);
+}
+
+void Application::initPipelines() {
 	std::cout << "Creating render pipeline..." << std::endl;
 	RenderPipelineDescriptor pipelineDesc{};
 
@@ -331,7 +540,7 @@ bool Application::onInit() {
 	pipelineDesc.vertex.bufferCount = 1;
 	pipelineDesc.vertex.buffers = &vertexBufferLayout;
 
-	pipelineDesc.vertex.module = shaderModule;
+	pipelineDesc.vertex.module = m_shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
 	pipelineDesc.vertex.constantCount = 0;
 	pipelineDesc.vertex.constants = nullptr;
@@ -343,7 +552,7 @@ bool Application::onInit() {
 
 	FragmentState fragmentState{};
 	pipelineDesc.fragment = &fragmentState;
-	fragmentState.module = shaderModule;
+	fragmentState.module = m_shaderModule;
 	fragmentState.entryPoint = "fs_main";
 	fragmentState.constantCount = 0;
 	fragmentState.constants = nullptr;
@@ -376,55 +585,23 @@ bool Application::onInit() {
 	pipelineDesc.multisample.mask = ~0u;
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-	// Create a bind group layout
-	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
-	bindGroupLayoutDesc.entryCount = (uint32_t)m_bindingLayoutEntries.size();
-	bindGroupLayoutDesc.entries = m_bindingLayoutEntries.data();
-	BindGroupLayout bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
-
 	// Create the pipeline layout
-	PipelineLayoutDescriptor layoutDesc{};
+	PipelineLayoutDescriptor layoutDesc;
 	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
-	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
-	pipelineDesc.layout = layout;
+	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&m_bindGroupLayout;
+	m_pipelineLayout = m_device.createPipelineLayout(layoutDesc);
+	pipelineDesc.layout = m_pipelineLayout;
 
 	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << m_pipeline << std::endl;
-
-	// Create bind group
-	BindGroupDescriptor bindGroupDesc{};
-	bindGroupDesc.layout = bindGroupLayout;
-	bindGroupDesc.entryCount = (uint32_t)m_bindings.size();
-	bindGroupDesc.entries = m_bindings.data();
-	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
-
-	initGui();
-
-#ifdef WEBGPU_BACKEND_DAWN
-	// Flush error queue
-	m_device.tick();
-#endif
-	
-	return true;
 }
 
-void Application::buildSwapChain() {
-	int width, height;
-	glfwGetFramebufferSize(m_window, &width, &height);
-
-	std::cout << "Creating swapchain..." << std::endl;
-	m_swapChainDesc = {};
-	m_swapChainDesc.width = (uint32_t)width;
-	m_swapChainDesc.height = (uint32_t)height;
-	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
-	m_swapChainDesc.format = m_swapChainFormat;
-	m_swapChainDesc.presentMode = PresentMode::Fifo;
-	m_swapChain = m_device.createSwapChain(m_surface, m_swapChainDesc);
-	std::cout << "Swapchain: " << m_swapChain << std::endl;
+void Application::terminatePipelines() {
+	wgpuRenderPipelineRelease(m_pipeline);
+	wgpuPipelineLayoutRelease(m_pipelineLayout);
 }
 
-void Application::buildDepthBuffer() {
+void Application::initDepthBuffer() {
 	// Destroy previously allocated texture
 	if (m_depthTexture != nullptr) m_depthTexture.destroy();
 
@@ -454,6 +631,12 @@ void Application::buildDepthBuffer() {
 	m_depthTextureView = m_depthTexture.createView(depthTextureViewDesc);
 }
 
+void Application::terminateDepthBuffer() {
+	wgpuTextureViewRelease(m_depthTextureView);
+	m_depthTexture.destroy();
+	wgpuTextureRelease(m_depthTexture);
+}
+
 void Application::onFrame() {
 	glfwPollEvents();
 	TextureView nextTexture = m_swapChain.getCurrentTextureView();
@@ -462,14 +645,12 @@ void Application::onFrame() {
 		return;
 	}
 	
-	Queue queue = m_device.getQueue();
-
 	updateLighting();
 	updateDragInertia();
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
-	queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
+	m_queue.writeBuffer(m_uniformBuffer, offsetof(Uniforms, time), &m_uniforms.time, sizeof(Uniforms::time));
 
 	CommandEncoderDescriptor commandEncoderDesc{};
 	commandEncoderDesc.label = "Command Encoder";
@@ -520,36 +701,27 @@ void Application::onFrame() {
 	renderPass.end();
 
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
-	queue.submit(command);
+	m_queue.submit(command);
 
 	wgpuTextureViewRelease(nextTexture);
 #if !defined(WEBGPU_BACKEND_WGPU)
 	wgpuCommandBufferRelease(command);
 	wgpuCommandEncoderRelease(encoder);
 	wgpuRenderPassEncoderRelease(renderPass);
-	wgpuQueueRelease(queue);
 #endif
 	
 	m_swapChain.present();
 }
 
-void Application::onFinish() {
-	for (auto texture : m_textures) {
-		texture.destroy();
-	}
-	m_depthTexture.destroy();
-
-	glfwDestroyWindow(m_window);
-	glfwTerminate();
-}
-
 void Application::onResize() {
-	buildSwapChain();
-	buildDepthBuffer();
+	terminateDepthBuffer();
+	terminateSwapChain();
+	initSwapChain();
+	initDepthBuffer();
 
 	float ratio = m_swapChainDesc.width / (float)m_swapChainDesc.height;
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, projectionMatrix), &m_uniforms.projectionMatrix, sizeof(MyUniforms::projectionMatrix));
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(Uniforms, projectionMatrix), &m_uniforms.projectionMatrix, sizeof(Uniforms::projectionMatrix));
 }
 
 void Application::onMouseMove(double xpos, double ypos) {
@@ -607,10 +779,10 @@ void Application::updateViewMatrix() {
 	float sy = sin(m_cameraState.angles.y);
 	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_cameraState.zoom);
 	m_uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(Uniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(Uniforms::viewMatrix));
 
 	m_uniforms.cameraWorldPosition = position;
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(MyUniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(MyUniforms::cameraWorldPosition));
+	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(Uniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(Uniforms::cameraWorldPosition));
 }
 
 void Application::updateDragInertia() {
@@ -624,17 +796,6 @@ void Application::updateDragInertia() {
 		m_drag.velocity *= m_drag.intertia;
 		updateViewMatrix();
 	}
-}
-
-void Application::initGui() {
-	// Setup Dear ImGui context
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-
-	// Setup Platform/Renderer backends
-	ImGui_ImplGlfw_InitForOther(m_window, true);
-	ImGui_ImplWGPU_Init(m_device, 3, m_swapChainFormat, m_depthTextureFormat);
 }
 
 namespace ImGui {
@@ -676,33 +837,6 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 }
 
-bool Application::initTexture(const std::filesystem::path &path) {
-	// Create a texture
-	TextureView textureView = nullptr;
-	Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
-	if (!texture) {
-		std::cerr << "Could not load texture!" << std::endl;
-		return false;
-	}
-	m_textures.push_back(texture);
-
-	// Setup binding
-	uint32_t bindingIndex = (uint32_t)m_bindingLayoutEntries.size();
-	BindGroupLayoutEntry bindingLayout = Default;
-	bindingLayout.binding = bindingIndex;
-	bindingLayout.visibility = ShaderStage::Fragment;
-	bindingLayout.texture.sampleType = TextureSampleType::Float;
-	bindingLayout.texture.viewDimension = TextureViewDimension::_2D;
-	m_bindingLayoutEntries.push_back(bindingLayout);
-
-	BindGroupEntry binding = Default;
-	binding.binding = bindingIndex;
-	binding.textureView = textureView;
-	m_bindings.push_back(binding);
-
-	return true;
-}
-
 void Application::initLighting() {
 	Queue queue = m_device.getQueue();
 
@@ -733,22 +867,6 @@ void Application::initLighting() {
 	m_lightingUniforms.instanceSpacing = 2.0f;
 
 	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
-
-	// Setup binding
-	uint32_t bindingIndex = (uint32_t)m_bindingLayoutEntries.size();
-	BindGroupLayoutEntry bindingLayout = Default;
-	bindingLayout.binding = bindingIndex;
-	bindingLayout.visibility = ShaderStage::Fragment | ShaderStage::Vertex;
-	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	bindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
-	m_bindingLayoutEntries.push_back(bindingLayout);
-
-	BindGroupEntry binding = Default;
-	binding.binding = bindingIndex;
-	binding.buffer = m_lightingUniformBuffer;
-	binding.offset = 0;
-	binding.size = sizeof(LightingUniforms);
-	m_bindings.push_back(binding);
 }
 
 void Application::updateLighting() {
@@ -756,4 +874,9 @@ void Application::updateLighting() {
 		Queue queue = m_device.getQueue();
 		queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 	}
+}
+
+void Application::terminateLighting() {
+	m_lightingUniformBuffer.destroy();
+	wgpuBufferDestroy(m_lightingUniformBuffer);
 }

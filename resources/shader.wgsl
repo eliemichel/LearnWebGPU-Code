@@ -121,6 +121,7 @@ fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3f {
 
 /* **************** IBL **************** */
 
+/*
 /**
  * Evaluate the diffuse irradiance of teh environment light coming from the
  * hemisphere oriented towards n.
@@ -163,6 +164,7 @@ fn ibl(
 
 	return ibl_diffuse + ibl_specular;
 }
+*/
 
 /* **************** BINDINGS **************** */
 
@@ -190,7 +192,7 @@ struct VertexOutput {
 /**
  * A structure holding the value of our uniforms
  */
-struct MyUniforms {
+struct Uniforms {
 	projectionMatrix: mat4x4f,
 	viewMatrix: mat4x4f,
 	modelMatrix: mat4x4f,
@@ -218,33 +220,33 @@ struct LightingUniforms {
 }
 
 // Instead of the simple uTime variable, our uniform variable is a struct
-@group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
-@group(0) @binding(5) var<uniform> uLighting: LightingUniforms;
-
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var textureSampler: sampler;
-@group(0) @binding(2) var baseColorTexture: texture_2d<f32>;
-@group(0) @binding(3) var normalTexture: texture_2d<f32>;
-@group(0) @binding(4) var environmentTexture: texture_2d<f32>;
+@group(0) @binding(2) var<uniform> uLighting: LightingUniforms;
+
+@group(0) @binding(3) var baseColorTexture: texture_2d<f32>;
+@group(0) @binding(4) var normalTexture: texture_2d<f32>;
+@group(0) @binding(5) var environmentTexture: texture_2d<f32>;
 
 /* **************** VERTEX MAIN **************** */
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	let worldPosition = uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
+	let worldPosition = uniforms.modelMatrix * vec4f(in.position, 1.0);
 	out.instance = (f32(in.instance_index) + 0.5) / 8.0;
 	
 	// A trick to offset instances without changing their perspective
-	var proj = uMyUniforms.projectionMatrix;
+	var proj = uniforms.projectionMatrix;
 	proj[2][0] = (out.instance - 0.5) * uLighting.instanceSpacing;
 
-	out.position = proj * uMyUniforms.viewMatrix * worldPosition;
+	out.position = proj * uniforms.viewMatrix * worldPosition;
 	out.color = in.color;
-	out.tangent = (uMyUniforms.modelMatrix * vec4f(in.tangent, 0.0)).xyz;
-	out.bitangent = (uMyUniforms.modelMatrix * vec4f(in.bitangent, 0.0)).xyz;
-	out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
+	out.tangent = (uniforms.modelMatrix * vec4f(in.tangent, 0.0)).xyz;
+	out.bitangent = (uniforms.modelMatrix * vec4f(in.bitangent, 0.0)).xyz;
+	out.normal = (uniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
 	out.uv = in.uv;
-	out.viewDirection = uMyUniforms.cameraWorldPosition - worldPosition.xyz;
+	out.viewDirection = uniforms.cameraWorldPosition - worldPosition.xyz;
 	return out;
 }
 
@@ -281,6 +283,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	}
 
 	// Gamma-correction
-	let corrected_color = pow(color, vec3f(uMyUniforms.gamma));
-	return vec4f(corrected_color, uMyUniforms.color.a);
+	let corrected_color = pow(color, vec3f(uniforms.gamma));
+	return vec4f(corrected_color, uniforms.color.a);
 }

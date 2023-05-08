@@ -59,18 +59,49 @@ public:
 	bool isRunning();
 
 private:
-	void buildSwapChain();
-	void buildDepthBuffer();
+	bool initWindow();
+	void terminateWindow();
+
+	bool initDevice();
+	void terminateDevice();
+
+	void initSwapChain();
+	void terminateSwapChain();
+
+	void initDepthBuffer();
+	void terminateDepthBuffer();
+
+	void initShaders();
+	void terminateShaders();
+
+	void initSampler();
+	void terminateSampler();
+
+	bool initBuffers();
+	void terminateBuffers();
+
+	bool initTextures();
+	void terminateTextures();
+
+	void initBindGroupLayouts();
+	void terminateBindGroupLayouts();
+
+	void initBindGroups();
+	void terminateBindGroups();
+
+	void initPipelines();
+	void terminatePipelines();
+
 	void updateViewMatrix();
 	void updateDragInertia();
 
 	void initGui(); // called in onInit
+	void terminateGui();
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
-
-	bool initTexture(const std::filesystem::path& path);
 
 	void initLighting();
 	void updateLighting();
+	void terminateLighting();
 
 private:
 	using vec2 = glm::vec2;
@@ -78,7 +109,7 @@ private:
 	using vec4 = glm::vec4;
 	using mat4x4 = glm::mat4x4;
 
-	struct MyUniforms {
+	struct Uniforms {
 		mat4x4 projectionMatrix;
 		mat4x4 viewMatrix;
 		mat4x4 modelMatrix;
@@ -88,32 +119,36 @@ private:
 		float gamma;
 		float _pad[3];
 	};
-	static_assert(sizeof(MyUniforms) % 16 == 0);
+	static_assert(sizeof(Uniforms) % 16 == 0);
 
 	// Everything that is initialized in `onInit` and needed in `onFrame`.
 	GLFWwindow* m_window = nullptr;
 	wgpu::Instance m_instance = nullptr;
+	wgpu::Adapter m_adapter = nullptr;
 	wgpu::Surface m_surface = nullptr;
 	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
 	wgpu::TextureFormat m_depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
 	wgpu::Device m_device = nullptr;
+	wgpu::Queue m_queue = nullptr;
 	wgpu::SwapChain m_swapChain = nullptr;
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::TextureView m_depthTextureView = nullptr;
 	wgpu::RenderPipeline m_pipeline = nullptr;
+	wgpu::PipelineLayout m_pipelineLayout = nullptr;
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
+	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	std::vector<wgpu::Texture> m_textures;
+	std::vector<wgpu::TextureView> m_textureViews;
 	wgpu::Texture m_depthTexture = nullptr;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
-	MyUniforms m_uniforms;
+	Uniforms m_uniforms;
 	std::vector<ResourceManager::VertexAttributes> m_vertexData;
 	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
-
-	std::vector<wgpu::BindGroupLayoutEntry> m_bindingLayoutEntries;
-	std::vector<wgpu::BindGroupEntry> m_bindings;
+	wgpu::Sampler m_sampler = nullptr;
+	wgpu::ShaderModule m_shaderModule = nullptr;
 
 	// Lighting
 	struct LightingUniforms {

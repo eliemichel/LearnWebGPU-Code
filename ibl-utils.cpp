@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#if 0
+
 float GDFG(float NoV, float NoL, float a) {
     float a2 = a * a;
     float GGXL = NoV * std::sqrt((-NoL * a2 + NoL) * NoL + a2);
@@ -35,3 +37,5 @@ glm::vec2 DFG(float NoV, float a, int sampleCount) {
     }
     return r * (1.0f / sampleCount);
 }
+
+#endif
