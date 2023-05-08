@@ -1,9 +1,113 @@
 const PI = 3.14159265359;
 
+/* **************** SHADING **************** */
+
+/**
+ * Standard properties of a material
+ * (Describe all the properties of a surface needed to shade it)
+ */
+struct MaterialProperties {
+    baseColor: vec3f,
+    roughness: f32,
+    metallic: f32,
+    reflectance: f32,
+    highQuality: u32, // bool, turn on costly extra visual effects
+}
+
+/**
+ * Given some material properties, the BRDF (Bidirectional Reflection
+ * Distribution Function) tells the probability that a photon coming from an
+ * incoming direction (towards the light) is reflected in an outgoing direction
+ * (towards the camera).
+ * The returned value gives a different probability for each color channel.
+ */
+fn brdf(
+    material: MaterialProperties,
+    normal: vec3f, // assumed to be normalized
+    incomingDirection: vec3f, // assumed to be normalized
+    outgoingDirection: vec3f, // assumed to be normalized
+) -> vec3f {
+    // Switch to compact notations used in math formulas
+    // (notations of https://google.github.io/filament/Filament.html)
+    let L = incomingDirection;
+    let V = outgoingDirection;
+    let N = normal;
+    let H = normalize(L + V);
+    let alpha = material.roughness * material.roughness;
+
+    let NoV = abs(dot(N, V)) + 1e-5;
+    let NoL = clamp(dot(N, L), 0.0, 1.0);
+    let NoH = clamp(dot(N, H), 0.0, 1.0);
+    let LoH = clamp(dot(L, H), 0.0, 1.0);
+
+    // == Specular (reflected) lobe ==
+    // Contribution of the Normal Distribution Function (NDF)
+    let D = D_GGX(NoH, alpha);
+    // Self-shadowing
+    let Vis = V_SmithGGXCorrelatedFast(NoV, NoL, alpha);
+    // Fresnel
+    let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance);
+    let f0_conductor = material.baseColor;
+    let f0 = mix(f0_dielectric, f0_conductor, material.metallic);
+    let F = F_Schlick_vec3f(LoH, f0, 1.0);
+    let f_r = D * Vis * F;
+
+    // == Diffuse lobe ==
+    let diffuseColor = (1.0 - material.metallic) * material.baseColor;
+    var f_d = vec3f(0.0);
+    if (material.highQuality != 0u) {
+        f_d = diffuseColor * Fd_Burley(NoV, NoL, LoH, alpha);
+    } else {
+        f_d = diffuseColor * Fd_Lambert();
+    }
+
+    return f_r + f_d;
+}
+
+fn D_GGX(NoH: f32, roughness: f32) -> f32 {
+    let a = NoH * roughness;
+    let k = roughness / (1.0 - NoH * NoH + a * a);
+    return k * k * (1.0 / PI);
+}
+
+fn V_SmithGGXCorrelatedFast(NoV: f32, NoL: f32, roughness: f32) -> f32 {
+    let a = roughness;
+    let GGXV = NoL * (NoV * (1.0 - a) + a);
+    let GGXL = NoV * (NoL * (1.0 - a) + a);
+    return clamp(0.5 / (GGXV + GGXL), 0.0, 1.0);
+}
+
+// f90 is 1.0 for specular
+fn F_Schlick_vec3f(u: f32, f0: vec3f, f90: f32) -> vec3f {
+    let v_pow_1 = 1.0 - u;
+    let v_pow_2 = v_pow_1 * v_pow_1;
+    let v_pow_5 = v_pow_2 * v_pow_2 * v_pow_1;
+    return f0 * (1.0 - v_pow_5) + vec3f(f90) * v_pow_5;
+}
+fn F_Schlick_f32(u: f32, f0: f32, f90: f32) -> f32 {
+    let v_pow_1 = 1.0 - u;
+    let v_pow_2 = v_pow_1 * v_pow_1;
+    let v_pow_5 = v_pow_2 * v_pow_2 * v_pow_1;
+    return f0 * (1.0 - v_pow_5) + f90 * v_pow_5;
+}
+
+fn Fd_Lambert() -> f32 {
+    return 1.0 / PI;
+}
+
+// More costly but more realistic at grazing angles
+fn Fd_Burley(NoV: f32, NoL: f32, LoH: f32, roughness: f32) -> f32 {
+    let f90 = 0.5 + 2.0 * roughness * LoH * LoH;
+    let lightScatter = F_Schlick_f32(NoL, 1.0, f90);
+    let viewScatter = F_Schlick_f32(NoV, 1.0, f90);
+    return lightScatter * viewScatter / PI;
+}
+
+/* **************** BINDINGS **************** */
+
 struct Uniforms {
-    kernel: mat3x3f,
-    test: f32,
-    filter_type: u32,
+    currentMipLevel: u32,
+    mipLevelCount: u32,
 }
 
 @group(0) @binding(0) var inputEquirectangularTexture: texture_2d<f32>;
@@ -21,6 +125,8 @@ struct CubeMapUVL {
     uv: vec2f,
     layer: u32,
 }
+
+/* **************** UTILS **************** */
 
 /**
  * Utility function for textureGatherWeights
@@ -148,6 +254,8 @@ fn textureGatherWeights_2df(t: texture_2d<f32>, uv: vec2f) -> vec2f {
     return fract(scaled_uv - 0.5);
 }
 
+/* **************** EQUIRECTANGULAR -> CUBEMAP **************** */
+
 const CUBE_FACE_TRANSFORM = array<mat3x3f,6>(
     mat3x3f(
         0.0, -2.0, 0.0,
@@ -214,6 +322,8 @@ fn computeCubeMap(@builtin(global_invocation_id) id: vec3u) {
     textureStore(outputCubemapTexture, id.xy, layer, color);
 }
 
+/* **************** CUBEMAP -> EQUIRECTANGULAR **************** */
+
 @compute @workgroup_size(8, 8)
 fn computeEquirectangular(@builtin(global_invocation_id) id: vec3u) {
     let outputDimensions = textureDimensions(outputEquirectangularTexture).xy;
@@ -245,38 +355,117 @@ fn computeEquirectangular(@builtin(global_invocation_id) id: vec3u) {
     textureStore(outputEquirectangularTexture, id.xy, color);
 }
 
+/* **************** CUBEMAP PREFILTERING **************** */
+
+fn rand(co: vec2f) -> f32 {
+    return fract(sin(dot(co, vec2f(12.9898, 78.233))) * 43758.5453);
+}
+
+const TOF = 0.5 / f32(0x80000000u);
+fn hammersley(i: u32, numSamples: u32) -> vec2f {
+    var bits = i;
+    bits = (bits << 16) | (bits >> 16);
+    bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1);
+    bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2);
+    bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
+    bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
+    return vec2(f32(i) / f32(numSamples), f32(bits) * TOF);
+}
+
+fn randomDirection(seed: u32) -> vec3f {
+    let t = f32(seed) / 32.0;
+    let x = rand(vec2f(t, 0.01));
+    let y = rand(vec2f(t, x));
+    let z = rand(vec2f(t, y));
+    return normalize(vec3f(x, y, z));
+}
+
+fn importanceSampleDirection(uniformSample: vec2f, alpha: f32) -> vec3f {
+    let phi = 2 * PI * uniformSample.x;
+    let A = 1 - uniformSample.y;
+    let B = 1.0 + (alpha + 1.0) * ((alpha - 1.0) * uniformSample.y);
+    let cos_theta2 = A / B;
+    let cos_theta = sqrt(cos_theta2);
+    let sin_theta = sqrt(1 - cos_theta2));
+    return vec3f(cos(phi) * sin_theta, sin(phi) * sin_theta, cos(theta));
+}
+
+fn sampleCubeMap(cubemapTexture: texture_cube<f32>, direction: vec3f) -> vec4f {
+    let samples = array<vec4f, 4>(
+        textureGather(0, cubemapTexture, textureSampler, direction),
+        textureGather(1, cubemapTexture, textureSampler, direction),
+        textureGather(2, cubemapTexture, textureSampler, direction),
+        textureGather(3, cubemapTexture, textureSampler, direction),
+    );
+
+    let w = textureGatherWeights_cubef(cubemapTexture, direction);
+    
+    return vec4f(
+        mix(mix(samples[0].w, samples[0].z, w.x), mix(samples[0].x, samples[0].y, w.x), w.y),
+        mix(mix(samples[1].w, samples[1].z, w.x), mix(samples[1].x, samples[1].y, w.x), w.y),
+        mix(mix(samples[2].w, samples[2].z, w.x), mix(samples[2].x, samples[2].y, w.x), w.y),
+        mix(mix(samples[3].w, samples[3].z, w.x), mix(samples[3].x, samples[3].y, w.x), w.y),
+    );
+}
+
+/**
+ * BRDF simplified for IBL prefiltering
+ * (sec 5.3.4.2.1 of Filament ref, LD term)
+ */
+fn brdf_ibl(L: vec3f, N: vec3f, alpha: f32) -> f32 {
+    let V = N; // approximation to make prefiltering tractable
+    let NoV = 1.0;
+    let NoL = clamp(dot(N, L), 0.0, 1.0);
+    return V_SmithGGXCorrelatedFast(NoV, NoL, alpha);
+}
+
+/**
+ * Create a transform matrix that converts coordinates local to the frame whose
+ * Z axis is the provided normal to world space coordinates.
+ */
+fn makeLocalFrame(N: vec3f) -> mat3x3f {
+    let Z = N;
+    var up = vec3f(0.0, 0.0, 1.0);
+    if (abs(N.z) > abs(N.x) && abs(N.z) > abs(N.y)) {
+        up = vec3f(0.0, 1.0, 0.0);
+    }
+    let X = normalize(cross(up, Z));
+    let Y = normalize(cross(Z, X));
+    return mat3x3f(X, Y, Z);
+}
+
 @compute @workgroup_size(4, 4, 6)
 fn prefilterCubeMap(@builtin(global_invocation_id) id: vec3u) {
     let outputDimensions = textureDimensions(outputCubemapTexture).xy;
 
     let layer = id.z;
-    var color = vec4f(0.0);
+    var color = vec3f(0.0);
+    var total_weight = 0.0;
+
+    let roughness = 0.5;
+    let alpha = roughness * roughness;
 
     let uv = vec2f(id.xy) / vec2f(outputDimensions - 1u);
-    let baseDirection = directionFromCubeMapUVL(CubeMapUVL(uv, layer));
+    let N = normalize(directionFromCubeMapUVL(CubeMapUVL(uv, layer)));
 
-    for (var i = 0u ; i < 10u ; i++) {
-        // This is for DEBUG only:
-        let direction = normalize(baseDirection + vec3f(f32(i), 0, 0));
+    let local_to_world = makeLocalFrame(N);
 
-        let samples = array<vec4f, 4>(
-            textureGather(0, inputCubemapTexture, textureSampler, direction),
-            textureGather(1, inputCubemapTexture, textureSampler, direction),
-            textureGather(2, inputCubemapTexture, textureSampler, direction),
-            textureGather(3, inputCubemapTexture, textureSampler, direction),
-        );
+    // Sample many light sources in the environment map
+    for (var i = 0u ; i < 256u ; i++) {
+        let random = hammersley(i, 256u);
+        let L_local = importanceSampleDirection(random, alpha);
+        let L = local_to_world * L_local;
+        // PDF of the importance sampled direction
+        let pdf = 1.0;
 
-        let w = textureGatherWeights_cubef(inputCubemapTexture, direction);
-        
-        let mean = vec4f(
-            mix(mix(samples[0].w, samples[0].z, w.x), mix(samples[0].x, samples[0].y, w.x), w.y),
-            mix(mix(samples[1].w, samples[1].z, w.x), mix(samples[1].x, samples[1].y, w.x), w.y),
-            mix(mix(samples[2].w, samples[2].z, w.x), mix(samples[2].x, samples[2].y, w.x), w.y),
-            mix(mix(samples[3].w, samples[3].z, w.x), mix(samples[3].x, samples[3].y, w.x), w.y),
-        );
+        let radiance_ortho = sampleCubeMap(inputCubemapTexture, L).rgb;
 
-        color += 0.1 * mean;
+        let NoL = clamp(dot(N, L), 0.0, 1.0);
+        color += brdf_ibl(L, N, alpha) / pdf * radiance_ortho * NoL;
+        total_weight += NoL;
     }
 
-    textureStore(outputCubemapTexture, id.xy, layer, color);
+    color /= total_weight;
+
+    textureStore(outputCubemapTexture, id.xy, layer, vec4f(color, 1.0));
 }

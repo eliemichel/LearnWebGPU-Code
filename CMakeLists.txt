@@ -22,6 +22,8 @@ add_executable(App
 	ResourceManager.h
 	ResourceManager.cpp
 	implementations.cpp
+	ibl-utils.h
+	ibl-utils.cpp
 	main.cpp
 	webgpu-release.h
 	stb_image.h

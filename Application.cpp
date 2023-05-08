@@ -801,19 +801,6 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		AddFlippedImage(view, { of.x + 1 * s, of.y + 2 * s }, { of.x + 2 * s,  of.y + 3 * s }, { 1, 0 }, { 0, 1 });
 	}
 
-	bool changed = false;
-	ImGui::Begin("Parameters");
-	ImGui::End();
-
-	if (changed) {
-		float sum = dot(vec4(1.0, 1.0, 1.0, 0.0), m_parameters.kernel * vec3(1.0));
-		m_uniforms.kernel = m_parameters.normalize && std::abs(sum) > 1e-6
-			? m_parameters.kernel / sum
-			: m_parameters.kernel;
-		m_uniforms.filterType = (uint32_t)m_parameters.filterType;
-	}
-	m_shouldCompute = m_shouldCompute || changed;
-
 	ImGui::Begin("Settings");
 	if (ImGui::Combo("Mode", (int*)&m_settings.mode, "EquirectToCubemap\0CubemapToEquirect\0")) {
 		m_shouldRebuildPipeline = true;
