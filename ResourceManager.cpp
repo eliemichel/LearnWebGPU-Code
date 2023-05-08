@@ -30,8 +30,21 @@
 #include "stb_image.h"
 
 #include <fstream>
+#include <array>
+#include <vector>
+#include <filesystem>
 
 using namespace wgpu;
+namespace fs = std::filesystem;
+
+const fs::path cubemapPaths[] = {
+	"cubemap-posX.png",
+	"cubemap-negX.png",
+	"cubemap-posY.png",
+	"cubemap-negY.png",
+	"cubemap-posZ.png",
+	"cubemap-negZ.png",
+};
 
 ShaderModule ResourceManager::loadShaderModule(const path& path, Device device) {
 	std::ifstream file(path);
@@ -244,6 +257,99 @@ Texture ResourceManager::loadTexture(const path& path, Device device, TextureVie
 		textureViewDesc.baseMipLevel = 0;
 		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
 		textureViewDesc.dimension = TextureViewDimension::_2D;
+		textureViewDesc.format = textureDesc.format;
+		*pTextureView = texture.createView(textureViewDesc);
+	}
+
+	return texture;
+}
+
+Texture ResourceManager::loadPrefilteredCubemap(const path& rootPath, Device device, TextureView* pTextureView) {
+	Extent3D cubemapSize = { 0, 0, 6 };
+	std::vector<std::array<uint8_t*, 6>> pixelData;
+
+	// Load all mip levels
+	for (uint32_t level = 0; level < 100; ++level) {
+		fs::path dirpath = rootPath / ("cubemap-mip" + std::to_string(level));
+		if (!fs::is_directory(dirpath)) {
+			break;
+		}
+		std::array<uint8_t*, 6> mipPixelData;
+		for (uint32_t layer = 0; layer < 6; ++layer) {
+			int width, height, channels;
+			fs::path path = dirpath / cubemapPaths[layer];
+			mipPixelData[layer] = stbi_load(path.string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
+			if (nullptr == mipPixelData[layer]) throw std::runtime_error("Could not load input texture!");
+			if (level == 0 && layer == 0) {
+				cubemapSize.width = (uint32_t)width;
+				cubemapSize.height = (uint32_t)height;
+			}
+		}
+		pixelData.push_back(mipPixelData);
+	}
+
+	if (pixelData.empty()) {
+		return nullptr;
+	}
+
+	TextureDescriptor textureDesc;
+	textureDesc.dimension = TextureDimension::_2D;
+	textureDesc.format = TextureFormat::RGBA8Unorm;
+	textureDesc.size = cubemapSize;
+	textureDesc.mipLevelCount = (uint32_t)pixelData.size();
+	textureDesc.sampleCount = 1;
+	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
+	textureDesc.viewFormatCount = 0;
+	textureDesc.viewFormats = nullptr;
+	Texture texture = device.createTexture(textureDesc);
+
+	// Upload texture data for all faces and all MIP levels
+	ImageCopyTexture destination;
+	destination.texture = texture;
+	destination.aspect = TextureAspect::All;
+	destination.mipLevel = 0;
+
+	TextureDataLayout source;
+	source.offset = 0;
+
+	Queue queue = device.getQueue();
+	
+	Extent3D mipLayerSize = { cubemapSize.width , cubemapSize.height , 1 };
+	for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
+		source.bytesPerRow = 4 * mipLayerSize.width;
+		source.rowsPerImage = mipLayerSize.height;
+
+		for (uint32_t layer = 0; layer < 6; ++layer) {
+			destination.origin = { 0, 0, layer };
+			destination.mipLevel = level;
+			queue.writeTexture(
+				destination,
+				pixelData[level][layer],
+				(size_t)(4 * mipLayerSize.width * mipLayerSize.height),
+				source,
+				mipLayerSize
+			);
+
+			// Free CPU-side data
+			stbi_image_free(pixelData[level][layer]);
+		}
+
+		mipLayerSize.width /= 2;
+		mipLayerSize.height /= 2;
+	}
+
+#ifdef WEBGPU_BACKEND_DAWN
+	wgpuQueueRelease(queue);
+#endif
+
+	if (pTextureView) {
+		TextureViewDescriptor textureViewDesc;
+		textureViewDesc.aspect = TextureAspect::All;
+		textureViewDesc.baseArrayLayer = 0;
+		textureViewDesc.arrayLayerCount = 6;
+		textureViewDesc.baseMipLevel = 0;
+		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
+		textureViewDesc.dimension = TextureViewDimension::Cube;
 		textureViewDesc.format = textureDesc.format;
 		*pTextureView = texture.createView(textureViewDesc);
 	}

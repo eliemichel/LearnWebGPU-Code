@@ -387,10 +387,23 @@ bool Application::initTextures() {
 		return true;
 	};
 
+	// Same, for a prefiltered cubemap
+	auto loadPrefilteredCubemap = [&](const std::filesystem::path& path) {
+		TextureView textureView = nullptr;
+		Texture texture = ResourceManager::loadPrefilteredCubemap(path, m_device, &textureView);
+		if (!texture) {
+			std::cerr << "Could not load prefiltered cubemap!" << std::endl;
+			return false;
+		}
+		m_textures.push_back(texture);
+		m_textureViews.push_back(textureView);
+		return true;
+	};
+
 	return (
 		loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg") &&
 		loadTexture(RESOURCE_DIR "/fourareen2K_normals.png") &&
-		loadTexture(RESOURCE_DIR "/autumn_park_4k.jpg")
+		loadPrefilteredCubemap(RESOURCE_DIR "/autumn_park")
 	);
 }
 
@@ -442,7 +455,7 @@ void Application::initBindGroupLayouts() {
 	environmentTextureLayout.binding = 5;
 	environmentTextureLayout.visibility = ShaderStage::Fragment;
 	environmentTextureLayout.texture.sampleType = TextureSampleType::Float;
-	environmentTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
+	environmentTextureLayout.texture.viewDimension = TextureViewDimension::Cube;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;

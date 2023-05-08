@@ -67,6 +67,9 @@ public:
 	// NB: The texture must be destroyed after use
 	static wgpu::Texture loadTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
 
+	// Load a cubemap and all its MIP levels that correspond to various roughnesses
+	static wgpu::Texture loadPrefilteredCubemap(const path& rootPath, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
+
 private:
 	// Compute Tangent and Bitangent attributes from the normal and UVs.
 	static void computeTextureFrameAttributes(std::vector<VertexAttributes>& vertexData);

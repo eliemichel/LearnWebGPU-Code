@@ -226,7 +226,7 @@ struct LightingUniforms {
 
 @group(0) @binding(3) var baseColorTexture: texture_2d<f32>;
 @group(0) @binding(4) var normalTexture: texture_2d<f32>;
-@group(0) @binding(5) var environmentTexture: texture_2d<f32>;
+@group(0) @binding(5) var environmentTexture: texture_cube<f32>;
 
 /* **************** VERTEX MAIN **************** */
 
