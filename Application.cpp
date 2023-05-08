@@ -64,12 +64,12 @@ using glm::vec3;
 using glm::vec2;
 
 const fs::path cubemapPaths[] = {
-	RESOURCE_DIR "/cubemap-posX.png",
-	RESOURCE_DIR "/cubemap-negX.png",
-	RESOURCE_DIR "/cubemap-posY.png",
-	RESOURCE_DIR "/cubemap-negY.png",
-	RESOURCE_DIR "/cubemap-posZ.png",
-	RESOURCE_DIR "/cubemap-negZ.png",
+	"cubemap-posX.png",
+	"cubemap-negX.png",
+	"cubemap-posY.png",
+	"cubemap-negY.png",
+	"cubemap-posZ.png",
+	"cubemap-negZ.png",
 };
 
 const fs::path equirectangularPath = RESOURCE_DIR "/equirectangular.jpg";
@@ -103,9 +103,9 @@ bool Application::onInit() {
 	initGui();
 	initBindGroupLayouts();
 	initComputePipelines();
-	initBuffers();
 	initTextures();
 	initTextureViews();
+	initBuffers();
 	initSampler();
 	initBindGroups();
 	return true;
@@ -114,9 +114,9 @@ bool Application::onInit() {
 void Application::onFinish() {
 	terminateBindGroups();
 	terminateSampler();
+	terminateBuffers();
 	terminateTextureViews();
 	terminateTextures();
-	terminateBuffers();
 	terminateComputePipelines();
 	terminateBindGroupLayouts();
 	terminateGui();
@@ -177,9 +177,10 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 2;
 	requiredLimits.limits.maxStorageBufferBindingSize = 0;
 	requiredLimits.limits.maxStorageTexturesPerShaderStage = 1;
+	requiredLimits.limits.maxDynamicUniformBuffersPerPipelineLayout = 1;
 
 	// Create device
-	DeviceDescriptor deviceDesc{};
+	DeviceDescriptor deviceDesc;
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
 	m_device = m_adapter.requestDevice(deviceDesc);
@@ -205,6 +206,13 @@ bool Application::initDevice() {
 #else
 	m_instance.processEvents();
 #endif
+
+	SupportedLimits deviceLimits;
+	m_device.getLimits(&deviceLimits);
+	m_uniformStride = std::max(
+		(uint32_t)sizeof(Uniforms),
+		(uint32_t)deviceLimits.limits.minUniformBufferOffsetAlignment
+	);
 
 	return true;
 }
@@ -289,7 +297,7 @@ void Application::initBuffers() {
 	BufferDescriptor desc;
 	desc.label = "Uniforms";
 	desc.mappedAtCreation = false;
-	desc.size = sizeof(Uniforms);
+	desc.size = m_cubemapTexture.getMipLevelCount() * m_uniformStride;
 	desc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	m_uniformBuffer = m_device.createBuffer(desc);
 }
@@ -372,7 +380,8 @@ void Application::initTexturesCubemapToEquirect() {
 	std::array<uint8_t*, 6> pixelData;
 	for (uint32_t layer = 0; layer < 6; ++layer) {
 		int width, height, channels;
-		pixelData[layer] = stbi_load(cubemapPaths[layer].string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
+		fs::path path = fs::path(RESOURCE_DIR) / cubemapPaths[layer];
+		pixelData[layer] = stbi_load(path.string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
 		if (nullptr == pixelData[layer]) throw std::runtime_error("Could not load input texture!");
 		if (layer == 0) {
 			cubemapSize.width = (uint32_t)width;
@@ -647,6 +656,9 @@ void Application::initBindGroupLayouts() {
 		bindings[1].storageTexture.viewDimension = TextureViewDimension::_2DArray;
 		bindings[1].visibility = ShaderStage::Compute;
 
+		// Dynamic offset to specify a different roughness for each dispatch
+		bindings[2].buffer.hasDynamicOffset = true;
+
 		m_prefilteringBindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
 	}
 }
@@ -817,12 +829,33 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		switch (m_settings.mode) {
 		case Mode::EquirectToCubemap:
 			for (uint32_t layer = 0; layer < 6; ++layer) {
-				saveTexture(cubemapPaths[layer], m_device, m_cubemapTexture, 0, layer);
+				fs::path path = fs::path(RESOURCE_DIR) / cubemapPaths[layer];
+				saveTexture(path, m_device, m_cubemapTexture, 0, layer);
 			}
 			break;
 		case Mode::CubemapToEquirect:
 			saveTexture(equirectangularPath, m_device, m_equirectangularTexture, 0);
 			break;
+		default:
+			assert(false);
+		}
+	}
+	if (ImGui::Button("Save Output (All MIPs)")) {
+		switch (m_settings.mode) {
+		case Mode::EquirectToCubemap: {
+			uint32_t levelCount = m_cubemapTexture.getMipLevelCount();
+			for (uint32_t level = 0; level < levelCount; ++level) {
+				fs::path dirname = fs::path(RESOURCE_DIR) / fs::path("cubemap-mip" + std::to_string(level));
+				if (!fs::is_directory(dirname)) {
+					fs::create_directory(dirname);
+				}
+				for (uint32_t layer = 0; layer < 6; ++layer) {
+					fs::path path = dirname / cubemapPaths[layer];
+					saveTexture(path, m_device, m_cubemapTexture, level, layer);
+				}
+			}
+			break;
+		}
 		default:
 			assert(false);
 		}
@@ -838,6 +871,7 @@ void Application::onCompute() {
 
 	if (m_shouldRebuildPipeline) {
 		terminateBindGroups();
+		terminateBuffers();
 		terminateTextureViews();
 		terminateTextures();
 		terminateComputePipelines();
@@ -846,6 +880,7 @@ void Application::onCompute() {
 		initComputePipelines();
 		initTextures();
 		initTextureViews();
+		initBuffers();
 		initBindGroups();
 		m_shouldRebuildPipeline = false;
 		m_shouldReallocateTextures = false;
@@ -853,10 +888,12 @@ void Application::onCompute() {
 
 	if (m_shouldReallocateTextures) {
 		terminateBindGroups();
+		terminateBuffers();
 		terminateTextureViews();
 		terminateTextures();
 		initTextures();
 		initTextureViews();
+		initBuffers();
 		initBindGroups();
 		m_shouldReallocateTextures = false;
 	}
@@ -900,9 +937,20 @@ void Application::onCompute() {
 	// Prefiltering dispatches
 	if (m_settings.mode == Mode::EquirectToCubemap) {
 		uint32_t levelCount = m_cubemapTexture.getMipLevelCount();
-		computePass.setPipeline(m_prefilteringPipeline);
+
+		// Setup uniform buffers
 		for (uint32_t level = 1; level < levelCount; ++level) {
-			computePass.setBindGroup(0, m_bindGroups[level], 0, nullptr);
+			m_uniforms.currentMipLevel = level;
+			m_uniforms.mipLevelCount = levelCount;
+			m_queue.writeBuffer(m_uniformBuffer, level * m_uniformStride, &m_uniforms, sizeof(Uniforms));
+		}
+
+		// Dispatch for each MIP level
+		computePass.setPipeline(m_prefilteringPipeline);
+		uint32_t dynamicOffset = 0;
+		for (uint32_t level = 1; level < levelCount; ++level) {
+			dynamicOffset = level * m_uniformStride;
+			computePass.setBindGroup(0, m_bindGroups[level], 1, &dynamicOffset);
 
 			invocationCountX = invocationCountX / 2;
 			invocationCountY = invocationCountY / 2;

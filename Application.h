@@ -164,6 +164,7 @@ private:
 	};
 	static_assert(sizeof(Uniforms) % 16 == 0);
 	Uniforms m_uniforms;
+	uint32_t m_uniformStride;
 
 	enum class Mode {
 		EquirectToCubemap,

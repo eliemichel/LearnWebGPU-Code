@@ -434,6 +434,14 @@ fn makeLocalFrame(N: vec3f) -> mat3x3f {
     return mat3x3f(X, Y, Z);
 }
 
+/**
+ * lod is linearly mapped from 0.0 at MIP level #0 to 1.0 at MIP level #mipLevelCount-1
+ * alpha = perceptualRoughness²
+ */
+fn lodToAlpha(lod: f32) -> f32 {
+    return lod;
+}
+
 const MIN_ROUGHNESS = 0.002025;
 const SAMPLE_COUNT = 512u;
 @compute @workgroup_size(4, 4, 6)
@@ -444,7 +452,7 @@ fn prefilterCubeMap(@builtin(global_invocation_id) id: vec3u) {
     var color = vec3f(0.0);
     var total_weight = 0.0;
 
-    let roughness = 0.5;
+    let roughness = lodToAlpha(f32(uniforms.currentMipLevel) / f32(uniforms.mipLevelCount - 1));
     let alpha = roughness * roughness;
 
     let uv = vec2f(id.xy) / vec2f(outputDimensions - 1u);
@@ -474,7 +482,8 @@ fn prefilterCubeMap(@builtin(global_invocation_id) id: vec3u) {
             let L_world = local_to_world * L;
             let radiance_ortho = sampleCubeMap(inputCubemapTexture, L_world).rgb;
 
-            color += brdf_ibl(-L, vec3f(0.0, 0.0, 1.0), alpha) * radiance_ortho * NoL;
+            // (where did factor brdf_ibl(-L, vec3f(0.0, 0.0, 1.0), alpha) go?)
+            color += radiance_ortho * NoL;
             total_weight += L.z;
         }
 
