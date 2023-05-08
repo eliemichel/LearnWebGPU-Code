@@ -386,8 +386,8 @@ fn importanceSampleDirection(uniformSample: vec2f, alpha: f32) -> vec3f {
     let B = 1.0 + (alpha + 1.0) * ((alpha - 1.0) * uniformSample.y);
     let cos_theta2 = A / B;
     let cos_theta = sqrt(cos_theta2);
-    let sin_theta = sqrt(1 - cos_theta2));
-    return vec3f(cos(phi) * sin_theta, sin(phi) * sin_theta, cos(theta));
+    let sin_theta = sqrt(1 - cos_theta2);
+    return vec3f(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
 }
 
 fn sampleCubeMap(cubemapTexture: texture_cube<f32>, direction: vec3f) -> vec4f {
@@ -434,6 +434,8 @@ fn makeLocalFrame(N: vec3f) -> mat3x3f {
     return mat3x3f(X, Y, Z);
 }
 
+const MIN_ROUGHNESS = 0.002025;
+const SAMPLE_COUNT = 512u;
 @compute @workgroup_size(4, 4, 6)
 fn prefilterCubeMap(@builtin(global_invocation_id) id: vec3u) {
     let outputDimensions = textureDimensions(outputCubemapTexture).xy;
@@ -451,21 +453,34 @@ fn prefilterCubeMap(@builtin(global_invocation_id) id: vec3u) {
     let local_to_world = makeLocalFrame(N);
 
     // Sample many light sources in the environment map
-    for (var i = 0u ; i < 256u ; i++) {
-        let random = hammersley(i, 256u);
-        let L_local = importanceSampleDirection(random, alpha);
-        let L = local_to_world * L_local;
+    for (var i = 0u ; i < SAMPLE_COUNT ; i++) {
+        // Assuming N = (0,0,1)
+        let random = hammersley(i, SAMPLE_COUNT);
+        let H = importanceSampleDirection(random, alpha);
+        let NoH = H.z;
+        let NoH2 = NoH * NoH;
+        let NoL = clamp(2.0 * NoH2 - 1.0, 0.0, 1.0);
+        let L = vec3f(2.0 * NoH * H.x, 2.0 * NoH * H.y, NoL);
+
         // PDF of the importance sampled direction
-        let pdf = 1.0;
+        let pdf = D_GGX(NoH, max(MIN_ROUGHNESS, roughness)) * 0.25;
 
-        let radiance_ortho = sampleCubeMap(inputCubemapTexture, L).rgb;
+        // TODO
+        //let invOmegaS = f32(SAMPLE_COUNT) * pdf;
+        //let l = -0.5 * log2(invOmegaS);
+        // then sample lod level l in prefiltered cubemap
 
-        let NoL = clamp(dot(N, L), 0.0, 1.0);
-        color += brdf_ibl(L, N, alpha) / pdf * radiance_ortho * NoL;
-        total_weight += NoL;
+        if (NoL > 0.0) {
+            let L_world = local_to_world * L;
+            let radiance_ortho = sampleCubeMap(inputCubemapTexture, L_world).rgb;
+
+            color += brdf_ibl(-L, vec3f(0.0, 0.0, 1.0), alpha) * radiance_ortho * NoL;
+            total_weight += L.z;
+        }
+
     }
 
-    color /= total_weight;
+    color *= (1.0 / total_weight);
 
     textureStore(outputCubemapTexture, id.xy, layer, vec4f(color, 1.0));
 }
