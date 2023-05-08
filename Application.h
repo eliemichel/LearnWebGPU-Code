@@ -74,8 +74,8 @@ private:
 	void initShaders();
 	void terminateShaders();
 
-	void initSampler();
-	void terminateSampler();
+	void initSamplers();
+	void terminateSamplers();
 
 	bool initBuffers();
 	void terminateBuffers();
@@ -147,7 +147,8 @@ private:
 	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
-	wgpu::Sampler m_sampler = nullptr;
+	wgpu::Sampler m_repeatSampler = nullptr;
+	wgpu::Sampler m_clampSampler = nullptr;
 	wgpu::ShaderModule m_shaderModule = nullptr;
 
 	// Lighting

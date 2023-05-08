@@ -92,7 +92,7 @@ bool Application::onInit() {
 	if (!initTextures()) return false;
 	if (!initBuffers()) return false;
 	initLighting();
-	initSampler();
+	initSamplers();
 	initBindGroups();
 
 #ifdef WEBGPU_BACKEND_DAWN
@@ -105,7 +105,7 @@ bool Application::onInit() {
 
 void Application::onFinish() {
 	terminateBindGroups();
-	terminateSampler();
+	terminateSamplers();
 	terminateLighting();
 	terminateBuffers();
 	terminateTextures();
@@ -275,7 +275,7 @@ void Application::terminateShaders() {
 	wgpuShaderModuleRelease(m_shaderModule);
 }
 
-void Application::initSampler() {
+void Application::initSamplers() {
 	SamplerDescriptor samplerDesc;
 	samplerDesc.addressModeU = AddressMode::Repeat;
 	samplerDesc.addressModeV = AddressMode::Repeat;
@@ -291,11 +291,17 @@ void Application::initSampler() {
 	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
 	samplerDesc.maxAnisotropy = 1;
-	m_sampler = m_device.createSampler(samplerDesc);
+	m_repeatSampler = m_device.createSampler(samplerDesc);
+
+	samplerDesc.addressModeU = AddressMode::ClampToEdge;
+	samplerDesc.addressModeV = AddressMode::ClampToEdge;
+	samplerDesc.addressModeW = AddressMode::ClampToEdge;
+	m_clampSampler = m_device.createSampler(samplerDesc);
 }
 
-void Application::terminateSampler() {
-	wgpuSamplerRelease(m_sampler);
+void Application::terminateSamplers() {
+	wgpuSamplerRelease(m_repeatSampler);
+	wgpuSamplerRelease(m_clampSampler);
 }
 
 bool Application::initBuffers() {
@@ -402,7 +408,8 @@ bool Application::initTextures() {
 	};
 
 	if (!(
-		loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg") &&
+		//loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg") &&
+		loadTexture(RESOURCE_DIR "/red.png") &&
 		loadTexture(RESOURCE_DIR "/fourareen2K_normals.png") &&
 		loadPrefilteredCubemap(RESOURCE_DIR "/autumn_park")
 	)) return false;
@@ -428,7 +435,7 @@ void Application::terminateTextures() {
 
 void Application::initBindGroupLayouts() {
 	// Create binding layout
-	std::vector<wgpu::BindGroupLayoutEntry> entries(7, Default);
+	std::vector<wgpu::BindGroupLayoutEntry> entries(8, Default);
 
 	BindGroupLayoutEntry& uniformBindingLayout = entries[0];
 	uniformBindingLayout.binding = 0;
@@ -436,37 +443,42 @@ void Application::initBindGroupLayouts() {
 	uniformBindingLayout.buffer.type = BufferBindingType::Uniform;
 	uniformBindingLayout.buffer.minBindingSize = sizeof(Uniforms);
 
-	BindGroupLayoutEntry& samplerBindingLayout = entries[1];
-	samplerBindingLayout.binding = 1;
-	samplerBindingLayout.visibility = ShaderStage::Fragment;
-	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
+	BindGroupLayoutEntry& repeatSamplerBindingLayout = entries[1];
+	repeatSamplerBindingLayout.binding = 1;
+	repeatSamplerBindingLayout.visibility = ShaderStage::Fragment;
+	repeatSamplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
 
-	BindGroupLayoutEntry& lightingBindingLayout = entries[2];
-	lightingBindingLayout.binding = 2;
+	BindGroupLayoutEntry& clampSamplerBindingLayout = entries[2];
+	clampSamplerBindingLayout.binding = 2;
+	clampSamplerBindingLayout.visibility = ShaderStage::Fragment;
+	clampSamplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
+
+	BindGroupLayoutEntry& lightingBindingLayout = entries[3];
+	lightingBindingLayout.binding = 3;
 	lightingBindingLayout.visibility = ShaderStage::Fragment | ShaderStage::Vertex;
 	lightingBindingLayout.buffer.type = BufferBindingType::Uniform;
 	lightingBindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
 
-	BindGroupLayoutEntry& baseColorTextureLayout = entries[3];
-	baseColorTextureLayout.binding = 3;
+	BindGroupLayoutEntry& baseColorTextureLayout = entries[4];
+	baseColorTextureLayout.binding = 4;
 	baseColorTextureLayout.visibility = ShaderStage::Fragment;
 	baseColorTextureLayout.texture.sampleType = TextureSampleType::Float;
 	baseColorTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
 
-	BindGroupLayoutEntry& normalTextureLayout = entries[4];
-	normalTextureLayout.binding = 4;
+	BindGroupLayoutEntry& normalTextureLayout = entries[5];
+	normalTextureLayout.binding = 5;
 	normalTextureLayout.visibility = ShaderStage::Fragment;
 	normalTextureLayout.texture.sampleType = TextureSampleType::Float;
 	normalTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
 
-	BindGroupLayoutEntry& environmentTextureLayout = entries[5];
-	environmentTextureLayout.binding = 5;
+	BindGroupLayoutEntry& environmentTextureLayout = entries[6];
+	environmentTextureLayout.binding = 6;
 	environmentTextureLayout.visibility = ShaderStage::Fragment;
 	environmentTextureLayout.texture.sampleType = TextureSampleType::Float;
 	environmentTextureLayout.texture.viewDimension = TextureViewDimension::Cube;
 
-	BindGroupLayoutEntry& dfgLutLayout = entries[6];
-	dfgLutLayout.binding = 6;
+	BindGroupLayoutEntry& dfgLutLayout = entries[7];
+	dfgLutLayout.binding = 7;
 	dfgLutLayout.visibility = ShaderStage::Fragment;
 	dfgLutLayout.texture.sampleType = TextureSampleType::Float;
 	dfgLutLayout.texture.viewDimension = TextureViewDimension::_2D;
@@ -484,32 +496,43 @@ void Application::terminateBindGroupLayouts() {
 
 void Application::initBindGroups() {
 	// Create bindings
-	std::vector<wgpu::BindGroupEntry> entries(7, Default);
+	std::vector<wgpu::BindGroupEntry> entries(8, Default);
 
-	entries[0].binding = 0;
-	entries[0].buffer = m_uniformBuffer;
-	entries[0].offset = 0;
-	entries[0].size = sizeof(Uniforms);
+	uint32_t b = 0;
+	entries[b].binding = b;
+	entries[b].buffer = m_uniformBuffer;
+	entries[b].offset = 0;
+	entries[b].size = sizeof(Uniforms);
 
-	entries[1].binding = 1;
-	entries[1].sampler = m_sampler;
+	++b; // 1
+	entries[b].binding = b;
+	entries[b].sampler = m_repeatSampler;
 
-	entries[2].binding = 2;
-	entries[2].buffer = m_lightingUniformBuffer;
-	entries[2].offset = 0;
-	entries[2].size = sizeof(LightingUniforms);
+	++b; // 2
+	entries[b].binding = b;
+	entries[b].sampler = m_clampSampler;
 
-	entries[3].binding = 3;
-	entries[3].textureView = m_textureViews[0];
+	++b; // 3
+	entries[b].binding = b;
+	entries[b].buffer = m_lightingUniformBuffer;
+	entries[b].offset = 0;
+	entries[b].size = sizeof(LightingUniforms);
 
-	entries[4].binding = 4;
-	entries[4].textureView = m_textureViews[1];
+	++b; // 4
+	entries[b].binding = b;
+	entries[b].textureView = m_textureViews[0];
 
-	entries[5].binding = 5;
-	entries[5].textureView = m_textureViews[2];
+	++b; // 5
+	entries[b].binding = b;
+	entries[b].textureView = m_textureViews[1];
 
-	entries[6].binding = 6;
-	entries[6].textureView = m_textureViews[3];
+	++b; // 6
+	entries[b].binding = b;
+	entries[b].textureView = m_textureViews[2];
+
+	++b; // 7
+	entries[b].binding = b;
+	entries[b].textureView = m_textureViews[3];
 
 	// Create bind group
 	BindGroupDescriptor bindGroupDesc;

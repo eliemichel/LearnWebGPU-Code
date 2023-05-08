@@ -169,23 +169,28 @@ fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
 }
 
 fn eval_ibl(material: MaterialProperties, N: vec3f, V: vec3f) -> vec3f {
-	let L = N; // ?
+	let R = -reflect(V, N);
+	let L = R; // ?
 	let H = normalize(L + V);
 	let LoH = clamp(dot(L, H), 0.0, 1.0);
 
-	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance);
+	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance) * 2.0;
 	let f0_conductor = material.baseColor;
 	let f0 = mix(f0_dielectric, f0_conductor, material.metallic);
 	let alpha = material.roughness * material.roughness;
 	let f90 = 0.5 + 2.0 * alpha * LoH * LoH;
+	//let f90 = 1.0;
 
-	let R = -reflect(V, N);
+	let irradiance = vec3f(1.0);//irradianceSH(uLighting.sphericalHarmonics, R);
+	let diffuseColor = (1.0 - material.metallic) * material.baseColor;
+	let ibl_diffuse = diffuseColor / PI * max(irradiance, vec3f(0.0));
+
 	let lod = computeLODFromRoughness(material.roughness);
 	let ld = textureSampleLevel(environmentTexture, textureSampler, R, lod).rgb;
-	let dfg = textureSampleLevel(dfgLut, textureSampler, vec2f(dot(N, V), material.roughness), 0.0).xy;
+	let dfg = textureSampleLevel(dfgLut, clampSampler, vec2f(dot(N, V), material.roughness), 0.0).xy;
 	let specularColor = f0 * dfg.x + f90 * dfg.y;
 	let ibl_specular = specularColor * ld;
-	return ibl_specular;
+	return ibl_diffuse + ibl_specular;
 }
 
 /* **************** BINDINGS **************** */
@@ -244,12 +249,13 @@ struct LightingUniforms {
 // Instead of the simple uTime variable, our uniform variable is a struct
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var textureSampler: sampler;
-@group(0) @binding(2) var<uniform> uLighting: LightingUniforms;
+@group(0) @binding(2) var clampSampler: sampler;
+@group(0) @binding(3) var<uniform> uLighting: LightingUniforms;
 
-@group(0) @binding(3) var baseColorTexture: texture_2d<f32>;
-@group(0) @binding(4) var normalTexture: texture_2d<f32>;
-@group(0) @binding(5) var environmentTexture: texture_cube<f32>;
-@group(0) @binding(6) var dfgLut: texture_2d<f32>;
+@group(0) @binding(4) var baseColorTexture: texture_2d<f32>;
+@group(0) @binding(5) var normalTexture: texture_2d<f32>;
+@group(0) @binding(6) var environmentTexture: texture_cube<f32>;
+@group(0) @binding(7) var dfgLut: texture_2d<f32>;
 
 /* **************** VERTEX MAIN **************** */
 

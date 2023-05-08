@@ -156,14 +156,16 @@ Texture createDFGTexture(Device device, uint32_t size, wgpu::TextureView* view) 
 
     // Generate data
     std::vector<float16_t> data(2 * size * size);
+    bool loaded = false;
     if (true) {
-        std::ifstream ifs("G:/tmp/DFG.bin", std::ios::binary);
+        std::ifstream ifs(RESOURCE_DIR "/DFG.bin", std::ios::binary);
         if (ifs.is_open()) {
             ifs.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(float16_t));
             ifs.close();
+            loaded = true;
         }
     }
-    else {
+    if (!loaded) {
         for (uint32_t y = 0; y < size; ++y) {
             const float coord = glm::clamp((size - y + 0.5f) / size, 0.0f, 1.0f);
 
@@ -218,7 +220,7 @@ Texture createDFGTexture(Device device, uint32_t size, wgpu::TextureView* view) 
 
     // DEBUG
     if (false) {
-        std::ofstream f("G:/tmp/DFG.bin", std::ios::binary);
+        std::ofstream f(RESOURCE_DIR "/DFG.bin", std::ios::binary);
         if (f.is_open()) {
             f.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float16_t));
             f.close();
