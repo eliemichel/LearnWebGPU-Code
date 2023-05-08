@@ -615,9 +615,6 @@ void Application::terminatePipelines() {
 }
 
 void Application::initDepthBuffer() {
-	// Destroy previously allocated texture
-	if (m_depthTexture != nullptr) m_depthTexture.destroy();
-
 	std::cout << "Creating depth texture..." << std::endl;
 	// Create the depth texture
 	TextureDescriptor depthTextureDesc;
