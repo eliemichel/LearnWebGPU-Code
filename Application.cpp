@@ -298,8 +298,8 @@ void Application::terminateSampler() {
 }
 
 bool Application::initBuffers() {
-	//bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
+	//bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return false;

@@ -1,7 +1,5 @@
 const PI = 3.14159265359;
 
-const USE_IBL = true;
-
 /* **************** SHADING **************** */
 
 /**
@@ -143,7 +141,9 @@ fn irradianceSH(sphericalHarmonics: array<vec3f, 9>, n: vec3f) -> vec3f {
 }
 
 fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
-	return uLighting.prefilteredEnvMapLodLevelCount * perceptualRoughness * perceptualRoughness;
+	//let count = uLighting.prefilteredEnvMapLodLevelCount;
+	let count = 7; // TODO
+	return count * perceptualRoughness * perceptualRoughness;
 }
 
 fn ibl(
@@ -170,8 +170,7 @@ fn ibl(
 
 fn eval_ibl(material: MaterialProperties, N: vec3f, V: vec3f) -> vec3f {
 	let R = -reflect(V, N);
-	let alpha = material.roughness * material.roughness;
-	let lod = alpha * 7;
+	let lod = computeLODFromRoughness(material.roughness);
 	let ld = textureSampleLevel(environmentTexture, textureSampler, R, lod).rgb;
 	return ld;
 }
@@ -287,14 +286,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	);
 	var color = vec3f(0.0);
 
-	if (USE_IBL) {
-		color += eval_ibl(material, N, V);
-	} else {
-		for (var i: i32 = 0; i < 2; i++) {
-			let L = normalize(uLighting.directions[i].xyz);
-			let lightEnergy = uLighting.colors[i].rgb * 2.0;
-			color += brdf(material, N, L, V) * lightEnergy;
-		}
+	color += eval_ibl(material, N, V);
+	
+	for (var i: i32 = 0; i < 2; i++) {
+		let L = normalize(uLighting.directions[i].xyz);
+		let lightEnergy = uLighting.colors[i].rgb * 0.0;
+		color += brdf(material, N, L, V) * lightEnergy;
 	}
 
 	// Gamma-correction
