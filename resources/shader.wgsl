@@ -151,7 +151,7 @@ fn eval_ibl(material: MaterialProperties, N: vec3f, V: vec3f) -> vec3f {
 	let H = normalize(L + V);
 	let LoH = clamp(dot(L, H), 0.0, 1.0);
 
-	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance) * 2.0;
+	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance) * 4.0;
 	let f0_conductor = material.baseColor;
 	let f0 = mix(f0_dielectric, f0_conductor, material.metallic);
 	let alpha = material.roughness * material.roughness;
