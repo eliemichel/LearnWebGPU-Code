@@ -26,6 +26,10 @@ add_executable(App
 	ibl-utils.cpp
 	main.cpp
 	webgpu-release.h
+	filament/Cubemap.h
+	filament/Cubemap.cpp
+	filament/Image.h
+	filament/Image.cpp
 )
 
 if(DEV_MODE)
