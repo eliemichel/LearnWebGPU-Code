@@ -121,46 +121,23 @@ fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3f {
 
 /* **************** IBL **************** */
 
-/*
 /**
  * Evaluate the diffuse irradiance of teh environment light coming from the
  * hemisphere oriented towards n.
  */
-fn irradianceSH(sphericalHarmonics: array<vec3f, 9>, n: vec3f) -> vec3f {
+fn irradianceSH(sphericalHarmonics: array<vec4f, 9>, n: vec3f) -> vec3f {
     // NB: We may use only the first 2 bands for better performance
     return
-          sphericalHarmonics[0]
-        + sphericalHarmonics[1] * (n.y)
-        + sphericalHarmonics[2] * (n.z)
-        + sphericalHarmonics[3] * (n.x)
-        + sphericalHarmonics[4] * (n.y * n.x)
-        + sphericalHarmonics[5] * (n.y * n.z)
-        + sphericalHarmonics[6] * (3.0 * n.z * n.z - 1.0)
-        + sphericalHarmonics[7] * (n.z * n.x)
-        + sphericalHarmonics[8] * (n.x * n.x - n.y * n.y);
+          sphericalHarmonics[0].rgb
+        + sphericalHarmonics[1].rgb * (n.y)
+        + sphericalHarmonics[2].rgb * (n.z)
+        + sphericalHarmonics[3].rgb * (n.x)
+        + sphericalHarmonics[4].rgb * (n.y * n.x)
+        + sphericalHarmonics[5].rgb * (n.y * n.z)
+        + sphericalHarmonics[6].rgb * (3.0 * n.z * n.z - 1.0)
+        + sphericalHarmonics[7].rgb * (n.z * n.x)
+        + sphericalHarmonics[8].rgb * (n.x * n.x - n.y * n.y);
 }
-
-fn ibl(
-	N: vec3f,
-	V: vec3f,
-	diffuseColor: vec3f,
-	f0: vec3f,
-	f90: vec3f,
-	perceptualRoughness: f32
-) -> vec3f {
-	let R = -reflect(V, N);
-	let irradiance = irradianceSH(uLighting.sphericalHarmonics, R);
-	let ibl_diffuse = diffuseColor / PI * max(irradiance, vec3f(0.0));
-
-	let lod = computeLODFromRoughness(perceptualRoughness);
-	let ld = textureSampleLevel(environmentTexture, R, lod).rgb;
-	let dfg = textureSampleLevel(dfgLut, vec2f(dot(N, V), perceptualRoughness), 0.0);
-	let specularColor = f0 * dfg.x + f90 * dfg.y;
-	let ibl_specular = specularColor * ld;
-
-	return ibl_diffuse + ibl_specular;
-}
-*/
 
 fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
 	//let count = uLighting.prefilteredEnvMapLodLevelCount;
@@ -181,7 +158,7 @@ fn eval_ibl(material: MaterialProperties, N: vec3f, V: vec3f) -> vec3f {
 	let f90 = 0.5 + 2.0 * alpha * LoH * LoH;
 	//let f90 = 1.0;
 
-	let irradiance = vec3f(1.0);//irradianceSH(uLighting.sphericalHarmonics, R);
+	let irradiance = irradianceSH(uLighting.sphericalHarmonics, R);
 	let diffuseColor = (1.0 - material.metallic) * material.baseColor;
 	let ibl_diffuse = diffuseColor / PI * max(irradiance, vec3f(0.0));
 
@@ -233,6 +210,7 @@ struct Uniforms {
  * A structure holding the lighting settings
  */
 struct LightingUniforms {
+	sphericalHarmonics: array<vec4f, 9>,
 	directions: array<vec4f, 2>,
 	colors: array<vec4f, 2>,
 	roughness: f32,

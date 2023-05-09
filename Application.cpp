@@ -380,32 +380,7 @@ bool Application::initTextures() {
 	m_textures.clear();
 	m_textureViews.clear();
 
-	// Create a texture and its view
-	auto loadTexture = [&](const std::filesystem::path& path) {
-		TextureView textureView = nullptr;
-		Texture texture = ResourceManager::loadTexture(path, m_device, &textureView);
-		if (!texture) {
-			std::cerr << "Could not load texture!" << std::endl;
-			return false;
-		}
-		m_textures.push_back(texture);
-		m_textureViews.push_back(textureView);
-		return true;
-	};
-
-	// Same, for a prefiltered cubemap
-	auto loadPrefilteredCubemap = [&](const std::filesystem::path& path) {
-		TextureView textureView = nullptr;
-		Texture texture = ResourceManager::loadPrefilteredCubemap(path, m_device, &textureView);
-		if (!texture) {
-			std::cerr << "Could not load prefiltered cubemap!" << std::endl;
-			return false;
-		}
-		m_textures.push_back(texture);
-		m_textureViews.push_back(textureView);
-		return true;
-	};
-
+	// Create a texture and its view, whichever texture type (loader) is used
 	auto load = [&](const std::filesystem::path& path, auto loader) {
 		TextureView textureView = nullptr;
 		Texture texture = loader(path, m_device, &textureView);
@@ -419,10 +394,10 @@ bool Application::initTextures() {
 	};
 
 	if (!(
-		//loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg") &&
-		loadTexture(RESOURCE_DIR "/red.png") &&
-		loadTexture(RESOURCE_DIR "/fourareen2K_normals.png") &&
-		loadPrefilteredCubemap(RESOURCE_DIR "/autumn_park") &&
+		//load(RESOURCE_DIR "/fourareen2K_albedo.jpg", ResourceManager::loadTexture) &&
+		load(RESOURCE_DIR "/red.png", ResourceManager::loadTexture) &&
+		load(RESOURCE_DIR "/fourareen2K_normals.png", ResourceManager::loadTexture) &&
+		load(RESOURCE_DIR "/autumn_park", ResourceManager::loadPrefilteredCubemap) &&
 		load(RESOURCE_DIR "/DFG.bin", ResourceManager::loadDFGTexture)
 	)) return false;
 
@@ -904,6 +879,15 @@ void Application::initLighting() {
 	bufferDesc.mappedAtCreation = false;
 	m_lightingUniformBuffer = m_device.createBuffer(bufferDesc);
 
+	// Load SH
+	std::ifstream ifs(RESOURCE_DIR "/SH.txt");
+	assert(ifs.is_open());
+	for (auto& sh : m_lightingUniforms.sphericalHarmonics) {
+		ifs >> sh.x;
+		ifs >> sh.y;
+		ifs >> sh.z;
+	}
+
 	// Upload the initial value of the uniforms
 	m_lightingUniforms.directions = {
 		vec4{0.5, -0.9, 0.1, 0.0},
@@ -919,7 +903,7 @@ void Application::initLighting() {
 	m_lightingUniforms.normalMapStrength = 0.5f;
 	m_lightingUniforms.highQuality = true;
 	m_lightingUniforms.roughness2 = 0.0f;
-	m_lightingUniforms.metallic2 = 0.1f;
+	m_lightingUniforms.metallic2 = 1.0f;
 	m_lightingUniforms.reflectance2 = 0.5f;
 	m_lightingUniforms.instanceSpacing = 2.0f;
 

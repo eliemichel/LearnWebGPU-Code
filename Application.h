@@ -153,6 +153,7 @@ private:
 
 	// Lighting
 	struct LightingUniforms {
+		std::array<vec4, 9> sphericalHarmonics;
 		std::array<vec4, 2> directions;
 		std::array<vec4, 2> colors;
 		float roughness;
