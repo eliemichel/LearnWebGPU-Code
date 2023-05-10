@@ -127,7 +127,7 @@ fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3f {
  */
 fn irradianceSH(sphericalHarmonics: array<vec4f, 9>, n: vec3f) -> vec3f {
     // NB: We may use only the first 2 bands for better performance
-    return
+    return max(vec3f(0.0),
           sphericalHarmonics[0].rgb
         + sphericalHarmonics[1].rgb * (n.y)
         + sphericalHarmonics[2].rgb * (n.z)
@@ -136,7 +136,8 @@ fn irradianceSH(sphericalHarmonics: array<vec4f, 9>, n: vec3f) -> vec3f {
         + sphericalHarmonics[5].rgb * (n.y * n.z)
         + sphericalHarmonics[6].rgb * (3.0 * n.z * n.z - 1.0)
         + sphericalHarmonics[7].rgb * (n.z * n.x)
-        + sphericalHarmonics[8].rgb * (n.x * n.x - n.y * n.y);
+        + sphericalHarmonics[8].rgb * (n.x * n.x - n.y * n.y)
+    );
 }
 
 fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
@@ -151,23 +152,23 @@ fn eval_ibl(material: MaterialProperties, N: vec3f, V: vec3f) -> vec3f {
 	let H = normalize(L + V);
 	let LoH = clamp(dot(L, H), 0.0, 1.0);
 
-	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance) * 4.0;
+	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance) * 3.0;
 	let f0_conductor = material.baseColor;
 	let f0 = mix(f0_dielectric, f0_conductor, material.metallic);
 	let alpha = material.roughness * material.roughness;
 	let f90 = 0.5 + 2.0 * alpha * LoH * LoH;
 	//let f90 = 1.0;
 
-	let irradiance = irradianceSH(uLighting.sphericalHarmonics, R);
+	let diffuseIrradiance = irradianceSH(uLighting.sphericalHarmonics, R);
 	let diffuseColor = (1.0 - material.metallic) * material.baseColor;
-	let ibl_diffuse = diffuseColor / PI * max(irradiance, vec3f(0.0));
+	let ibl_diffuse = diffuseColor * diffuseIrradiance;
 
 	let lod = computeLODFromRoughness(material.roughness);
 	let ld = textureSampleLevel(environmentTexture, textureSampler, R, lod).rgb;
 	let dfg = textureSampleLevel(dfgLut, clampSampler, vec2f(dot(N, V), material.roughness), 0.0).xy;
 	let specularColor = f0 * dfg.x + f90 * dfg.y;
 	let ibl_specular = specularColor * ld;
-	return ibl_diffuse + ibl_specular;
+	return ibl_diffuse * (1.0 - specularColor) + ibl_specular;
 }
 
 /* **************** BINDINGS **************** */
