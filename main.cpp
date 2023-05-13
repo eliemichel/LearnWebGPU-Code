@@ -195,6 +195,7 @@ int main (int, char**) {
 	}
 
 	// Don't forget to release the adapter
+	wgpuSurfaceRelease(surface);
 	wgpuAdapterRelease(adapter);
 	wgpuInstanceRelease(instance);
 
