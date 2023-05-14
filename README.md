@@ -1,9 +1,9 @@
 LearnWebGPU - Code
 ==================
 
-This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
+This repository contains the reference code base accompanying the [Learn WebGPU](https://eliemichel.github.io/LearnWebGPU) programming guide.
 
-Branch `step018`: This corresponds to the code at the end of the page [The Command Queue](learnwgpu.com/getting-started/the-command-queue.html).
+Branch `step018`: This corresponds to the code at the end of the page [Playing with buffers](https://eliemichel.github.io/LearnWebGPU/basic-3d-rendering/input-geometry/playing-with-buffers.html).
 
 Building
 --------
