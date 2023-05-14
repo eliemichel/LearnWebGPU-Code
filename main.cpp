@@ -27,7 +27,6 @@
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
 
-#include "webgpu-utils.h"
 #include "webgpu-release.h"
 
 #include <glfw3webgpu.h>
