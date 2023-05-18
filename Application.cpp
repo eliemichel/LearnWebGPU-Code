@@ -145,10 +145,11 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxBufferSize = 4 * 1024 * 1024 * sizeof(float);
-	requiredLimits.limits.maxTextureDimension1D = 4096;
-	requiredLimits.limits.maxTextureDimension2D = 4096;
-	requiredLimits.limits.maxTextureDimension3D = 4096;
+	requiredLimits.limits.maxTextureDimension1D = 2048;
+	requiredLimits.limits.maxTextureDimension2D = 2048;
+	requiredLimits.limits.maxTextureDimension3D = 2048;
 	requiredLimits.limits.maxTextureArrayLayers = 1;
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
 	requiredLimits.limits.maxSamplersPerShaderStage = 1;
@@ -281,11 +282,7 @@ void Application::initSamplers() {
 	samplerDesc.addressModeW = AddressMode::Repeat;
 	samplerDesc.magFilter = FilterMode::Linear;
 	samplerDesc.minFilter = FilterMode::Linear;
-#ifdef WEBGPU_BACKEND_DAWN
-	samplerDesc.mipmapFilter = FilterMode::Linear;
-#else
 	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
-#endif
 	samplerDesc.lodMinClamp = 0.0f;
 	samplerDesc.lodMaxClamp = 32.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
@@ -385,7 +382,7 @@ bool Application::initTextures() {
 		TextureView textureView = nullptr;
 		Texture texture = loader(path, m_device, &textureView);
 		if (!texture) {
-			std::cerr << "Could not load prefiltered cubemap!" << std::endl;
+			std::cerr << "Could not load texture:" << path << std::endl;
 			return false;
 		}
 		m_textures.push_back(texture);
@@ -741,6 +738,10 @@ void Application::onFrame() {
 	wgpuCommandEncoderRelease(encoder);
 	wgpuRenderPassEncoderRelease(renderPass);
 #endif
+
+#ifdef WEBGPU_BACKEND_DAWN
+	m_device.tick();
+#endif
 	
 	m_swapChain.present();
 }
@@ -753,7 +754,7 @@ void Application::onResize() {
 
 	float ratio = m_swapChainDesc.width / (float)m_swapChainDesc.height;
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(Uniforms, projectionMatrix), &m_uniforms.projectionMatrix, sizeof(Uniforms::projectionMatrix));
+	m_queue.writeBuffer(m_uniformBuffer, offsetof(Uniforms, projectionMatrix), &m_uniforms.projectionMatrix, sizeof(Uniforms::projectionMatrix));
 }
 
 void Application::onMouseMove(double xpos, double ypos) {
@@ -811,10 +812,10 @@ void Application::updateViewMatrix() {
 	float sy = sin(m_cameraState.angles.y);
 	vec3 position = vec3(cx * cy, sx * cy, sy) * std::exp(-m_cameraState.zoom);
 	m_uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(Uniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(Uniforms::viewMatrix));
+	m_queue.writeBuffer(m_uniformBuffer, offsetof(Uniforms, viewMatrix), &m_uniforms.viewMatrix, sizeof(Uniforms::viewMatrix));
 
 	m_uniforms.cameraWorldPosition = position;
-	m_device.getQueue().writeBuffer(m_uniformBuffer, offsetof(Uniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(Uniforms::cameraWorldPosition));
+	m_queue.writeBuffer(m_uniformBuffer, offsetof(Uniforms, cameraWorldPosition), &m_uniforms.cameraWorldPosition, sizeof(Uniforms::cameraWorldPosition));
 }
 
 void Application::updateDragInertia() {
@@ -870,8 +871,6 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 }
 
 void Application::initLighting() {
-	Queue queue = m_device.getQueue();
-
 	// Create uniform buffer
 	BufferDescriptor bufferDesc;
 	bufferDesc.size = sizeof(LightingUniforms);
@@ -907,13 +906,12 @@ void Application::initLighting() {
 	m_lightingUniforms.reflectance2 = 0.5f;
 	m_lightingUniforms.instanceSpacing = 2.0f;
 
-	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
+	m_queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 }
 
 void Application::updateLighting() {
 	if (m_lightingUniformsChanged) {
-		Queue queue = m_device.getQueue();
-		queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
+		m_queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
 	}
 }
 
