@@ -88,10 +88,7 @@ bool Application::onInit() {
 	initGui();
 	initBindGroupLayouts();
 	initPipelines();
-	if (!initTextures()) return false;
 	if (!initBuffers()) return false;
-	initLighting();
-	initSamplers();
 	initBindGroups();
 
 #ifdef WEBGPU_BACKEND_DAWN
@@ -104,10 +101,7 @@ bool Application::onInit() {
 
 void Application::onFinish() {
 	terminateBindGroups();
-	terminateSamplers();
-	terminateLighting();
 	terminateBuffers();
-	terminateTextures();
 	terminatePipelines();
 	terminateBindGroupLayouts();
 	terminateGui();
@@ -191,6 +185,7 @@ void Application::terminateDevice() {
 #ifndef WEBGPU_BACKEND_WGPU
 	wgpuQueueRelease(m_queue);
 #endif WEBGPU_BACKEND_WGPU
+	wgpuSurfaceRelease(m_surface);
 	wgpuDeviceRelease(m_device);
 	wgpuInstanceRelease(m_instance);
 }
@@ -275,31 +270,6 @@ void Application::terminateShaders() {
 	wgpuShaderModuleRelease(m_shaderModule);
 }
 
-void Application::initSamplers() {
-	SamplerDescriptor samplerDesc;
-	samplerDesc.addressModeU = AddressMode::Repeat;
-	samplerDesc.addressModeV = AddressMode::Repeat;
-	samplerDesc.addressModeW = AddressMode::Repeat;
-	samplerDesc.magFilter = FilterMode::Linear;
-	samplerDesc.minFilter = FilterMode::Linear;
-	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
-	samplerDesc.lodMinClamp = 0.0f;
-	samplerDesc.lodMaxClamp = 32.0f;
-	samplerDesc.compare = CompareFunction::Undefined;
-	samplerDesc.maxAnisotropy = 1;
-	m_repeatSampler = m_device.createSampler(samplerDesc);
-
-	samplerDesc.addressModeU = AddressMode::ClampToEdge;
-	samplerDesc.addressModeV = AddressMode::ClampToEdge;
-	samplerDesc.addressModeW = AddressMode::ClampToEdge;
-	m_clampSampler = m_device.createSampler(samplerDesc);
-}
-
-void Application::terminateSamplers() {
-	wgpuSamplerRelease(m_repeatSampler);
-	wgpuSamplerRelease(m_clampSampler);
-}
-
 bool Application::initBuffers() {
 	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
 	//bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
@@ -373,94 +343,15 @@ void Application::terminateBuffers() {
 	wgpuShaderModuleRelease(m_shaderModule);
 }
 
-bool Application::initTextures() {
-	m_textures.clear();
-	m_textureViews.clear();
-
-	// Create a texture and its view, whichever texture type (loader) is used
-	auto load = [&](const std::filesystem::path& path, auto loader) {
-		TextureView textureView = nullptr;
-		Texture texture = loader(path, m_device, &textureView);
-		if (!texture) {
-			std::cerr << "Could not load texture:" << path << std::endl;
-			return false;
-		}
-		m_textures.push_back(texture);
-		m_textureViews.push_back(textureView);
-		return true;
-	};
-
-	if (!(
-		//load(RESOURCE_DIR "/fourareen2K_albedo.jpg", ResourceManager::loadTexture) &&
-		load(RESOURCE_DIR "/red.png", ResourceManager::loadTexture) &&
-		load(RESOURCE_DIR "/fourareen2K_normals.png", ResourceManager::loadTexture) &&
-		load(RESOURCE_DIR "/autumn_park", ResourceManager::loadPrefilteredCubemap) &&
-		load(RESOURCE_DIR "/DFG.bin", ResourceManager::loadDFGTexture)
-	)) return false;
-
-	return true;
-}
-
-void Application::terminateTextures() {
-	for (TextureView tv : m_textureViews) {
-		wgpuTextureViewRelease(tv);
-	}
-
-	for (Texture t : m_textures) {
-		t.destroy();
-		wgpuTextureRelease(t);
-	}
-}
-
 void Application::initBindGroupLayouts() {
 	// Create binding layout
-	std::vector<wgpu::BindGroupLayoutEntry> entries(8, Default);
+	std::vector<wgpu::BindGroupLayoutEntry> entries(1, Default);
 
 	BindGroupLayoutEntry& uniformBindingLayout = entries[0];
 	uniformBindingLayout.binding = 0;
 	uniformBindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 	uniformBindingLayout.buffer.type = BufferBindingType::Uniform;
 	uniformBindingLayout.buffer.minBindingSize = sizeof(Uniforms);
-
-	BindGroupLayoutEntry& repeatSamplerBindingLayout = entries[1];
-	repeatSamplerBindingLayout.binding = 1;
-	repeatSamplerBindingLayout.visibility = ShaderStage::Fragment;
-	repeatSamplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
-
-	BindGroupLayoutEntry& clampSamplerBindingLayout = entries[2];
-	clampSamplerBindingLayout.binding = 2;
-	clampSamplerBindingLayout.visibility = ShaderStage::Fragment;
-	clampSamplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
-
-	BindGroupLayoutEntry& lightingBindingLayout = entries[3];
-	lightingBindingLayout.binding = 3;
-	lightingBindingLayout.visibility = ShaderStage::Fragment | ShaderStage::Vertex;
-	lightingBindingLayout.buffer.type = BufferBindingType::Uniform;
-	lightingBindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
-
-	BindGroupLayoutEntry& baseColorTextureLayout = entries[4];
-	baseColorTextureLayout.binding = 4;
-	baseColorTextureLayout.visibility = ShaderStage::Fragment;
-	baseColorTextureLayout.texture.sampleType = TextureSampleType::Float;
-	baseColorTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
-
-	BindGroupLayoutEntry& normalTextureLayout = entries[5];
-	normalTextureLayout.binding = 5;
-	normalTextureLayout.visibility = ShaderStage::Fragment;
-	normalTextureLayout.texture.sampleType = TextureSampleType::Float;
-	normalTextureLayout.texture.viewDimension = TextureViewDimension::_2D;
-
-	BindGroupLayoutEntry& environmentTextureLayout = entries[6];
-	environmentTextureLayout.binding = 6;
-	environmentTextureLayout.visibility = ShaderStage::Fragment;
-	environmentTextureLayout.texture.sampleType = TextureSampleType::Float;
-	environmentTextureLayout.texture.viewDimension = TextureViewDimension::Cube;
-
-	BindGroupLayoutEntry& dfgLutLayout = entries[7];
-	dfgLutLayout.binding = 7;
-	dfgLutLayout.visibility = ShaderStage::Fragment;
-	dfgLutLayout.texture.sampleType = TextureSampleType::Float;
-	dfgLutLayout.texture.viewDimension = TextureViewDimension::_2D;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
@@ -475,43 +366,13 @@ void Application::terminateBindGroupLayouts() {
 
 void Application::initBindGroups() {
 	// Create bindings
-	std::vector<wgpu::BindGroupEntry> entries(8, Default);
+	std::vector<wgpu::BindGroupEntry> entries(1, Default);
 
 	uint32_t b = 0;
 	entries[b].binding = b;
 	entries[b].buffer = m_uniformBuffer;
 	entries[b].offset = 0;
 	entries[b].size = sizeof(Uniforms);
-
-	++b; // 1
-	entries[b].binding = b;
-	entries[b].sampler = m_repeatSampler;
-
-	++b; // 2
-	entries[b].binding = b;
-	entries[b].sampler = m_clampSampler;
-
-	++b; // 3
-	entries[b].binding = b;
-	entries[b].buffer = m_lightingUniformBuffer;
-	entries[b].offset = 0;
-	entries[b].size = sizeof(LightingUniforms);
-
-	++b; // 4
-	entries[b].binding = b;
-	entries[b].textureView = m_textureViews[0];
-
-	++b; // 5
-	entries[b].binding = b;
-	entries[b].textureView = m_textureViews[1];
-
-	++b; // 6
-	entries[b].binding = b;
-	entries[b].textureView = m_textureViews[2];
-
-	++b; // 7
-	entries[b].binding = b;
-	entries[b].textureView = m_textureViews[3];
 
 	// Create bind group
 	BindGroupDescriptor bindGroupDesc;
@@ -674,7 +535,6 @@ void Application::onFrame() {
 		return;
 	}
 	
-	updateLighting();
 	updateDragInertia();
 
 	// Update uniform buffer
@@ -848,74 +708,10 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 
 	bool changed = false;
 	ImGui::Begin("Lighting");
-	changed = ImGui::ColorEdit3("Color #0", glm::value_ptr(m_lightingUniforms.colors[0])) || changed;
-	changed = ImGui::DragDirection("Direction #0", m_lightingUniforms.directions[0]) || changed;
-	changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1])) || changed;
-	changed = ImGui::DragDirection("Direction #1", m_lightingUniforms.directions[1]) || changed;
-	changed = ImGui::SliderFloat("Roughness", &m_lightingUniforms.roughness, 0.0f, 1.0f) || changed;
-	changed = ImGui::SliderFloat("Metallic", &m_lightingUniforms.metallic, 0.0f, 1.0f) || changed;
-	changed = ImGui::SliderFloat("Reflectance", &m_lightingUniforms.reflectance, 0.0f, 1.0f) || changed;
-	changed = ImGui::SliderFloat("Normal Map Strength", &m_lightingUniforms.normalMapStrength, 0.0f, 1.0f) || changed;
-	bool highQuality = m_lightingUniforms.highQuality != 0;
-	changed = ImGui::Checkbox("High Quality", &highQuality) || changed;
-	m_lightingUniforms.highQuality = highQuality ? 1 : 0;
-	changed = ImGui::SliderFloat("Roughness 2", &m_lightingUniforms.roughness2, 0.0f, 1.0f) || changed;
-	changed = ImGui::SliderFloat("Metallic 2", &m_lightingUniforms.metallic2, 0.0f, 1.0f) || changed;
-	changed = ImGui::SliderFloat("Reflectance 2", &m_lightingUniforms.reflectance2, 0.0f, 1.0f) || changed;
-	changed = ImGui::SliderFloat("Instance Spacing", &m_lightingUniforms.instanceSpacing, 0.0f, 10.0f) || changed;
+	static float foo = 0.5;
+	changed = ImGui::SliderFloat("Foo", &foo, 0.0f, 1.0f) || changed;
 	ImGui::End();
-	m_lightingUniformsChanged = changed;
 
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
-}
-
-void Application::initLighting() {
-	// Create uniform buffer
-	BufferDescriptor bufferDesc;
-	bufferDesc.size = sizeof(LightingUniforms);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
-	bufferDesc.mappedAtCreation = false;
-	m_lightingUniformBuffer = m_device.createBuffer(bufferDesc);
-
-	// Load SH
-	std::ifstream ifs(RESOURCE_DIR "/SH.txt");
-	assert(ifs.is_open());
-	for (auto& sh : m_lightingUniforms.sphericalHarmonics) {
-		ifs >> sh.x;
-		ifs >> sh.y;
-		ifs >> sh.z;
-	}
-
-	// Upload the initial value of the uniforms
-	m_lightingUniforms.directions = {
-		vec4{0.5, -0.9, 0.1, 0.0},
-		vec4{0.2, 0.4, 0.3, 0.0}
-	};
-	m_lightingUniforms.colors = {
-		vec4{1.0, 0.9, 0.6, 1.0},
-		vec4{0.6, 0.9, 1.0, 1.0}
-	};
-	m_lightingUniforms.roughness = 1.0f;
-	m_lightingUniforms.metallic = 0.0f;
-	m_lightingUniforms.reflectance = 0.5f;
-	m_lightingUniforms.normalMapStrength = 0.5f;
-	m_lightingUniforms.highQuality = true;
-	m_lightingUniforms.roughness2 = 0.0f;
-	m_lightingUniforms.metallic2 = 1.0f;
-	m_lightingUniforms.reflectance2 = 0.5f;
-	m_lightingUniforms.instanceSpacing = 2.0f;
-
-	m_queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
-}
-
-void Application::updateLighting() {
-	if (m_lightingUniformsChanged) {
-		m_queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
-	}
-}
-
-void Application::terminateLighting() {
-	m_lightingUniformBuffer.destroy();
-	wgpuBufferDestroy(m_lightingUniformBuffer);
 }

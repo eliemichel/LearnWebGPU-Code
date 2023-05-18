@@ -74,14 +74,8 @@ private:
 	void initShaders();
 	void terminateShaders();
 
-	void initSamplers();
-	void terminateSamplers();
-
 	bool initBuffers();
 	void terminateBuffers();
-
-	bool initTextures();
-	void terminateTextures();
 
 	void initBindGroupLayouts();
 	void terminateBindGroupLayouts();
@@ -98,10 +92,6 @@ private:
 	void initGui(); // called in onInit
 	void terminateGui();
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
-
-	void initLighting();
-	void updateLighting();
-	void terminateLighting();
 
 private:
 	using vec2 = glm::vec2;
@@ -138,8 +128,6 @@ private:
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
 	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
-	std::vector<wgpu::Texture> m_textures;
-	std::vector<wgpu::TextureView> m_textureViews;
 	wgpu::Texture m_depthTexture = nullptr;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
 	Uniforms m_uniforms;
@@ -147,30 +135,7 @@ private:
 	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
 	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
-	wgpu::Sampler m_repeatSampler = nullptr;
-	wgpu::Sampler m_clampSampler = nullptr;
 	wgpu::ShaderModule m_shaderModule = nullptr;
-
-	// Lighting
-	struct LightingUniforms {
-		std::array<vec4, 9> sphericalHarmonics;
-		std::array<vec4, 2> directions;
-		std::array<vec4, 2> colors;
-		float roughness;
-		float metallic;
-		float reflectance;
-		float normalMapStrength;
-		uint32_t highQuality; // bool
-		float roughness2;
-		float metallic2;
-		float reflectance2;
-		float instanceSpacing;
-		float _pad[3];
-	};
-	static_assert(sizeof(LightingUniforms) % 16 == 0);
-	wgpu::Buffer m_lightingUniformBuffer = nullptr;
-	LightingUniforms m_lightingUniforms;
-	bool m_lightingUniformsChanged = false;
 
 	struct CameraState {
 		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x

@@ -103,81 +103,11 @@ fn Fd_Burley(NoV: f32, NoL: f32, LoH: f32, roughness: f32) -> f32 {
     return lightScatter * viewScatter / PI;
 }
 
-/**
- * Sample a local normal from the normal map and rotate it using the normal
- * frame to get a global normal.
- */
-fn sampleNormal(in: VertexOutput, normalMapStrength: f32) -> vec3f {
-	let encodedN = textureSample(normalTexture, textureSampler, in.uv).rgb;
-	let localN = encodedN - 0.5;
-	let rotation = mat3x3f(
-		normalize(in.tangent),
-		normalize(in.bitangent),
-		normalize(in.normal),
-	);
-	let rotatedN = normalize(rotation * localN);
-	return normalize(mix(in.normal, rotatedN, normalMapStrength));
-}
-
-/* **************** IBL **************** */
-
-/**
- * Evaluate the diffuse irradiance of teh environment light coming from the
- * hemisphere oriented towards n.
- */
-fn irradianceSH(sphericalHarmonics: array<vec4f, 9>, n: vec3f) -> vec3f {
-    // NB: We may use only the first 2 bands for better performance
-    return max(vec3f(0.0),
-          sphericalHarmonics[0].rgb
-        + sphericalHarmonics[1].rgb * (n.y)
-        + sphericalHarmonics[2].rgb * (n.z)
-        + sphericalHarmonics[3].rgb * (n.x)
-        + sphericalHarmonics[4].rgb * (n.y * n.x)
-        + sphericalHarmonics[5].rgb * (n.y * n.z)
-        + sphericalHarmonics[6].rgb * (3.0 * n.z * n.z - 1.0)
-        + sphericalHarmonics[7].rgb * (n.z * n.x)
-        + sphericalHarmonics[8].rgb * (n.x * n.x - n.y * n.y)
-    );
-}
-
-fn computeLODFromRoughness(perceptualRoughness: f32) -> f32 {
-	//let count = uLighting.prefilteredEnvMapLodLevelCount;
-	let count = 7; // TODO
-	return f32(count) * perceptualRoughness * perceptualRoughness;
-}
-
-fn eval_ibl(material: MaterialProperties, N: vec3f, V: vec3f) -> vec3f {
-	let R = -reflect(V, N);
-	let L = R; // ?
-	let H = normalize(L + V);
-	let LoH = clamp(dot(L, H), 0.0, 1.0);
-
-	let f0_dielectric = vec3f(0.16 * material.reflectance * material.reflectance) * 3.0;
-	let f0_conductor = material.baseColor;
-	let f0 = mix(f0_dielectric, f0_conductor, material.metallic);
-	let alpha = material.roughness * material.roughness;
-	let f90 = 0.5 + 2.0 * alpha * LoH * LoH;
-	//let f90 = 1.0;
-
-	let diffuseIrradiance = irradianceSH(uLighting.sphericalHarmonics, R);
-	let diffuseColor = (1.0 - material.metallic) * material.baseColor;
-	let ibl_diffuse = diffuseColor * diffuseIrradiance;
-
-	let lod = computeLODFromRoughness(material.roughness);
-	let ld = textureSampleLevel(environmentTexture, textureSampler, R, lod).rgb;
-	let dfg = textureSampleLevel(dfgLut, clampSampler, vec2f(dot(N, V), material.roughness), 0.0).xy;
-	let specularColor = f0 * dfg.x + f90 * dfg.y;
-	let ibl_specular = specularColor * ld;
-	return ibl_diffuse * (1.0 - specularColor) + ibl_specular;
-}
-
 /* **************** BINDINGS **************** */
 
 struct VertexInput {
 	@builtin(instance_index) instance_index: u32,
 	@location(0) position: vec3f,
-	@location(4) tangent: vec3f,
-	@location(5) bitangent: vec3f,
 	@location(1) normal: vec3f,
 	@location(2) color: vec3f,
 	@location(3) uv: vec2f,
@@ -186,12 +116,9 @@ struct VertexInput {
 struct VertexOutput {
 	@builtin(position) position: vec4f,
 	@location(0) color: vec3f,
-	@location(4) tangent: vec3f,
-	@location(5) bitangent: vec3f,
 	@location(1) normal: vec3f,
 	@location(2) uv: vec2f,
 	@location(3) viewDirection: vec3f,
-	@location(6) instance: f32,
 }
 
 /**
@@ -207,34 +134,9 @@ struct Uniforms {
 	gamma: f32,
 }
 
-/**
- * A structure holding the lighting settings
- */
-struct LightingUniforms {
-	sphericalHarmonics: array<vec4f, 9>,
-	directions: array<vec4f, 2>,
-	colors: array<vec4f, 2>,
-	roughness: f32,
-	metallic: f32,
-	reflectance: f32,
-	normalMapStrength: f32,
-	highQuality: u32,
-	roughness2: f32,
-	metallic2: f32,
-	reflectance2: f32,
-	instanceSpacing: f32,
-}
-
 // Instead of the simple uTime variable, our uniform variable is a struct
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var textureSampler: sampler;
-@group(0) @binding(2) var clampSampler: sampler;
-@group(0) @binding(3) var<uniform> uLighting: LightingUniforms;
-
-@group(0) @binding(4) var baseColorTexture: texture_2d<f32>;
-@group(0) @binding(5) var normalTexture: texture_2d<f32>;
-@group(0) @binding(6) var environmentTexture: texture_cube<f32>;
-@group(0) @binding(7) var dfgLut: texture_2d<f32>;
 
 /* **************** VERTEX MAIN **************** */
 
@@ -242,16 +144,9 @@ struct LightingUniforms {
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 	let worldPosition = uniforms.modelMatrix * vec4f(in.position, 1.0);
-	out.instance = (f32(in.instance_index) + 0.5) / 8.0;
-	
-	// A trick to offset instances without changing their perspective
 	var proj = uniforms.projectionMatrix;
-	proj[2][0] = (out.instance - 0.5) * uLighting.instanceSpacing;
-
 	out.position = proj * uniforms.viewMatrix * worldPosition;
 	out.color = in.color;
-	out.tangent = (uniforms.modelMatrix * vec4f(in.tangent, 0.0)).xyz;
-	out.bitangent = (uniforms.modelMatrix * vec4f(in.bitangent, 0.0)).xyz;
 	out.normal = (uniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
 	out.uv = in.uv;
 	out.viewDirection = uniforms.cameraWorldPosition - worldPosition.xyz;
@@ -260,40 +155,39 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 /* **************** FRAGMENT MAIN **************** */
 
+const cLightingDirections = array<vec3f,2>(
+	vec3f(1.0, 1.0, 1.0),
+	vec3f(-1.0, -0.5, 0.5),
+);
+
+const cLightingColors = array<vec3f,2>(
+	vec3f(1.0, 0.98, 0.95),
+	vec3f(0.95, 0.98, 1.0),
+);
+
+const cLightingPower = 1.2;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-	let N = sampleNormal(in, uLighting.normalMapStrength);
+	let N = normalize(in.normal);
 
 	// Compute shading
 	let V = normalize(in.viewDirection);
 
-	// Sample texture
-	let baseColor = textureSample(baseColorTexture, textureSampler, in.uv).rgb;
-
-	// Combine texture and lighting
-	//let color = baseColor * uLighting.kd * diffuse + uLighting.ks * specular;
-
-	// To debug normals
-	//let color = N * 0.5 + 0.5;
-
 	let material = MaterialProperties(
-		baseColor,
-		mix(uLighting.roughness, uLighting.roughness2, in.instance),
-		mix(uLighting.metallic, uLighting.metallic2, in.instance),
-		mix(uLighting.reflectance, uLighting.reflectance2, in.instance),
-		uLighting.highQuality,
+		vec3f(1.0, 0.0, 0.0), // basecolor
+		0.6, // roughness
+		0.0, // metallic
+		0.2, // reflectance
+		1u, // high quality
 	);
 	var color = vec3f(0.0);
 
-	color += eval_ibl(material, N, V);
-	
-	/*
 	for (var i: i32 = 0; i < 2; i++) {
-		let L = normalize(uLighting.directions[i].xyz);
-		let lightEnergy = uLighting.colors[i].rgb * 0.0;
+		let L = normalize(cLightingDirections[i].xyz);
+		let lightEnergy = cLightingColors[i].rgb * cLightingPower;
 		color += brdf(material, N, L, V) * lightEnergy;
 	}
-	*/
 
 	// Gamma-correction
 	let corrected_color = pow(color, vec3f(uniforms.gamma));
