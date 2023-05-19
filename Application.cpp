@@ -271,8 +271,7 @@ void Application::terminateShaders() {
 }
 
 bool Application::initBuffers() {
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/suzanne.obj", m_vertexData);
-	//bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/quad-input.obj", m_vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return false;
@@ -438,7 +437,7 @@ void Application::initPipelines() {
 	pipelineDesc.vertex.constantCount = 0;
 	pipelineDesc.vertex.constants = nullptr;
 
-	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
+	pipelineDesc.primitive.topology = PrimitiveTopology::LineList;
 	pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
 	pipelineDesc.primitive.frontFace = FrontFace::CCW;
 	pipelineDesc.primitive.cullMode = CullMode::None;

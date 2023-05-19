@@ -132,6 +132,89 @@ bool ResourceManager::loadGeometryFromObj(const path& path, std::vector<VertexAt
 	return true;
 }
 
+bool ResourceManager::loadWireframeGeometryFromObj(const path& path, std::vector<VertexAttributes>& vertexData) {
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+
+	std::string warn;
+	std::string err;
+
+	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str());
+
+	if (!warn.empty()) {
+		std::cout << warn << std::endl;
+	}
+
+	if (!err.empty()) {
+		std::cerr << err << std::endl;
+	}
+
+	if (!ret) {
+		return false;
+	}
+
+	// Fill in vertexData here
+	vertexData.clear();
+	for (const auto& shape : shapes) {
+		size_t offset = vertexData.size();
+		vertexData.resize(offset + 2 * shape.mesh.indices.size());
+
+		for (int i = 0; i < vertexData.size(); ++i) {
+			const tinyobj::index_t& idx = shape.mesh.indices[i];
+			// TODO: handle quads
+			int next_vertex_index = (idx.vertex_index / 3) + ((idx.vertex_index % 3) + 1) % 3;
+
+			vertexData[offset + 2 * i + 0].position = {
+				attrib.vertices[3 * idx.vertex_index + 0],
+				-attrib.vertices[3 * idx.vertex_index + 2],
+				attrib.vertices[3 * idx.vertex_index + 1]
+			};
+			vertexData[offset + 2 * i + 1].position = {
+				attrib.vertices[3 * next_vertex_index + 0],
+				-attrib.vertices[3 * next_vertex_index + 2],
+				attrib.vertices[3 * next_vertex_index + 1]
+			};
+
+			vertexData[offset + 2 * i + 0].normal = {
+				attrib.normals[3 * idx.normal_index + 0],
+				-attrib.normals[3 * idx.normal_index + 2],
+				attrib.normals[3 * idx.normal_index + 1]
+			};
+			vertexData[offset + 2 * i + 1].normal = {
+				attrib.normals[3 * next_vertex_index + 0],
+				-attrib.normals[3 * next_vertex_index + 2],
+				attrib.normals[3 * next_vertex_index + 1]
+			};
+
+			vertexData[offset + 2 * i + 0].color = {
+				attrib.colors[3 * idx.vertex_index + 0],
+				attrib.colors[3 * idx.vertex_index + 1],
+				attrib.colors[3 * idx.vertex_index + 2]
+			};
+			vertexData[offset + 2 * i + 1].color = {
+				attrib.colors[3 * next_vertex_index + 0],
+				attrib.colors[3 * next_vertex_index + 1],
+				attrib.colors[3 * next_vertex_index + 2]
+			};
+
+			// Fix the UV convention
+			vertexData[offset + 2 * i + 0].uv = {
+				attrib.texcoords[2 * idx.texcoord_index + 0],
+				1 - attrib.texcoords[2 * idx.texcoord_index + 1]
+			};
+			vertexData[offset + 2 * i + 1].uv = {
+				attrib.texcoords[2 * next_vertex_index + 0],
+				1 - attrib.texcoords[2 * next_vertex_index + 1]
+			};
+		}
+	}
+
+	computeTextureFrameAttributes(vertexData);
+
+	return true;
+}
+
 void ResourceManager::computeTextureFrameAttributes(std::vector<VertexAttributes>& vertexData) {
 	size_t triangleCount = vertexData.size() / 3;
 	// We compute the local texture frame per triangle
