@@ -339,7 +339,11 @@ bool Application::initBuffers() {
 }
 
 void Application::terminateBuffers() {
-	wgpuShaderModuleRelease(m_shaderModule);
+	wgpuBufferDestroy(m_uniformBuffer);
+	wgpuBufferRelease(m_uniformBuffer);
+
+	wgpuBufferDestroy(m_vertexBuffer);
+	wgpuBufferRelease(m_vertexBuffer);
 }
 
 void Application::initBindGroupLayouts() {

@@ -47,6 +47,8 @@ target_compile_definitions(App PRIVATE NOMINMAX)
 
 if(MSVC)
 	target_compile_options(App PRIVATE /wd4201 /wd4706 /wd4127)
+
+	set_target_properties(App PROPERTIES VS_DEBUGGER_ENVIRONMENT "DAWN_DEBUG_BREAK_ON_ERROR=1")
 endif(MSVC)
 
 set_target_properties(App PROPERTIES CXX_STANDARD 17)
