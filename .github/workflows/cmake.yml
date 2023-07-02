@@ -32,15 +32,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Debug Test
-      if: ${{ matrix.os == 'windows-latest' }}
-      run: |
-        echo $Env:FILE
-        echo Test-Path -PathType Leaf $Env:FILE
-        echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }})"
-      env:
-        FILE: CMakeLists.txt
-  
     # Cancel if no CMakeLists is found
     - name: Look for CMakeLists file
       id: check-cmakelists
@@ -48,6 +39,19 @@ jobs:
       env:
         FILE: CMakeLists.txt
     
+    - name: Debug Test
+      if: ${{ matrix.os == 'windows-latest' }}
+      run: |
+        echo $Env:FILE
+        echo "Test-Path -PathType Leaf $Env:FILE"
+        echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }})"
+        echo "${{ matrix.install-deps }}"
+        echo "${{ steps.check-cmakelists.outputs.cmakelists-exists }}"
+        echo "${{ steps.check-cmakelists.outputs.cmakelists-exists == 'True' }}"
+        echo "${{ matrix.install-deps && (steps.check-cmakelists.outputs.cmakelists-exists == 'True') }}"
+      env:
+        FILE: CMakeLists.txt
+  
     - name: Install dependencies
       if: ${{ matrix.install-deps && (steps.check-cmakelists.outputs.cmakelists-exists == 'True') }}
       run: ${{ matrix.install-deps }}
