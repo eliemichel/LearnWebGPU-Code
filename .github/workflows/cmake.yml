@@ -20,12 +20,6 @@ jobs:
           install-deps: |
             sudo apt-get update -y
             sudo apt-get install -y xorg-dev
-          file-exists-cmd: if test -f "$FILE"; then echo True; else echo False; fi
-        - os: windows-latest
-          file-exists-cmd: Test-Path -PathType Leaf $Env:FILE
-        - os: macos-latest
-          file-exists-cmd: if test -f "$FILE"; then echo True; else echo False; fi
-        
         
     runs-on: ${{ matrix.os }}
 
@@ -35,31 +29,20 @@ jobs:
     # Cancel if no CMakeLists is found
     - name: Look for CMakeLists file
       id: check-cmakelists
-      run: echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }})" >> "$GITHUB_OUTPUT"
-      env:
-        FILE: CMakeLists.txt
-    
-    - name: Debug Test
-      if: ${{ matrix.os == 'windows-latest' }}
       run: |
-        echo $Env:FILE
-        echo "Test-Path -PathType Leaf $Env:FILE"
-        echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }})"
-        echo "${{ matrix.install-deps }}"
-        echo "${{ steps.check-cmakelists.outputs.cmakelists-exists }}"
-        echo "${{ steps.check-cmakelists.outputs.cmakelists-exists == 'True' }}"
-        echo "${{ matrix.install-deps && (steps.check-cmakelists.outputs.cmakelists-exists == 'True') }}"
-      env:
-        FILE: CMakeLists.txt
-  
+        if test -f CMakeLists.txt; then
+          echo "cmakelists-exists=true" >> "$GITHUB_OUTPUT"
+        fi
+      shell: bash
+
     - name: Install dependencies
-      if: ${{ matrix.install-deps && (steps.check-cmakelists.outputs.cmakelists-exists == 'True') }}
+      if: ${{ matrix.install-deps && steps.check-cmakelists.outputs.cmakelists-exists }}
       run: ${{ matrix.install-deps }}
 
     - name: Configure CMake
-      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists == 'True' }}
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
       run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
-      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists == 'True' }}
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
