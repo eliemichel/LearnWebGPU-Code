@@ -26,13 +26,20 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+  
+    # Cancel if no CMakeLists is found
+    - name: Look for CMakeLists file
+      id: check-cmakelists
+      run: echo "cmakelists-exists=$(test -f CMakeLists.txt)" >> "$GITHUB_OUTPUT"
     
-    - if: ${{ matrix.install-deps }}
-      name: Install dependencies
+    - name: Install dependencies
+      if: ${{ matrix.install-deps && steps.check-cmakelists.outputs.cmakelists-exists }}
       run: ${{ matrix.install-deps }}
 
     - name: Configure CMake
-      run: cmake -S examples -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
+      run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
