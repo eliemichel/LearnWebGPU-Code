@@ -31,6 +31,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    
+    - name: Debug Test
+      if: ${{ matrix.os == 'windows-latest' }}
+      run: |
+        echo $Env:FILE
+        echo Test-Path -PathType Leaf $Env:FILE
+        echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }})"
+      env:
+        FILE: CMakeLists.txt
   
     # Cancel if no CMakeLists is found
     - name: Look for CMakeLists file
