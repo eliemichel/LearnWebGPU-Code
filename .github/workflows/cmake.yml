@@ -1,0 +1,50 @@
+name: CMake
+
+# Controls when the workflow will run
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+        - os: ubuntu-latest
+          install-deps: |
+            sudo apt-get update -y
+            sudo apt-get install -y xorg-dev
+          file-exists-cmd: test -f
+        - os: windows-latest
+          file-exists-cmd: Test-Path -PathType Leaf
+        - os: macos-latest
+          file-exists-cmd: test -f
+        
+        
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+  
+    # Cancel if no CMakeLists is found
+    - name: Look for CMakeLists file
+      id: check-cmakelists
+      run: echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }} CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+    
+    - name: Install dependencies
+      if: ${{ matrix.install-deps && steps.check-cmakelists.outputs.cmakelists-exists }}
+      run: ${{ matrix.install-deps }}
+
+    - name: Configure CMake
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
+      run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+    - name: Build
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
