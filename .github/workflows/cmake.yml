@@ -22,7 +22,7 @@ jobs:
             sudo apt-get install -y xorg-dev
           file-exists-cmd: if test -f "$FILE"; then echo True; else echo False; fi
         - os: windows-latest
-          file-exists-cmd: Test-Path -PathType Leaf "$FILE"
+          file-exists-cmd: Test-Path -PathType Leaf $Env:FILE
         - os: macos-latest
           file-exists-cmd: if test -f "$FILE"; then echo True; else echo False; fi
         
