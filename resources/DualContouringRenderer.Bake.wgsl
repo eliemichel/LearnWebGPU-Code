@@ -42,31 +42,58 @@ const edge_lut = array<vec2<u32>,12>(
 	vec2<u32>(2, 6), // (010, 110)
 );
 
-fn evalSdf(pos: vec3<f32>) -> f32 {
-	let offset1 = vec3<f32>(0.0);
-	let radius1 = 0.55 + 0.1 * cos(3.0 * uniforms.time);
-	let d1 = length(pos - offset1) - radius1;
+fn sdBox(p: vec3<f32>, b: vec3<f32>) -> f32 {
+	let q = abs(p) - b;
+	return length(max(q,vec3<f32>(0.0))) + min(max(q.x,max(q.y,q.z)),0.0);
+}
 
-	let offset2 = vec3<f32>(0.0, 0.6, 0.6);
-	let radius2 = 0.3;
-	let d2 = length(pos - offset2) - radius2;
+fn opUnion(d1: f32, d2: f32) -> f32 {
 	return min(d1, d2);
 }
 
-fn evalNormal(pos: vec3<f32>) -> vec3<f32> {
+fn opSubtraction(d1: f32, d2: f32) -> f32 {
+	return max(d1, -d2);
+}
+
+fn evalSdf(pos: vec3<f32>) -> f32 {
 	let offset1 = vec3<f32>(0.0);
-	let radius1 = 0.55 + 0.1 * cos(3.0 * uniforms.time);
+	let alpha = atan2(pos.y, pos.x);
+	let wave = cos(5.0 * alpha - 2.0 * uniforms.time + 10.0 * pos.z);
+	let radius1 = 0.55 + 0.05 * wave + 0.1 * cos(3.0 * uniforms.time);
 	let d1 = length(pos - offset1) - radius1;
 
 	let offset2 = vec3<f32>(0.0, 0.6, 0.6);
 	let radius2 = 0.3;
 	let d2 = length(pos - offset2) - radius2;
 
-	if (d1 < d2) {
-		return normalize(pos - offset1);
-	} else {
-		return normalize(pos - offset2);
-	}
+	let th1 = 0.25 * 3.1415 * uniforms.time;
+	let c1 = cos(th1);
+	let s1 = sin(th1);
+	let th2 = 0.3 * 3.1415;
+	let c2 = cos(th2);
+	let s2 = sin(th2);
+	let M = mat3x3<f32>(
+		1.0, 0.0, 0.0,
+		0.0, c2, s2,
+		0.0, -s2, c2,
+	) * mat3x3<f32>(
+		c1, s1, 0.0,
+		-s1, c1, 0.0,
+		0.0, 0.0, 1.0,
+	);
+	let box_pos = M * (pos - vec3<f32>(0.0, 0.0, 0.8));
+	let box = sdBox(box_pos, vec3<f32>(0.15, 0.4, 1.2));
+
+	return opSubtraction(opUnion(d1, d2), box);
+}
+
+fn evalNormal(pos: vec3<f32>) -> vec3<f32> {
+	const eps = 0.0001;
+    const k = vec2<f32>(1.0, -1.0);
+    return normalize(k.xyy * evalSdf(pos + k.xyy * eps) + 
+                     k.yyx * evalSdf(pos + k.yyx * eps) + 
+                     k.yxy * evalSdf(pos + k.yxy * eps) + 
+                     k.xxx * evalSdf(pos + k.xxx * eps));
 }
 
 fn allocateVertices(vertex_count: u32) -> u32 {
@@ -89,24 +116,6 @@ fn cornerOffsetF(i: u32) -> vec3<f32> {
 fn positionFromGridCoord(grid_coord: vec3<f32>) -> vec3<f32> {
 	return grid_coord / f32(uniforms.resolution) * 2.0 - 1.0;
 }
-
-/*
-fn computeQef(position: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-	// TODO: put in a filterable form
-	// qef(X) = pow(dot(X - position, normal), 2);
-
-	= dot(X, normal)^2 - 2 * dot(X, normal) * dot(position, normal) + dot(position, normal)^2
-	= dot(X, normal)^2 - 2 * dot(X, normal) * dot(position, normal) + dot(position, normal)^2
-
-	return vec3<f32>(0.0, 0.0, 0.0);
-}
-
-fn accumulateQef(cell_id, qef) {
-	// TODO: atomic
-	let d = textureLoad(distance_grid_read, cell_id, 0).r;
-	textureStore(distance_grid_write, cell_id, vec4<f32>(d, qef));
-}
-*/
 
 fn loadVertexPosition(cell_coord: vec3<u32>) -> vec3<f32> {
 	let offset = textureLoad(position_grid_read, cell_coord, 0).xyz;
@@ -214,7 +223,7 @@ fn main_fill(in: ComputeInput) {
 				vertices[addr + 5].position = vertex01;
 				for (var i = 0u ; i < 6 ; i++) {
 					vertices[addr + i].normal = evalNormal(vertices[addr + i].position);
-					vertices[addr + i].position += vec3<f32>(2.0, 0.0, 0.0); // global offset
+					vertices[addr + i].position += vec3<f32>(1.0, 0.0, 0.0); // global offset
 				}
 			}
 		}

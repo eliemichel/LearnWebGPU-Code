@@ -65,6 +65,7 @@ public:
 private:
 	void buildSwapChain();
 	void buildDepthBuffer();
+	void buildCameraUniformBuffer();
 	void updateViewMatrix();
 	void updateDragInertia();
 
@@ -72,9 +73,6 @@ private:
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
 
 	bool initTexture(const std::filesystem::path& path);
-
-	void initLighting();
-	void updateLighting();
 
 private:
 	using vec2 = glm::vec2;
@@ -102,33 +100,15 @@ private:
 	wgpu::SwapChain m_swapChain = nullptr;
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::TextureView m_depthTextureView = nullptr;
-	wgpu::RenderPipeline m_pipeline = nullptr;
-	wgpu::Buffer m_vertexBuffer = nullptr;
-	wgpu::BindGroup m_bindGroup = nullptr;
 	std::vector<wgpu::Texture> m_textures;
 	wgpu::Texture m_depthTexture = nullptr;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
 	CameraUniforms m_uniforms;
-	std::vector<ResourceManager::VertexAttributes> m_vertexData;
-	int m_indexCount;
 	std::unique_ptr<wgpu::ErrorCallback> m_uncapturedErrorCallback;
+	std::unique_ptr<wgpu::DeviceLostCallback> m_deviceLostCallback;
 
 	std::vector<wgpu::BindGroupLayoutEntry> m_bindingLayoutEntries;
 	std::vector<wgpu::BindGroupEntry> m_bindings;
-
-	// Lighting
-	struct LightingUniforms {
-		std::array<vec4, 2> directions;
-		std::array<vec4, 2> colors;
-		float hardness;
-		float kd;
-		float ks;
-		float _pad;
-	};
-	static_assert(sizeof(LightingUniforms) % 16 == 0);
-	wgpu::Buffer m_lightingUniformBuffer = nullptr;
-	LightingUniforms m_lightingUniforms;
-	bool m_lightingUniformsChanged = false;
 
 	struct CameraState {
 		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x
@@ -156,8 +136,13 @@ private:
 		float intertia = 0.9f;
 	};
 
+	struct Settings {
+		bool showWireframe = false;
+	};
+
 	CameraState m_cameraState;
 	DragState m_drag;
+	Settings m_settings;
 
 	std::shared_ptr<MarchingCubesRenderer> m_marchingCubesRenderer;
 	std::shared_ptr<DualContouringRenderer> m_dualContouringRenderer;

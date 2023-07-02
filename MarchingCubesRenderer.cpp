@@ -204,7 +204,7 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 	{
 		uint32_t moduleCode = (1u << i000) + (1u << i101);
 		auto& entries = baseModules[moduleCode];
-		/*
+		//*
 		entries.push_back({ i000, i001 });
 		entries.push_back({ i000, i010 });
 		entries.push_back({ i000, i100 });
@@ -212,7 +212,7 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 		entries.push_back({ i101, i100 });
 		entries.push_back({ i101, i111 });
 		entries.push_back({ i101, i001 });
-		*/
+		/*/
 		entries.push_back({ i000, i001 });
 		entries.push_back({ i101, i001 });
 		entries.push_back({ i101, i111 });
@@ -228,6 +228,7 @@ void MarchingCubesRenderer::initModuleLut(const InitContext& context) {
 		entries.push_back({ i101, i111 });
 		entries.push_back({ i000, i100 });
 		entries.push_back({ i101, i100 });
+		//*/
 	}
 	{
 		uint32_t moduleCode = (1u << i100) + (1u << i110) + (1u << i010);
@@ -696,6 +697,9 @@ void MarchingCubesRenderer::initDrawingResources(const InitContext& context) {
 	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
 
 	m_drawingPipeline = device.createRenderPipeline(pipelineDesc);
+
+	pipelineDesc.primitive.topology = PrimitiveTopology::LineList;
+	m_wireframeDrawingPipeline = device.createRenderPipeline(pipelineDesc);
 }
 
 void MarchingCubesRenderer::bake() {
@@ -710,8 +714,23 @@ void MarchingCubesRenderer::bake() {
 		commandEncoderDesc.label = "MarchingCubes Baking (Sample)";
 		CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
 
+		QuerySetDescriptor querySetDesc;
+		querySetDesc.count = 1;
+		querySetDesc.pipelineStatisticsCount = 0;
+		querySetDesc.type = QueryType::Timestamp;
+		wgpuDeviceCreateQuerySet();
+		QuerySet querySet = m_device.createQuerySet(querySetDesc);
+
+		ComputePassTimestampWrite timestampWrites;
+		timestampWrites.location = ComputePassTimestampLocation::Beginning;
+		timestampWrites.queryIndex = 0;
+		timestampWrites.querySet = 0;
+
 		ComputePassDescriptor computePassDesc = Default;
+		computePassDesc.timestampWriteCount = 1;
+		computePassDesc.timestampWrites = &timestampWrites;
 		ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
+		computePass.insertDebugMarker("test");
 
 		computePass.setPipeline(m_bakingPipelines.eval.pipeline);
 		computePass.setBindGroup(0, m_bakingPipelines.eval.bindGroup, 0, nullptr);
@@ -824,4 +843,13 @@ void MarchingCubesRenderer::draw(const DrawingContext& context) const {
 	renderPass.setBindGroup(0, m_drawingBindGroup, 0, nullptr);
 
 	renderPass.draw(m_vertexCount, 1, 0, 0);
+
+	if (context.showWireframe) {
+		renderPass.setPipeline(m_wireframeDrawingPipeline);
+
+		renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexCount * sizeof(VertexAttributes));
+		renderPass.setBindGroup(0, m_drawingBindGroup, 0, nullptr);
+
+		renderPass.draw(m_vertexCount, 1, 0, 0);
+	}
 }

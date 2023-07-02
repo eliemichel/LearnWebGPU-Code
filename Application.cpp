@@ -151,7 +151,11 @@ bool Application::onInit() {
 		std::cout << std::endl;
 	});
 
-	Queue queue = m_device.getQueue();
+	m_deviceLostCallback = m_device.setDeviceLostCallback([](DeviceLostReason reason, char const* message) {
+		std::cout << "Device lost: reason " << reason;
+		if (message) std::cout << " (message: " << message << ")";
+		std::cout << std::endl;
+	});
 
 	// Create swapchain
 #if defined(WEBGPU_BACKEND_WGPU)
@@ -159,196 +163,10 @@ bool Application::onInit() {
 #else
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #endif
+
 	buildSwapChain();
-
-	std::cout << "Creating shader module..." << std::endl;
-	ShaderModule shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wsl", m_device);
-	std::cout << "Shader module: " << shaderModule << std::endl;
-
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", m_vertexData);
-	if (!success) {
-		std::cerr << "Could not load geometry!" << std::endl;
-		return 1;
-	}
-
-	// Create vertex buffer
-	BufferDescriptor bufferDesc;
-	bufferDesc.size = m_vertexData.size() * sizeof(VertexAttributes);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
-	bufferDesc.mappedAtCreation = false;
-	m_vertexBuffer = m_device.createBuffer(bufferDesc);
-	queue.writeBuffer(m_vertexBuffer, 0, m_vertexData.data(), bufferDesc.size);
-
-	m_indexCount = static_cast<int>(m_vertexData.size());
-
-	// Create uniform buffer
-	bufferDesc.size = sizeof(CameraUniforms);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
-	bufferDesc.mappedAtCreation = false;
-	m_uniformBuffer = m_device.createBuffer(bufferDesc);
-
-	// Upload the initial value of the uniforms
-	m_uniforms.time = 1.0f;
-	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
-
-	// Matrices
-	m_uniforms.modelMatrix = mat4x4(1.0);
-	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
-	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
-
-	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(CameraUniforms));
-	updateViewMatrix();
-
+	buildCameraUniformBuffer();
 	buildDepthBuffer();
-
-	// Create a sampler
-	SamplerDescriptor samplerDesc;
-	samplerDesc.addressModeU = AddressMode::Repeat;
-	samplerDesc.addressModeV = AddressMode::Repeat;
-	samplerDesc.addressModeW = AddressMode::Repeat;
-	samplerDesc.magFilter = FilterMode::Linear;
-	samplerDesc.minFilter = FilterMode::Linear;
-#if defined(WEBGPU_BACKEND_WGPU)
-	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
-#else
-	samplerDesc.mipmapFilter = FilterMode::Linear;
-#endif
-	samplerDesc.lodMinClamp = 0.0f;
-	samplerDesc.lodMaxClamp = 32.0f;
-	samplerDesc.compare = CompareFunction::Undefined;
-	samplerDesc.maxAnisotropy = 1;
-	Sampler sampler = m_device.createSampler(samplerDesc);
-
-	// Create binding layout
-	m_bindingLayoutEntries.resize(2, Default);
-
-	BindGroupLayoutEntry& bindingLayout = m_bindingLayoutEntries[0];
-	bindingLayout.binding = 0;
-	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
-	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	bindingLayout.buffer.minBindingSize = sizeof(CameraUniforms);
-
-	BindGroupLayoutEntry& samplerBindingLayout = m_bindingLayoutEntries[1];
-	samplerBindingLayout.binding = 1;
-	samplerBindingLayout.visibility = ShaderStage::Fragment;
-	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
-
-	// Create bindings
-	m_bindings.resize(2);
-
-	m_bindings[0].binding = 0;
-	m_bindings[0].buffer = m_uniformBuffer;
-	m_bindings[0].offset = 0;
-	m_bindings[0].size = sizeof(CameraUniforms);
-
-	m_bindings[1].binding = 1;
-	m_bindings[1].sampler = sampler;
-
-	if (!initTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg")) return false;
-	initLighting();
-
-	std::cout << "Creating render pipeline..." << std::endl;
-	RenderPipelineDescriptor pipelineDesc{};
-
-	// Vertex fetch
-	std::vector<VertexAttribute> vertexAttribs(4);
-
-	// Position attribute
-	vertexAttribs[0].shaderLocation = 0;
-	vertexAttribs[0].format = VertexFormat::Float32x3;
-	vertexAttribs[0].offset = offsetof(VertexAttributes, position);
-
-	// Normal attribute
-	vertexAttribs[1].shaderLocation = 1;
-	vertexAttribs[1].format = VertexFormat::Float32x3;
-	vertexAttribs[1].offset = offsetof(VertexAttributes, normal);
-
-	// Color attribute
-	vertexAttribs[2].shaderLocation = 2;
-	vertexAttribs[2].format = VertexFormat::Float32x3;
-	vertexAttribs[2].offset = offsetof(VertexAttributes, color);
-
-	// UV attribute
-	vertexAttribs[3].shaderLocation = 3;
-	vertexAttribs[3].format = VertexFormat::Float32x2;
-	vertexAttribs[3].offset = offsetof(VertexAttributes, uv);
-
-	VertexBufferLayout vertexBufferLayout;
-	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
-	vertexBufferLayout.attributes = vertexAttribs.data();
-	vertexBufferLayout.arrayStride = sizeof(VertexAttributes);
-	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
-
-	pipelineDesc.vertex.bufferCount = 1;
-	pipelineDesc.vertex.buffers = &vertexBufferLayout;
-
-	pipelineDesc.vertex.module = shaderModule;
-	pipelineDesc.vertex.entryPoint = "vs_main";
-	pipelineDesc.vertex.constantCount = 0;
-	pipelineDesc.vertex.constants = nullptr;
-
-	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
-	pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
-	pipelineDesc.primitive.frontFace = FrontFace::CCW;
-	pipelineDesc.primitive.cullMode = CullMode::None;
-
-	FragmentState fragmentState{};
-	pipelineDesc.fragment = &fragmentState;
-	fragmentState.module = shaderModule;
-	fragmentState.entryPoint = "fs_main";
-	fragmentState.constantCount = 0;
-	fragmentState.constants = nullptr;
-
-	BlendState blendState{};
-	blendState.color.srcFactor = BlendFactor::SrcAlpha;
-	blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
-	blendState.color.operation = BlendOperation::Add;
-	blendState.alpha.srcFactor = BlendFactor::Zero;
-	blendState.alpha.dstFactor = BlendFactor::One;
-	blendState.alpha.operation = BlendOperation::Add;
-
-	ColorTargetState colorTarget{};
-	colorTarget.format = m_swapChainFormat;
-	colorTarget.blend = &blendState;
-	colorTarget.writeMask = ColorWriteMask::All;
-
-	fragmentState.targetCount = 1;
-	fragmentState.targets = &colorTarget;
-
-	DepthStencilState depthStencilState = Default;
-	depthStencilState.depthCompare = CompareFunction::Less;
-	depthStencilState.depthWriteEnabled = true;
-	depthStencilState.format = m_depthTextureFormat;
-	depthStencilState.stencilReadMask = 0;
-	depthStencilState.stencilWriteMask = 0;
-	pipelineDesc.depthStencil = &depthStencilState;
-
-	pipelineDesc.multisample.count = 1;
-	pipelineDesc.multisample.mask = ~0u;
-	pipelineDesc.multisample.alphaToCoverageEnabled = false;
-
-	// Create a bind group layout
-	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
-	bindGroupLayoutDesc.entryCount = (uint32_t)m_bindingLayoutEntries.size();
-	bindGroupLayoutDesc.entries = m_bindingLayoutEntries.data();
-	BindGroupLayout bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
-
-	// Create the pipeline layout
-	PipelineLayoutDescriptor layoutDesc{};
-	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
-	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
-	pipelineDesc.layout = layout;
-
-	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
-	std::cout << "Render pipeline: " << m_pipeline << std::endl;
-
-	// Create bind group
-	BindGroupDescriptor bindGroupDesc{};
-	bindGroupDesc.layout = bindGroupLayout;
-	bindGroupDesc.entryCount = (uint32_t)m_bindings.size();
-	bindGroupDesc.entries = m_bindings.data();
-	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
 	AbstractRenderer::InitContext ctx{
 		m_device,
@@ -357,8 +175,8 @@ bool Application::onInit() {
 		m_uniformBuffer,
 		sizeof(CameraUniforms)
 	};
-	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 32);
-	m_dualContouringRenderer = std::make_shared<DualContouringRenderer>(ctx, 32);
+	m_marchingCubesRenderer = std::make_shared<MarchingCubesRenderer>(ctx, 128);
+	m_dualContouringRenderer = std::make_shared<DualContouringRenderer>(ctx, 128);
 
 	initGui();
 
@@ -409,11 +227,32 @@ void Application::buildDepthBuffer() {
 	m_depthTextureView = m_depthTexture.createView(depthTextureViewDesc);
 }
 
+void Application::buildCameraUniformBuffer() {
+	// Create camera uniform buffer
+	BufferDescriptor bufferDesc;
+	bufferDesc.size = sizeof(CameraUniforms);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
+	bufferDesc.mappedAtCreation = false;
+	m_uniformBuffer = m_device.createBuffer(bufferDesc);
+
+	// Upload the initial value of the uniforms
+	m_uniforms.time = 1.0f;
+	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+
+	// Matrices
+	m_uniforms.modelMatrix = mat4x4(1.0);
+	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
+
+	Queue queue = m_device.getQueue();
+	queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(CameraUniforms));
+	updateViewMatrix();
+}
+
 void Application::onFrame() {
 	glfwPollEvents();
 	Queue queue = m_device.getQueue();
 
-	updateLighting();
 	updateDragInertia();
 	m_marchingCubesRenderer->bake();
 	m_dualContouringRenderer->bake();
@@ -474,14 +313,10 @@ void Application::onFrame() {
 	renderPassDesc.timestampWrites = nullptr;
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
-	renderPass.setPipeline(m_pipeline);
-
-	renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexData.size() * sizeof(VertexAttributes));
-	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
-
-	renderPass.draw(m_indexCount, 1, 0, 0);
-
-	AbstractRenderer::DrawingContext ctx{ renderPass };
+	AbstractRenderer::DrawingContext ctx{
+		renderPass,
+		m_settings.showWireframe
+	};
 	m_marchingCubesRenderer->draw(ctx);
 	m_dualContouringRenderer->draw(ctx);
 
@@ -617,17 +452,13 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	bool changed = false;
-	ImGui::Begin("Lighting");
-	changed = ImGui::ColorEdit3("Color #0", glm::value_ptr(m_lightingUniforms.colors[0])) || changed;
-	changed = ImGui::DragDirection("Direction #0", m_lightingUniforms.directions[0]) || changed;
-	changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1])) || changed;
-	changed = ImGui::DragDirection("Direction #1", m_lightingUniforms.directions[1]) || changed;
-	changed = ImGui::SliderFloat("Hardness", &m_lightingUniforms.hardness, 0.01f, 128.0f) || changed;
-	changed = ImGui::SliderFloat("K Diffuse", &m_lightingUniforms.kd, 0.0f, 2.0f) || changed;
-	changed = ImGui::SliderFloat("K Specular", &m_lightingUniforms.ks, 0.0f, 2.0f) || changed;
+	/*
+	ImGui::Begin("Settings");
+	ImGui::Checkbox("Show Wireframe", &m_settings.showWireframe);
 	ImGui::End();
-	m_lightingUniformsChanged = changed;
+	*/
+	ImGui::Begin("Profiling");
+	ImGui::End();
 
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
@@ -658,53 +489,4 @@ bool Application::initTexture(const std::filesystem::path &path) {
 	m_bindings.push_back(binding);
 
 	return true;
-}
-
-void Application::initLighting() {
-	Queue queue = m_device.getQueue();
-
-	// Create uniform buffer
-	BufferDescriptor bufferDesc;
-	bufferDesc.size = sizeof(LightingUniforms);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
-	bufferDesc.mappedAtCreation = false;
-	m_lightingUniformBuffer = m_device.createBuffer(bufferDesc);
-
-	// Upload the initial value of the uniforms
-	m_lightingUniforms.directions = {
-		vec4{0.5, -0.9, 0.1, 0.0},
-		vec4{0.2, 0.4, 0.3, 0.0}
-	};
-	m_lightingUniforms.colors = {
-		vec4{1.0, 0.9, 0.6, 1.0},
-		vec4{0.6, 0.9, 1.0, 1.0}
-	};
-	m_lightingUniforms.hardness = 16.0f;
-	m_lightingUniforms.kd = 1.0f;
-	m_lightingUniforms.ks = 0.5f;
-
-	queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
-
-	// Setup binding
-	uint32_t bindingIndex = (uint32_t)m_bindingLayoutEntries.size();
-	BindGroupLayoutEntry bindingLayout = Default;
-	bindingLayout.binding = bindingIndex;
-	bindingLayout.visibility = ShaderStage::Fragment;
-	bindingLayout.buffer.type = BufferBindingType::Uniform;
-	bindingLayout.buffer.minBindingSize = sizeof(LightingUniforms);
-	m_bindingLayoutEntries.push_back(bindingLayout);
-
-	BindGroupEntry binding = Default;
-	binding.binding = bindingIndex;
-	binding.buffer = m_lightingUniformBuffer;
-	binding.offset = 0;
-	binding.size = sizeof(LightingUniforms);
-	m_bindings.push_back(binding);
-}
-
-void Application::updateLighting() {
-	if (m_lightingUniformsChanged) {
-		Queue queue = m_device.getQueue();
-		queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
-	}
 }
