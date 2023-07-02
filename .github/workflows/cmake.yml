@@ -20,11 +20,11 @@ jobs:
           install-deps: |
             sudo apt-get update -y
             sudo apt-get install -y xorg-dev
-          file-exists-cmd: test -f
+          file-exists-cmd: if test -f "$FILE"; then echo True; else echo False; fi
         - os: windows-latest
-          file-exists-cmd: Test-Path -PathType Leaf
+          file-exists-cmd: Test-Path -PathType Leaf "$FILE"
         - os: macos-latest
-          file-exists-cmd: test -f
+          file-exists-cmd: if test -f "$FILE"; then echo True; else echo False; fi
         
         
     runs-on: ${{ matrix.os }}
@@ -35,16 +35,18 @@ jobs:
     # Cancel if no CMakeLists is found
     - name: Look for CMakeLists file
       id: check-cmakelists
-      run: echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }} CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+      run: echo "cmakelists-exists=$(${{ matrix.file-exists-cmd }})" >> "$GITHUB_OUTPUT"
+      env:
+        FILE: CMakeLists.txt
     
     - name: Install dependencies
-      if: ${{ matrix.install-deps && steps.check-cmakelists.outputs.cmakelists-exists }}
+      if: ${{ matrix.install-deps && steps.check-cmakelists.outputs.cmakelists-exists == "True" }}
       run: ${{ matrix.install-deps }}
 
     - name: Configure CMake
-      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists == "True" }}
       run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
-      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
+      if: ${{ steps.check-cmakelists.outputs.cmakelists-exists == "True" }}
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
