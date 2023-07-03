@@ -24,12 +24,11 @@
  * SOFTWARE.
  */
 
-#include <glfw3webgpu.h>
-#include <GLFW/glfw3.h>
-
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu.hpp>
-#include <wgpu.h> // wgpuTextureViewDrop
+
+#include <glfw3webgpu.h>
+#include <GLFW/glfw3.h>
 
 #include <iostream>
 #include <cassert>
@@ -117,9 +116,7 @@ int main (int, char**) {
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 		renderPass.end();
 		
-		// This procedure is not handled by the wrapper because not standard,
-		// but as you can see there is no conversion needed whatsoever.
-		wgpuTextureViewDrop(nextTexture);
+		nextTexture.release();
 
 		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
