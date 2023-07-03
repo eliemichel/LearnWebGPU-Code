@@ -33,8 +33,6 @@
 #include <iostream>
 #include <cassert>
 
-#include "webgpu-release.h"
-
 using namespace wgpu;
 
 int main (int, char**) {
