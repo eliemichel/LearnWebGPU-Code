@@ -30,17 +30,6 @@
 
 #include <iostream>
 
-// Dawn and wgpu-native do not agree yet on the lifetime management
-// of objects. We align on Dawn convention of calling "release" the
-// methods that free memory for objects created with wgpuCreateSomething.
-// (The key difference is that Dawn also offers a "reference" function to
-// increment a reference counter, and release decreases this counter and
-// actually frees memory only when the counter gets to 0)
-#ifdef WEBGPU_BACKEND_WGPU
-#include <webgpu/wgpu.h>
-#define wgpuInstanceRelease wgpuInstanceDrop
-#endif
-
 int main (int, char**) {
 	// We create the equivalent of the navigator.gpu if this were web code
 
