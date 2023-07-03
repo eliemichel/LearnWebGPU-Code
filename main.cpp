@@ -25,7 +25,6 @@
  */
 
 #include "glfw3webgpu.h"
-#include "webgpu-release.h"
 
 #include <GLFW/glfw3.h>
 
