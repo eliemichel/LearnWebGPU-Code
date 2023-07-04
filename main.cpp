@@ -98,7 +98,11 @@ int main (int, char**) {
 	swapChainDesc.usage = WGPUTextureUsage_RenderAttachment;
 
 	// The swap chain textures use the color format suggested by the target surface.
-	WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+#ifdef WEBGPU_BACKEND_WGPU
+    WGPUTextureFormat swapChainFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
+#else
+    WGPUTextureFormat swapChainFormat = WGPUTextureFormat_BGRA8Unorm;
+#endif
 	swapChainDesc.format = swapChainFormat;
 	
 	// FIFO stands for "first in, first out", meaning that the presented
