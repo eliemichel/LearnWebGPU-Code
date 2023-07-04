@@ -86,10 +86,6 @@ int main (int, char**) {
 
 	inspectDevice(device);
 
-	wgpuDeviceSetDeviceLostCallback(device, [](WGPUDeviceLostReason reason, char const * message, void*) {
-		std::cout << "Device lost! Reason: " << reason << ", message: " << message << std::endl;
-	}, nullptr);
-
 	// Get the main and only command queue used to send instructions to the GPU
 	WGPUQueue queue = wgpuDeviceGetQueue(device);
 
