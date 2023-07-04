@@ -75,6 +75,13 @@ int main (int, char**) {
 
 	Queue queue = device.getQueue();
 
+	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
+		std::cout << "Uncaptured device error: type " << type;
+		if (message) std::cout << " (" << message << ")";
+		std::cout << std::endl;
+	};
+	wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
+
 	std::cout << "Creating swapchain device..." << std::endl;
 	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
 	SwapChainDescriptor swapChainDesc = {};
