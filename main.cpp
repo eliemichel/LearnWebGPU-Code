@@ -25,7 +25,7 @@
  */
 
 #define WEBGPU_CPP_IMPLEMENTATION
-#include <webgpu.hpp>
+#include <webgpu/webgpu.hpp>
 
 #include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
@@ -83,7 +83,11 @@ int main (int, char**) {
 	wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
 
 	std::cout << "Creating swapchain device..." << std::endl;
-	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
+#ifdef WEBGPU_BACKEND_WGPU
+    TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
+#else
+    TextureFormat swapChainFormat = TextureFormat::BGRA8Unorm;
+#endif
 	SwapChainDescriptor swapChainDesc = {};
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
