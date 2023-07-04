@@ -96,8 +96,6 @@ int main (int, char**) {
 	bufferDesc.mappedAtCreation = false;
 	Buffer buffer2 = device.createBuffer(bufferDesc);
 
-	std::cout << "Configuring command queue..." << std::endl;
-
 	// Get the command queue, through which we send commands to the GPU
 	Queue queue = device.getQueue();
 
