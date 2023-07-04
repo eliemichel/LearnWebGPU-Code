@@ -77,6 +77,13 @@ int main (int, char**) {
 
 	WGPUQueue queue = wgpuDeviceGetQueue(device);
 
+	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
+		std::cout << "Uncaptured device error: type " << type;
+		if (message) std::cout << " (" << message << ")";
+		std::cout << std::endl;
+	};
+	wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
+
 	std::cout << "Creating swapchain device..." << std::endl;
 
 	// We describe the Swap Chain that is used to present rendered textures on
