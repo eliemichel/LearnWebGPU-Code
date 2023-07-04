@@ -87,10 +87,6 @@ int main (int, char**) {
 
 	inspectDevice(device);
 
-	wgpuDeviceSetDeviceLostCallback(device, [](WGPUDeviceLostReason reason, char const * message, void*) {
-		std::cout << "Device lost! Reason: " << reason << ", message: " << message << std::endl;
-	}, nullptr);
-
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
