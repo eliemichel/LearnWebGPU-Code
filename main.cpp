@@ -131,11 +131,7 @@ fn fs_main() -> @location(0) vec4f {
 	shaderDesc.nextInChain = &shaderCodeDesc.chain;
 
 	// Setup the actual payload of the shader code descriptor
-#ifdef WEBGPU_BACKEND_WGPU
 	shaderCodeDesc.code = shaderSource;
-#else
-	shaderCodeDesc.source = shaderSource;
-#endif
 
 	ShaderModule shaderModule = device.createShaderModule(shaderDesc);
 	std::cout << "Shader module: " << shaderModule << std::endl;
@@ -230,7 +226,7 @@ fn fs_main() -> @location(0) vec4f {
 		
 		RenderPassDescriptor renderPassDesc;
 
-		WGPURenderPassColorAttachment renderPassColorAttachment;
+		RenderPassColorAttachment renderPassColorAttachment;
 		renderPassColorAttachment.view = nextTexture;
 		renderPassColorAttachment.resolveTarget = nullptr;
 		renderPassColorAttachment.loadOp = LoadOp::Clear;
