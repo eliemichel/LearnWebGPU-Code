@@ -91,6 +91,7 @@ int main (int, char**) {
 	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
 	requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 3;
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
