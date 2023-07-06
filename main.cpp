@@ -96,16 +96,16 @@ int main (int, char**) {
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
 	requiredLimits.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
-	//                                                 ^ This was a 5
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 3;
-	// We use at most 1 bind group for now
 	requiredLimits.limits.maxBindGroups = 1;
-	// We use at most 1 uniform buffer per stage
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-	// Uniform structs have a size of maximum 16 float
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
+	// For the depth buffer, we enable textures (up to the size of the window):
+	requiredLimits.limits.maxTextureDimension1D = 480;
+	requiredLimits.limits.maxTextureDimension2D = 640;
+	requiredLimits.limits.maxTextureArrayLayers = 1;
 
 	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
@@ -152,20 +152,17 @@ int main (int, char**) {
 	// Position attribute
 	vertexAttribs[0].shaderLocation = 0;
 	vertexAttribs[0].format = VertexFormat::Float32x3;
-	//                                              ^ This was a 2
 	vertexAttribs[0].offset = 0;
 
 	// Color attribute
 	vertexAttribs[1].shaderLocation = 1;
 	vertexAttribs[1].format = VertexFormat::Float32x3;
 	vertexAttribs[1].offset = 3 * sizeof(float);
-	//                        ^ This was a 2
 
 	VertexBufferLayout vertexBufferLayout;
 	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
 	vertexBufferLayout.attributes = vertexAttribs.data();
 	vertexBufferLayout.arrayStride = 6 * sizeof(float);
-	//                               ^ This was a 5
 	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
 
 	pipelineDesc.vertex.bufferCount = 1;
@@ -203,8 +200,21 @@ int main (int, char**) {
 
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
+
+	// We setup a depth buffer state for the render pipeline
+	DepthStencilState depthStencilState = Default;
+	// Keep a fragment only if its depth is lower than the previously blended one
+	depthStencilState.depthCompare = CompareFunction::Less;
+	// Each time a fragment is blended into the target, we update the value of the Z-buffer
+	depthStencilState.depthWriteEnabled = true;
+	// Store the format in a variable as later parts of the code depend on it
+	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
+	depthStencilState.format = depthTextureFormat;
+	// Deactivate the stencil alltogether
+	depthStencilState.stencilReadMask = 0;
+	depthStencilState.stencilWriteMask = 0;
 	
-	pipelineDesc.depthStencil = nullptr;
+	pipelineDesc.depthStencil = &depthStencilState;
 
 	pipelineDesc.multisample.count = 1;
 	pipelineDesc.multisample.mask = ~0u;
@@ -212,9 +222,7 @@ int main (int, char**) {
 
 	// Create binding layout (don't forget to = Default)
 	BindGroupLayoutEntry bindingLayout = Default;
-	// The binding index as used in the @binding attribute in the shader
 	bindingLayout.binding = 0;
-	// The stage that needs to access this resource
 	bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 	bindingLayout.buffer.type = BufferBindingType::Uniform;
 	bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
@@ -234,6 +242,31 @@ int main (int, char**) {
 
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
+
+	// Create the depth texture
+	TextureDescriptor depthTextureDesc;
+	depthTextureDesc.dimension = TextureDimension::_2D;
+	depthTextureDesc.format = depthTextureFormat;
+	depthTextureDesc.mipLevelCount = 1;
+	depthTextureDesc.sampleCount = 1;
+	depthTextureDesc.size = {640, 480, 1};
+	depthTextureDesc.usage = TextureUsage::RenderAttachment;
+	depthTextureDesc.viewFormatCount = 1;
+	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
+	Texture depthTexture = device.createTexture(depthTextureDesc);
+	std::cout << "Depth texture: " << depthTexture << std::endl;
+
+	// Create the view of the depth texture manipulated by the rasterizer
+	TextureViewDescriptor depthTextureViewDesc;
+	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
+	depthTextureViewDesc.baseArrayLayer = 0;
+	depthTextureViewDesc.arrayLayerCount = 1;
+	depthTextureViewDesc.baseMipLevel = 0;
+	depthTextureViewDesc.mipLevelCount = 1;
+	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
+	depthTextureViewDesc.format = depthTextureFormat;
+	TextureView depthTextureView = depthTexture.createView(depthTextureViewDesc);
+	std::cout << "Depth texture view: " << depthTextureView << std::endl;
 
 	std::vector<float> pointData;
 	std::vector<uint16_t> indexData;
@@ -316,7 +349,32 @@ int main (int, char**) {
 		renderPassDesc.colorAttachmentCount = 1;
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-		renderPassDesc.depthStencilAttachment = nullptr;
+		// We now add a depth/stencil attachment:
+		RenderPassDepthStencilAttachment depthStencilAttachment;
+		// The view of the depth texture
+		depthStencilAttachment.view = depthTextureView;
+
+		// The initial value of the depth buffer, meaning "far"
+		depthStencilAttachment.depthClearValue = 1.0f;
+		// Operation settings comparable to the color attachment
+		depthStencilAttachment.depthLoadOp = LoadOp::Clear;
+		depthStencilAttachment.depthStoreOp = StoreOp::Store;
+		// we could turn off writing to the depth buffer globally here
+		depthStencilAttachment.depthReadOnly = false;
+
+		// Stencil setup, mandatory but unused
+		depthStencilAttachment.stencilClearValue = 0;
+#ifdef WEBGPU_BACKEND_WGPU
+		depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
+		depthStencilAttachment.stencilStoreOp = StoreOp::Store;
+#else
+		depthStencilAttachment.stencilLoadOp = LoadOp::Undefined;
+		depthStencilAttachment.stencilStoreOp = StoreOp::Undefined;
+#endif
+		depthStencilAttachment.stencilReadOnly = true;
+
+		renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
+
 		renderPassDesc.timestampWriteCount = 0;
 		renderPassDesc.timestampWrites = nullptr;
 		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
@@ -333,7 +391,7 @@ int main (int, char**) {
 
 		renderPass.end();
 		
-		wgpuTextureViewRelease(nextTexture);
+		nextTexture.release();
 
 		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
@@ -341,17 +399,28 @@ int main (int, char**) {
 		queue.submit(command);
 
 		swapChain.present();
+
+#ifdef WEBGPU_BACKEND_DAWN
+		// Flush error callbacks
+		device.tick();
+#endif
 	}
 
 	vertexBuffer.destroy();
-	wgpuBufferRelease(vertexBuffer);
+	vertexBuffer.release();
 	indexBuffer.destroy();
-	wgpuBufferRelease(indexBuffer);
+	indexBuffer.release();
 
-	wgpuSwapChainRelease(swapChain);
-	wgpuDeviceRelease(device);
-	wgpuAdapterRelease(adapter);
-	wgpuInstanceRelease(instance);
+	// Destroy the depth texture and its view
+	depthTextureView.release();
+	depthTexture.destroy();
+	depthTexture.release();
+
+	swapChain.release();
+	device.release();
+	adapter.release();
+	instance.release();
+
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
