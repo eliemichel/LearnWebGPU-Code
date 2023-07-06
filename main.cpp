@@ -376,15 +376,12 @@ ShaderModule loadShaderModule(const fs::path& path, Device device) {
 	ShaderModuleWGSLDescriptor shaderCodeDesc;
 	shaderCodeDesc.chain.next = nullptr;
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
+	shaderCodeDesc.code = shaderSource.c_str();
 	ShaderModuleDescriptor shaderDesc;
 	shaderDesc.nextInChain = &shaderCodeDesc.chain;
-
 #ifdef WEBGPU_BACKEND_WGPU
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
-	shaderCodeDesc.code = shaderSource.c_str();
-#else
-	shaderCodeDesc.source = shaderSource.c_str();
 #endif
 
 	return device.createShaderModule(shaderDesc);
