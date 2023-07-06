@@ -248,7 +248,7 @@ fn fs_main() -> @location(0) vec4f {
 
 		renderPass.end();
 		
-		wgpuTextureViewRelease(nextTexture);
+		nextTexture.release();
 
 		CommandBufferDescriptor cmdBufferDescriptor;
 		cmdBufferDescriptor.label = "Command buffer";
@@ -258,10 +258,10 @@ fn fs_main() -> @location(0) vec4f {
 		swapChain.present();
 	}
 
-	wgpuSwapChainRelease(swapChain);
-	wgpuDeviceRelease(device);
-	wgpuAdapterRelease(adapter);
-	wgpuInstanceRelease(instance);
+	swapChain.release();
+	device.release();
+	adapter.release();
+	instance.release();
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
