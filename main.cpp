@@ -401,7 +401,7 @@ int main (int, char**) {
 		swapChain.present();
 
 #ifdef WEBGPU_BACKEND_DAWN
-		// Flush error callbacks
+		// Check for pending error callbacks
 		device.tick();
 #endif
 	}
