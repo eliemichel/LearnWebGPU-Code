@@ -311,7 +311,7 @@ int main (int, char**) {
 		
 		RenderPassDescriptor renderPassDesc{};
 
-		WGPURenderPassColorAttachment renderPassColorAttachment;
+		RenderPassColorAttachment renderPassColorAttachment{};
 		renderPassColorAttachment.view = nextTexture;
 		renderPassColorAttachment.resolveTarget = nullptr;
 		renderPassColorAttachment.loadOp = LoadOp::Clear;
