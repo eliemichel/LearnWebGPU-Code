@@ -58,7 +58,7 @@ struct MyUniforms {
 static_assert(sizeof(MyUniforms) % 16 == 0);
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
-bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData);
+bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData, int dimensions);
 
 int main (int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -95,7 +95,8 @@ int main (int, char**) {
 	requiredLimits.limits.maxVertexAttributes = 2;
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
-	requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
+	requiredLimits.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
+	//                                                 ^ This was a 5
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 3;
@@ -150,18 +151,21 @@ int main (int, char**) {
 
 	// Position attribute
 	vertexAttribs[0].shaderLocation = 0;
-	vertexAttribs[0].format = VertexFormat::Float32x2;
+	vertexAttribs[0].format = VertexFormat::Float32x3;
+	//                                              ^ This was a 2
 	vertexAttribs[0].offset = 0;
 
 	// Color attribute
 	vertexAttribs[1].shaderLocation = 1;
 	vertexAttribs[1].format = VertexFormat::Float32x3;
-	vertexAttribs[1].offset = 2 * sizeof(float);
+	vertexAttribs[1].offset = 3 * sizeof(float);
+	//                        ^ This was a 2
 
 	VertexBufferLayout vertexBufferLayout;
 	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
 	vertexBufferLayout.attributes = vertexAttribs.data();
-	vertexBufferLayout.arrayStride = 5 * sizeof(float);
+	vertexBufferLayout.arrayStride = 6 * sizeof(float);
+	//                               ^ This was a 5
 	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
 
 	pipelineDesc.vertex.bufferCount = 1;
@@ -234,7 +238,7 @@ int main (int, char**) {
 	std::vector<float> pointData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometry(RESOURCE_DIR "/webgpu.txt", pointData, indexData);
+	bool success = loadGeometry(RESOURCE_DIR "/pyramid.txt", pointData, indexData, 3 /* dimensions */);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -258,9 +262,7 @@ int main (int, char**) {
 	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 
 	// Create uniform buffer
-	// The buffer will only contain 1 float with the value of uTime
 	bufferDesc.size = sizeof(MyUniforms);
-	// Make sure to flag the buffer as BufferUsage::Uniform
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
 	Buffer uniformBuffer = device.createBuffer(bufferDesc);
@@ -273,20 +275,14 @@ int main (int, char**) {
 
 	// Create a binding
 	BindGroupEntry binding{};
-	// The index of the binding (the entries in bindGroupDesc can be in any order)
 	binding.binding = 0;
-	// The buffer it is actually bound to
 	binding.buffer = uniformBuffer;
-	// We can specify an offset within the buffer, so that a single buffer can hold
-	// multiple uniform blocks.
 	binding.offset = 0;
-	// And we specify again the size of the buffer.
 	binding.size = sizeof(MyUniforms);
 
 	// A bind group contains one or multiple bindings
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = bindGroupLayout;
-	// There must be as many bindings as declared in the layout!
 	bindGroupDesc.entryCount = bindGroupLayoutDesc.entryCount;
 	bindGroupDesc.entries = &binding;
 	BindGroup bindGroup = device.createBindGroup(bindGroupDesc);
@@ -387,7 +383,7 @@ ShaderModule loadShaderModule(const fs::path& path, Device device) {
 	return device.createShaderModule(shaderDesc);
 }
 
-bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData) {
+bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData, int dimensions) {
 	std::ifstream file(path);
 	if (!file.is_open()) {
 		return false;
@@ -420,7 +416,7 @@ bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vect
 		else if (currentSection == Section::Points) {
 			std::istringstream iss(line);
 			// Get x, y, r, g, b
-			for (int i = 0; i < 5; ++i) {
+			for (int i = 0; i < dimensions + 3; ++i) {
 				iss >> value;
 				pointData.push_back(value);
 			}

@@ -3,7 +3,7 @@ LearnWebGPU - Code
 
 This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
 
-Branch `step043`: This corresponds to the code at the end of the page [More uniforms](https://eliemichel.github.io/LearnWebGPU/basic-3d-rendering/shader-uniforms/multiple-uniforms.html).
+Branch `step050`: This corresponds to the code at the end of the page [A simple example](http://localhost:8000/basic-3d-rendering/3d-meshes/a-simple-example.html).
 
 Building
 --------
