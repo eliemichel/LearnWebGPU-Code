@@ -95,8 +95,8 @@ fn vs_main_optionA(in: VertexInput) -> VertexOutput {
 	));
 
 	// Move the view point
-	let focalPoint = vec3<f32>(0.0, 0.0, -2.0);
-	let T2 = transpose(mat4x4<f32>(
+	let focalPoint = vec3f(0.0, 0.0, -2.0);
+	let T2 = transpose(mat4x4f(
 		1.0,  0.0, 0.0, -focalPoint.x,
 		0.0,  1.0, 0.0, -focalPoint.y,
 		0.0,  0.0, 1.0, -focalPoint.z,
