@@ -115,11 +115,14 @@ int main (int, char**) {
 	requiredLimits.limits.maxVertexAttributes = 3;
 	//                                          ^ This was a 2
 	requiredLimits.limits.maxVertexBuffers = 1;
-	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
-	requiredLimits.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
+	requiredLimits.limits.maxBufferSize = 16 * sizeof(VertexAttributes);
+	//                                         ^^^^^^^^^^^^^^^^^^^^^^^^ This was 6 * sizeof(float)
+	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
+	//                                                        ^^^^^^^^^^^^^^^^^^^^^^^^ This was 6 * sizeof(float)
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
-	requiredLimits.limits.maxInterStageShaderComponents = 3;
+	requiredLimits.limits.maxInterStageShaderComponents = 6;
+	//                                                    ^ This was a 3
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
 	// Update max uniform buffer size:
