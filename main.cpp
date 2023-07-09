@@ -64,6 +64,16 @@ struct MyUniforms {
     float _pad[3];
 };
 
+/**
+ * A structure that describes the data layout in the vertex buffer
+ * We do not instantiate it but use it in `sizeof` and `offsetof`
+ */
+struct VertexAttributes {
+	vec3 position;
+	vec3 normal;
+	vec3 color;
+};
+
 // Have the compiler check byte alignment
 static_assert(sizeof(MyUniforms) % 16 == 0);
 
@@ -102,7 +112,8 @@ int main (int, char**) {
 
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
-	requiredLimits.limits.maxVertexAttributes = 2;
+	requiredLimits.limits.maxVertexAttributes = 3;
+	//                                          ^ This was a 2
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
 	requiredLimits.limits.maxVertexBufferArrayStride = 6 * sizeof(float);
@@ -157,22 +168,29 @@ int main (int, char**) {
 	RenderPipelineDescriptor pipelineDesc;
 
 	// Vertex fetch
-	std::vector<VertexAttribute> vertexAttribs(2);
+	std::vector<VertexAttribute> vertexAttribs(3);
+	//                                         ^ This was a 2
 
 	// Position attribute
 	vertexAttribs[0].shaderLocation = 0;
 	vertexAttribs[0].format = VertexFormat::Float32x3;
 	vertexAttribs[0].offset = 0;
 
-	// Color attribute
+	// Normal attribute
 	vertexAttribs[1].shaderLocation = 1;
 	vertexAttribs[1].format = VertexFormat::Float32x3;
-	vertexAttribs[1].offset = 3 * sizeof(float);
+	vertexAttribs[1].offset = offsetof(VertexAttributes, normal);
+
+	// Color attribute
+	vertexAttribs[2].shaderLocation = 2;
+	vertexAttribs[2].format = VertexFormat::Float32x3;
+	vertexAttribs[2].offset = offsetof(VertexAttributes, color);
 
 	VertexBufferLayout vertexBufferLayout;
 	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
 	vertexBufferLayout.attributes = vertexAttribs.data();
-	vertexBufferLayout.arrayStride = 6 * sizeof(float);
+	vertexBufferLayout.arrayStride = sizeof(VertexAttributes);
+	//                               ^^^^^^^^^^^^^^^^^^^^^^^^ This was 6 * sizeof(float)
 	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
 
 	pipelineDesc.vertex.bufferCount = 1;
@@ -211,16 +229,11 @@ int main (int, char**) {
 	fragmentState.targetCount = 1;
 	fragmentState.targets = &colorTarget;
 
-	// We setup a depth buffer state for the render pipeline
 	DepthStencilState depthStencilState = Default;
-	// Keep a fragment only if its depth is lower than the previously blended one
 	depthStencilState.depthCompare = CompareFunction::Less;
-	// Each time a fragment is blended into the target, we update the value of the Z-buffer
 	depthStencilState.depthWriteEnabled = true;
-	// Store the format in a variable as later parts of the code depend on it
 	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
 	depthStencilState.format = depthTextureFormat;
-	// Deactivate the stencil alltogether
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
 	
@@ -281,7 +294,8 @@ int main (int, char**) {
 	std::vector<float> pointData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometry(RESOURCE_DIR "/pyramid.txt", pointData, indexData, 3 /* dimensions */);
+	bool success = loadGeometry(RESOURCE_DIR "/pyramid.txt", pointData, indexData, 6 /* dimensions */);
+	//                                                                             ^ This was a 3
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -455,20 +469,12 @@ int main (int, char**) {
 		renderPassDesc.colorAttachmentCount = 1;
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-		// We now add a depth/stencil attachment:
 		RenderPassDepthStencilAttachment depthStencilAttachment;
-		// The view of the depth texture
 		depthStencilAttachment.view = depthTextureView;
-
-		// The initial value of the depth buffer, meaning "far"
 		depthStencilAttachment.depthClearValue = 1.0f;
-		// Operation settings comparable to the color attachment
 		depthStencilAttachment.depthLoadOp = LoadOp::Clear;
 		depthStencilAttachment.depthStoreOp = StoreOp::Store;
-		// we could turn off writing to the depth buffer globally here
 		depthStencilAttachment.depthReadOnly = false;
-
-		// Stencil setup, mandatory but unused
 		depthStencilAttachment.stencilClearValue = 0;
 #ifdef WEBGPU_BACKEND_WGPU
 		depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
@@ -517,7 +523,6 @@ int main (int, char**) {
 	indexBuffer.destroy();
 	indexBuffer.release();
 
-	// Destroy the depth texture and its view
 	depthTextureView.release();
 	depthTexture.destroy();
 	depthTexture.release();

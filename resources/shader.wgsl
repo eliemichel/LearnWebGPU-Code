@@ -1,12 +1,13 @@
 struct VertexInput {
 	@location(0) position: vec3f,
-    //                        ^ This was a 2
-	@location(1) color: vec3f,
+	@location(1) normal: vec3f, // new attribute
+	@location(2) color: vec3f,
 };
 
 struct VertexOutput {
 	@builtin(position) position: vec4f,
 	@location(0) color: vec3f,
+	@location(1) normal: vec3f, // <--- Add a normal output
 };
 
 /**
@@ -95,8 +96,8 @@ fn vs_main_optionA(in: VertexInput) -> VertexOutput {
 	));
 
 	// Move the view point
-	let focalPoint = vec3<f32>(0.0, 0.0, -2.0);
-	let T2 = transpose(mat4x4<f32>(
+	let focalPoint = vec3f(0.0, 0.0, -2.0);
+	let T2 = transpose(mat4x4f(
 		1.0,  0.0, 0.0, -focalPoint.x,
 		0.0,  1.0, 0.0, -focalPoint.y,
 		0.0,  0.0, 1.0, -focalPoint.z,
