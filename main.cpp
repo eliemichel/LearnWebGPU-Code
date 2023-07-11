@@ -54,6 +54,12 @@ static_assert(sizeof(MyUniforms) % 16 == 0);
 ShaderModule loadShaderModule(const fs::path& path, Device device);
 bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData);
 
+/** Round 'value' up to the next multiplier of 'step' */
+uint32_t ceilToNextMultiple(uint32_t value, uint32_t step) {
+	uint32_t divide_and_ceil = value / step + (value % step == 0 ? 0 : 1);
+	return step * divide_and_ceil;
+}
+
 int main (int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
 	if (!instance) {
@@ -256,7 +262,7 @@ int main (int, char**) {
 
 	// Create uniform buffer
 	// Subtility
-	uint32_t uniformStride = std::max(
+	uint32_t uniformStride = ceilToNextMultiple(
 		(uint32_t)sizeof(MyUniforms),
 		(uint32_t)deviceLimits.minUniformBufferOffsetAlignment
 	);
