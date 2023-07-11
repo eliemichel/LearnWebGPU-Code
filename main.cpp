@@ -227,7 +227,7 @@ int main (int, char**) {
 	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc;
 	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = &(WGPUBindGroupLayout)bindGroupLayout;
+	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
 	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
