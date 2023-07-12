@@ -35,6 +35,9 @@
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
 
+#define TINYOBJLOADER_IMPLEMENTATION // add this to exactly 1 of your C++ files
+#include "tiny_obj_loader.h"
+
 #include <iostream>
 #include <cassert>
 #include <filesystem>
@@ -78,7 +81,8 @@ struct VertexAttributes {
 static_assert(sizeof(MyUniforms) % 16 == 0);
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
-bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData, int dimensions);
+// New loading procedure
+bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& vertexData);
 
 int main (int, char**) {
 	Instance instance = createInstance(InstanceDescriptor{});
@@ -113,19 +117,15 @@ int main (int, char**) {
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 3;
-	//                                          ^ This was a 2
 	requiredLimits.limits.maxVertexBuffers = 1;
-	requiredLimits.limits.maxBufferSize = 16 * sizeof(VertexAttributes);
-	//                                         ^^^^^^^^^^^^^^^^^^^^^^^^ This was 6 * sizeof(float)
+	// Update max buffer size to allow up to 10000 vertices in the loaded file:
+	requiredLimits.limits.maxBufferSize = 10000 * sizeof(VertexAttributes);
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
-	//                                                        ^^^^^^^^^^^^^^^^^^^^^^^^ This was 6 * sizeof(float)
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 6;
-	//                                                    ^ This was a 3
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
-	// Update max uniform buffer size:
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	requiredLimits.limits.maxTextureDimension1D = 480;
 	requiredLimits.limits.maxTextureDimension2D = 640;
@@ -297,8 +297,9 @@ int main (int, char**) {
 	std::vector<float> pointData;
 	std::vector<uint16_t> indexData;
 
-	bool success = loadGeometry(RESOURCE_DIR "/pyramid.txt", pointData, indexData, 6 /* dimensions */);
-	//                                                                             ^ This was a 3
+	// Load mesh data from OBJ file
+	std::vector<VertexAttributes> vertexData;
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/pyramid.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -306,21 +307,14 @@ int main (int, char**) {
 
 	// Create vertex buffer
 	BufferDescriptor bufferDesc;
-	bufferDesc.size = pointData.size() * sizeof(float);
+	bufferDesc.size = vertexData.size() * sizeof(VertexAttributes); // changed
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
 	bufferDesc.mappedAtCreation = false;
 	Buffer vertexBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(vertexBuffer, 0, pointData.data(), bufferDesc.size);
+	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size); // changed
 
-	int indexCount = static_cast<int>(indexData.size());
+	int indexCount = static_cast<int>(vertexData.size()); // changed
 	
-	// Create index buffer
-	bufferDesc.size = indexData.size() * sizeof(float);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
-	bufferDesc.mappedAtCreation = false;
-	Buffer indexBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
-
 	// Create uniform buffer
 	bufferDesc.size = sizeof(MyUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
@@ -331,55 +325,21 @@ int main (int, char**) {
 	MyUniforms uniforms;
 
 	// Build transform matrices
-	// Option A: Manually define matrices
-	// Scale the object
-	mat4x4 S = transpose(mat4x4(
-		0.3, 0.0, 0.0, 0.0,
-		0.0, 0.3, 0.0, 0.0,
-		0.0, 0.0, 0.3, 0.0,
-		0.0, 0.0, 0.0, 1.0
-	));
-
-	// Translate the object
-	mat4x4 T1 = transpose(mat4x4(
-		1.0, 0.0, 0.0, 0.5,
-		0.0, 1.0, 0.0, 0.0,
-		0.0, 0.0, 1.0, 0.0,
-		0.0, 0.0, 0.0, 1.0
-	));
 
 	// Translate the view
-	vec3 focalPoint(0.0, 0.0, -2.0);
-	mat4x4 T2 = transpose(mat4x4(
-		1.0, 0.0, 0.0, -focalPoint.x,
-		0.0, 1.0, 0.0, -focalPoint.y,
-		0.0, 0.0, 1.0, -focalPoint.z,
-		0.0, 0.0, 0.0, 1.0
-	));
-
+	vec3 focalPoint(0.0, 0.0, -1.0);
 	// Rotate the object
 	float angle1 = 2.0f; // arbitrary time
-	float c1 = cos(angle1);
-	float s1 = sin(angle1);
-	mat4x4 R1 = transpose(mat4x4(
-		c1, s1, 0.0, 0.0,
-		-s1, c1, 0.0, 0.0,
-		0.0, 0.0, 1.0, 0.0,
-		0.0, 0.0, 0.0, 1.0
-		));
-
 	// Rotate the view point
 	float angle2 = 3.0f * PI / 4.0f;
-	float c2 = cos(angle2);
-	float s2 = sin(angle2);
-	mat4x4 R2 = transpose(mat4x4(
-		1.0, 0.0, 0.0, 0.0,
-		0.0, c2, s2, 0.0,
-		0.0, -s2, c2, 0.0,
-		0.0, 0.0, 0.0, 1.0
-	));
 
+	mat4x4 S = glm::scale(mat4x4(1.0), vec3(0.3f));
+	mat4x4 T1 = mat4x4(1.0);
+	mat4x4 R1 = glm::rotate(mat4x4(1.0), angle1, vec3(0.0, 0.0, 1.0));
 	uniforms.modelMatrix = R1 * T1 * S;
+
+	mat4x4 R2 = glm::rotate(mat4x4(1.0), -angle2, vec3(1.0, 0.0, 0.0));
+	mat4x4 T2 = glm::translate(mat4x4(1.0), -focalPoint);
 	uniforms.viewMatrix = T2 * R2;
 
 	float ratio = 640.0f / 480.0f;
@@ -393,31 +353,6 @@ int main (int, char**) {
 		0.0, 0.0, far * divider, -far * near * divider,
 		0.0, 0.0, 1.0 / focalLength, 0.0
 	));
-
-	// Option B: Use GLM extensions
-	S = glm::scale(mat4x4(1.0), vec3(0.3f));
-	T1 = glm::translate(mat4x4(1.0), vec3(0.5, 0.0, 0.0));
-	R1 = glm::rotate(mat4x4(1.0), angle1, vec3(0.0, 0.0, 1.0));
-	uniforms.modelMatrix = R1 * T1 * S;
-
-	R2 = glm::rotate(mat4x4(1.0), -angle2, vec3(1.0, 0.0, 0.0));
-	T2 = glm::translate(mat4x4(1.0), -focalPoint);
-	uniforms.viewMatrix = T2 * R2;
-
-	// Option C: A different way of using GLM extensions
-	mat4x4 M(1.0);
-	M = glm::rotate(M, angle1, vec3(0.0, 0.0, 1.0));
-	M = glm::translate(M, vec3(0.5, 0.0, 0.0));
-	M = glm::scale(M, vec3(0.3f));
-	uniforms.modelMatrix = M;
-
-	mat4x4 V(1.0);
-	V = glm::translate(V, -focalPoint);
-	V = glm::rotate(V, -angle2, vec3(1.0, 0.0, 0.0));
-	uniforms.viewMatrix = V;
-	
-	float fov = 2 * glm::atan(1 / focalLength);
-	uniforms.projectionMatrix = glm::perspective(fov, ratio, near, far);
 
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
@@ -496,13 +431,12 @@ int main (int, char**) {
 
 		renderPass.setPipeline(pipeline);
 
-		renderPass.setVertexBuffer(0, vertexBuffer, 0, pointData.size() * sizeof(float));
-		renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexData.size() * sizeof(uint16_t));
+		renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexData.size() * sizeof(VertexAttributes)); // changed
 
 		// Set binding group
 		renderPass.setBindGroup(0, bindGroup, 0, nullptr);
 
-		renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
+		renderPass.draw(indexCount, 1, 0, 0); // changed
 
 		renderPass.end();
 		
@@ -523,8 +457,6 @@ int main (int, char**) {
 
 	vertexBuffer.destroy();
 	vertexBuffer.release();
-	indexBuffer.destroy();
-	indexBuffer.release();
 
 	depthTextureView.release();
 	depthTexture.destroy();
@@ -566,52 +498,59 @@ ShaderModule loadShaderModule(const fs::path& path, Device device) {
 	return device.createShaderModule(shaderDesc);
 }
 
-bool loadGeometry(const fs::path& path, std::vector<float>& pointData, std::vector<uint16_t>& indexData, int dimensions) {
-	std::ifstream file(path);
-	if (!file.is_open()) {
+bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& vertexData) {
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+
+	std::string warn;
+	std::string err;
+
+	// Call the core loading procedure of TinyOBJLoader
+	bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.string().c_str());
+
+	// Check errors
+	if (!warn.empty()) {
+		std::cout << warn << std::endl;
+	}
+
+	if (!err.empty()) {
+		std::cerr << err << std::endl;
+	}
+
+	if (!ret) {
 		return false;
 	}
 
-	pointData.clear();
-	indexData.clear();
+	// Filling in vertexData:
+	vertexData.clear();
+	for (const auto& shape : shapes) {
+		size_t offset = vertexData.size();
+		vertexData.resize(offset + shape.mesh.indices.size());
 
-	enum class Section {
-		None,
-		Points,
-		Indices,
-	};
-	Section currentSection = Section::None;
+		for (int i = 0; i < shape.mesh.indices.size(); ++i) {
+			const tinyobj::index_t& idx = shape.mesh.indices[i];
 
-	float value;
-	uint16_t index;
-	std::string line;
-	while (!file.eof()) {
-		getline(file, line);
-		if (line == "[points]") {
-			currentSection = Section::Points;
-		}
-		else if (line == "[indices]") {
-			currentSection = Section::Indices;
-		}
-		else if (line[0] == '#' || line.empty()) {
-			// Do nothing, this is a comment
-		}
-		else if (currentSection == Section::Points) {
-			std::istringstream iss(line);
-			// Get x, y, r, g, b
-			for (int i = 0; i < dimensions + 3; ++i) {
-				iss >> value;
-				pointData.push_back(value);
-			}
-		}
-		else if (currentSection == Section::Indices) {
-			std::istringstream iss(line);
-			// Get corners #0 #1 and #2
-			for (int i = 0; i < 3; ++i) {
-				iss >> index;
-				indexData.push_back(index);
-			}
+			vertexData[offset + i].position = {
+				attrib.vertices[3 * idx.vertex_index + 0],
+				-attrib.vertices[3 * idx.vertex_index + 2], // Add a minus to avoid mirroring
+				attrib.vertices[3 * idx.vertex_index + 1]
+			};
+
+			// Also apply the transform to normals!!
+			vertexData[offset + i].normal = {
+				attrib.normals[3 * idx.normal_index + 0],
+				-attrib.normals[3 * idx.normal_index + 2],
+				attrib.normals[3 * idx.normal_index + 1]
+			};
+
+			vertexData[offset + i].color = {
+				attrib.colors[3 * idx.vertex_index + 0],
+				attrib.colors[3 * idx.vertex_index + 1],
+				attrib.colors[3 * idx.vertex_index + 2]
+			};
 		}
 	}
+
 	return true;
 }
