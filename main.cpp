@@ -528,7 +528,7 @@ bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& ve
 		size_t offset = vertexData.size();
 		vertexData.resize(offset + shape.mesh.indices.size());
 
-		for (int i = 0; i < shape.mesh.indices.size(); ++i) {
+		for (size_t i = 0; i < shape.mesh.indices.size(); ++i) {
 			const tinyobj::index_t& idx = shape.mesh.indices[i];
 
 			vertexData[offset + i].position = {
