@@ -123,7 +123,7 @@ int main (int, char**) {
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 1;
-	requiredLimits.limits.maxBufferSize = 10000 * sizeof(VertexAttributes);
+	requiredLimits.limits.maxBufferSize = 150000 * sizeof(VertexAttributes);
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -322,16 +322,6 @@ int main (int, char**) {
 	TextureView depthTextureView = depthTexture.createView(depthTextureViewDesc);
 	std::cout << "Depth texture view: " << depthTextureView << std::endl;
 
-	// Create a texture
-	TextureView textureView = nullptr;
-	Texture texture = loadTexture(RESOURCE_DIR "/texture.jpg", device, &textureView);
-	if (!texture) {
-		std::cerr << "Could not load texture!" << std::endl;
-		return 1;
-	}
-	std::cout << "Texture: " << texture << std::endl;
-	std::cout << "Texture view: " << textureView << std::endl;
-
 	// Create a sampler
 	SamplerDescriptor samplerDesc;
 	samplerDesc.addressModeU = AddressMode::Repeat;
@@ -346,10 +336,19 @@ int main (int, char**) {
 	samplerDesc.maxAnisotropy = 1;
 	Sampler sampler = device.createSampler(samplerDesc);
 
+	// Create a texture
+	TextureView textureView = nullptr;
+	Texture texture = loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", device, &textureView);
+	if (!texture) {
+		std::cerr << "Could not load texture!" << std::endl;
+		return 1;
+	}
+	std::cout << "Texture: " << texture << std::endl;
+	std::cout << "Texture view: " << textureView << std::endl;
 
 	// Load mesh data from OBJ file
 	std::vector<VertexAttributes> vertexData;
-	bool success = loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -406,9 +405,6 @@ int main (int, char**) {
 		// Update uniform buffer
 		uniforms.time = static_cast<float>(glfwGetTime());
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
-		float viewZ = glm::mix(0.0f, 0.25f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
-		uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -1.5f, viewZ + 0.25f), vec3(0.0f), vec3(0, 0, 1));
-		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, viewMatrix), &uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
 		
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
