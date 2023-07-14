@@ -45,10 +45,14 @@ set_target_properties(App PROPERTIES
 target_treat_all_warnings_as_errors(App)
 target_copy_webgpu_binaries(App)
 
-# Ignore a warning that GLM requires to bypass
 if (MSVC)
+	# Ignore a warning that GLM requires to bypass
 	# Disable warning C4201: nonstandard extension used: nameless struct/union
 	target_compile_options(App PUBLIC /wd4201)
 	# Disable warning C4305: truncation from 'int' to 'bool' in 'if' condition
 	target_compile_options(App PUBLIC /wd4305)
+
+	# Ignore a warning that stb_image requires to bypass
+	# Disable warning C4244: conversion from 'int' to 'short', possible loss of data
+	target_compile_options(App PUBLIC /wd4244)
 endif (MSVC)
