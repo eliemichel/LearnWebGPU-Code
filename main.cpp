@@ -52,8 +52,6 @@ using glm::mat4x4;
 using glm::vec4;
 using glm::vec3;
 
-constexpr float PI = 3.14159265358979323846f;
-
 /**
  * The same structure as in the shader, replicated in C++
  */
