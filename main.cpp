@@ -51,6 +51,7 @@ namespace fs = std::filesystem;
 using glm::mat4x4;
 using glm::vec4;
 using glm::vec3;
+using glm::vec2;
 
 constexpr float PI = 3.14159265358979323846f;
 
@@ -78,6 +79,7 @@ struct VertexAttributes {
 	vec3 position;
 	vec3 normal;
 	vec3 color;
+	vec2 uv; // <--- Add a texture coordinate attribute
 };
 
 ShaderModule loadShaderModule(const fs::path& path, Device device);
@@ -116,20 +118,21 @@ int main (int, char**) {
 
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
-	requiredLimits.limits.maxVertexAttributes = 3;
+	requiredLimits.limits.maxVertexAttributes = 4;
+	//                                          ^ This was a 4
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBufferSize = 10000 * sizeof(VertexAttributes);
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
-	requiredLimits.limits.maxInterStageShaderComponents = 6;
+	requiredLimits.limits.maxInterStageShaderComponents = 8;
+	//                                                    ^ This was a 6
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	requiredLimits.limits.maxTextureDimension1D = 480;
 	requiredLimits.limits.maxTextureDimension2D = 640;
 	requiredLimits.limits.maxTextureArrayLayers = 1;
-	// Add the possibility to sample a texture in a shader
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
 
 	DeviceDescriptor deviceDesc;
@@ -172,7 +175,8 @@ int main (int, char**) {
 	RenderPipelineDescriptor pipelineDesc;
 
 	// Vertex fetch
-	std::vector<VertexAttribute> vertexAttribs(3);
+	std::vector<VertexAttribute> vertexAttribs(4);
+	//                                         ^ This was a 3
 
 	// Position attribute
 	vertexAttribs[0].shaderLocation = 0;
@@ -188,6 +192,11 @@ int main (int, char**) {
 	vertexAttribs[2].shaderLocation = 2;
 	vertexAttribs[2].format = VertexFormat::Float32x3;
 	vertexAttribs[2].offset = offsetof(VertexAttributes, color);
+
+	// UV attribute
+	vertexAttribs[3].shaderLocation = 3;
+	vertexAttribs[3].format = VertexFormat::Float32x2;
+	vertexAttribs[3].offset = offsetof(VertexAttributes, uv);
 
 	VertexBufferLayout vertexBufferLayout;
 	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
@@ -309,9 +318,8 @@ int main (int, char**) {
 	TextureDescriptor textureDesc;
 	textureDesc.dimension = TextureDimension::_2D;
 	textureDesc.size = { 256, 256, 1 };
-	//                             ^ ignored because it is a 2D texture
-	textureDesc.mipLevelCount = 1; // We'll see mipmaps later on
-	textureDesc.sampleCount = 1; // We'll see multisampling later on
+	textureDesc.mipLevelCount = 1;
+	textureDesc.sampleCount = 1;
 	textureDesc.format = TextureFormat::RGBA8Unorm;
 	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
 	textureDesc.viewFormatCount = 0;
@@ -335,28 +343,23 @@ int main (int, char**) {
 	for (uint32_t i = 0; i < textureDesc.size.width; ++i) {
 		for (uint32_t j = 0; j < textureDesc.size.height; ++j) {
 			uint8_t *p = &pixels[4 * (j * textureDesc.size.width + i)];
-			p[0] = (uint8_t)i; // r
-			p[1] = (uint8_t)j; // g
-			p[2] = 128; // b
+			p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0; // r
+			p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0; // g
+			p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0; // b
 			p[3] = 255; // a
 		}
 	}
 
 	// Upload texture data
-	// Arguments telling which part of the texture we upload to
-	// (together with the last argument of writeTexture)
 	ImageCopyTexture destination;
 	destination.texture = texture;
 	destination.mipLevel = 0;
-	destination.origin = { 0, 0, 0 }; // equivalent of the offset argument of Queue::writeBuffer
-	destination.aspect = TextureAspect::All; // only relevant for depth/Stencil textures
-
-	// Arguments telling how the C++ side pixel memory is laid out
+	destination.origin = { 0, 0, 0 };
+	destination.aspect = TextureAspect::All;
 	TextureDataLayout source;
 	source.offset = 0;
 	source.bytesPerRow = 4 * textureDesc.size.width;
 	source.rowsPerImage = textureDesc.size.height;
-
 	queue.writeTexture(destination, pixels.data(), pixels.size(), source, textureDesc.size);
 
 	std::vector<float> pointData;
@@ -364,7 +367,7 @@ int main (int, char**) {
 
 	// Load mesh data from OBJ file
 	std::vector<VertexAttributes> vertexData;
-	bool success = loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/cube.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -389,8 +392,9 @@ int main (int, char**) {
 	// Upload the initial value of the uniforms
 	MyUniforms uniforms;
 	uniforms.modelMatrix = mat4x4(1.0);
-	uniforms.viewMatrix = glm::scale(mat4x4(1.0), vec3(1.0f));
-	uniforms.projectionMatrix = glm::ortho(-1, 1, -1, 1, -1, 1);
+	// NB: The last argument of lookAt indicates our Up direction convention:
+	uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 	uniforms.time = 1.0f;
 	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
@@ -569,11 +573,10 @@ bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& ve
 
 			vertexData[offset + i].position = {
 				attrib.vertices[3 * idx.vertex_index + 0],
-				-attrib.vertices[3 * idx.vertex_index + 2], // Add a minus to avoid mirroring
+				-attrib.vertices[3 * idx.vertex_index + 2],
 				attrib.vertices[3 * idx.vertex_index + 1]
 			};
 
-			// Also apply the transform to normals!!
 			vertexData[offset + i].normal = {
 				attrib.normals[3 * idx.normal_index + 0],
 				-attrib.normals[3 * idx.normal_index + 2],
@@ -584,6 +587,11 @@ bool loadGeometryFromObj(const fs::path& path, std::vector<VertexAttributes>& ve
 				attrib.colors[3 * idx.vertex_index + 0],
 				attrib.colors[3 * idx.vertex_index + 1],
 				attrib.colors[3 * idx.vertex_index + 2]
+			};
+
+			vertexData[offset + i].uv = {
+				attrib.texcoords[2 * idx.texcoord_index + 0],
+				1 - attrib.texcoords[2 * idx.texcoord_index + 1]
 			};
 		}
 	}

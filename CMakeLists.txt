@@ -49,4 +49,6 @@ target_copy_webgpu_binaries(App)
 if (MSVC)
 	# Disable warning C4201: nonstandard extension used: nameless struct/union
 	target_compile_options(App PUBLIC /wd4201)
+	# Disable warning C4305: truncation from 'int' to 'bool' in 'if' condition
+	target_compile_options(App PUBLIC /wd4305)
 endif (MSVC)
