@@ -119,14 +119,12 @@ int main (int, char**) {
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 4;
-	//                                          ^ This was a 4
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBufferSize = 10000 * sizeof(VertexAttributes);
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 8;
-	//                                                    ^ This was a 6
 	requiredLimits.limits.maxBindGroups = 1;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
@@ -134,6 +132,7 @@ int main (int, char**) {
 	requiredLimits.limits.maxTextureDimension2D = 640;
 	requiredLimits.limits.maxTextureArrayLayers = 1;
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
+	requiredLimits.limits.maxSamplersPerShaderStage = 1; // new limit
 
 	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
@@ -176,7 +175,6 @@ int main (int, char**) {
 
 	// Vertex fetch
 	std::vector<VertexAttribute> vertexAttribs(4);
-	//                                         ^ This was a 3
 
 	// Position attribute
 	vertexAttribs[0].shaderLocation = 0;
@@ -257,7 +255,8 @@ int main (int, char**) {
 	// Create binding layouts
 
 	// Since we now have 2 bindings, we use a vector to store them
-	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(2, Default);
+	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(3, Default);
+	//                                                     ^ This was a 2
 
 	// The uniform buffer binding that we already had
 	BindGroupLayoutEntry& bindingLayout = bindingLayoutEntries[0];
@@ -272,6 +271,12 @@ int main (int, char**) {
 	textureBindingLayout.visibility = ShaderStage::Fragment;
 	textureBindingLayout.texture.sampleType = TextureSampleType::Float;
 	textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
+
+	// The texture sampler binding
+	BindGroupLayoutEntry& samplerBindingLayout = bindingLayoutEntries[2];
+	samplerBindingLayout.binding = 2;
+	samplerBindingLayout.visibility = ShaderStage::Fragment;
+	samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
 
 	// Create a bind group layout
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
@@ -318,7 +323,8 @@ int main (int, char**) {
 	TextureDescriptor textureDesc;
 	textureDesc.dimension = TextureDimension::_2D;
 	textureDesc.size = { 256, 256, 1 };
-	textureDesc.mipLevelCount = 1;
+	textureDesc.mipLevelCount = 8;
+	//                          ^ This was a 1
 	textureDesc.sampleCount = 1;
 	textureDesc.format = TextureFormat::RGBA8Unorm;
 	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
@@ -332,42 +338,85 @@ int main (int, char**) {
 	textureViewDesc.baseArrayLayer = 0;
 	textureViewDesc.arrayLayerCount = 1;
 	textureViewDesc.baseMipLevel = 0;
-	textureViewDesc.mipLevelCount = 1;
+	textureViewDesc.mipLevelCount = 8;
+	//                              ^ This was a 1
 	textureViewDesc.dimension = TextureViewDimension::_2D;
 	textureViewDesc.format = textureDesc.format;
 	TextureView textureView = texture.createView(textureViewDesc);
 	std::cout << "Texture view: " << textureView << std::endl;
 
-	// Create image data
-	std::vector<uint8_t> pixels(4 * textureDesc.size.width * textureDesc.size.height);
-	for (uint32_t i = 0; i < textureDesc.size.width; ++i) {
-		for (uint32_t j = 0; j < textureDesc.size.height; ++j) {
-			uint8_t *p = &pixels[4 * (j * textureDesc.size.width + i)];
-			p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0; // r
-			p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0; // g
-			p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0; // b
-			p[3] = 255; // a
-		}
-	}
+	// Create a sampler
+	SamplerDescriptor samplerDesc;
+	samplerDesc.addressModeU = AddressMode::Repeat;
+	samplerDesc.addressModeV = AddressMode::Repeat;
+	samplerDesc.addressModeW = AddressMode::Repeat;
+	samplerDesc.magFilter = FilterMode::Linear;
+	samplerDesc.minFilter = FilterMode::Linear;
+	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
+	samplerDesc.lodMinClamp = 0.0f;
+	samplerDesc.lodMaxClamp = 8.0f;
+	samplerDesc.compare = CompareFunction::Undefined;
+	samplerDesc.maxAnisotropy = 1;
+	Sampler sampler = device.createSampler(samplerDesc);
 
-	// Upload texture data
+	// Create and upload texture data, one mip level at a time
 	ImageCopyTexture destination;
 	destination.texture = texture;
-	destination.mipLevel = 0;
 	destination.origin = { 0, 0, 0 };
 	destination.aspect = TextureAspect::All;
+
 	TextureDataLayout source;
 	source.offset = 0;
-	source.bytesPerRow = 4 * textureDesc.size.width;
-	source.rowsPerImage = textureDesc.size.height;
-	queue.writeTexture(destination, pixels.data(), pixels.size(), source, textureDesc.size);
+
+	Extent3D mipLevelSize = textureDesc.size;
+	std::vector<uint8_t> previousLevelPixels;
+	for (uint32_t level = 0; level < textureDesc.mipLevelCount; ++level) {
+		// Create image data
+		std::vector<uint8_t> pixels(4 * mipLevelSize.width * mipLevelSize.height);
+		for (uint32_t i = 0; i < mipLevelSize.width; ++i) {
+			for (uint32_t j = 0; j < mipLevelSize.height; ++j) {
+				uint8_t* p = &pixels[4 * (j * mipLevelSize.width + i)];
+				if (level == 0) {
+					p[0] = (i / 16) % 2 == (j / 16) % 2 ? 255 : 0; // r
+					p[1] = ((i - j) / 16) % 2 == 0 ? 255 : 0; // g
+					p[2] = ((i + j) / 16) % 2 == 0 ? 255 : 0; // b
+				} else {
+					// Get the corresponding 4 pixels from the previous level
+					uint8_t* p00 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 0))];
+					uint8_t* p01 = &previousLevelPixels[4 * ((2 * j + 0) * (2 * mipLevelSize.width) + (2 * i + 1))];
+					uint8_t* p10 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 0))];
+					uint8_t* p11 = &previousLevelPixels[4 * ((2 * j + 1) * (2 * mipLevelSize.width) + (2 * i + 1))];
+					// Average
+					p[0] = (p00[0] + p01[0] + p10[0] + p11[0]) / 4;
+					p[1] = (p00[1] + p01[1] + p10[1] + p11[1]) / 4;
+					p[2] = (p00[2] + p01[2] + p10[2] + p11[2]) / 4;
+				}
+				p[3] = 255; // a
+			}
+		}
+
+		// Change this to the current level
+		destination.mipLevel = level;
+
+		// Compute from the mip level size
+		source.bytesPerRow = 4 * mipLevelSize.width;
+		source.rowsPerImage = mipLevelSize.height;
+
+		queue.writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
+
+		// The size of the next mip level:
+		// (see https://www.w3.org/TR/webgpu/#logical-miplevel-specific-texture-extent)
+		mipLevelSize.width /= 2;
+		mipLevelSize.height /= 2;
+		previousLevelPixels = std::move(pixels);
+	}
 
 	std::vector<float> pointData;
 	std::vector<uint16_t> indexData;
 
 	// Load mesh data from OBJ file
 	std::vector<VertexAttributes> vertexData;
-	bool success = loadGeometryFromObj(RESOURCE_DIR "/cube.obj", vertexData);
+	bool success = loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return 1;
@@ -392,7 +441,6 @@ int main (int, char**) {
 	// Upload the initial value of the uniforms
 	MyUniforms uniforms;
 	uniforms.modelMatrix = mat4x4(1.0);
-	// NB: The last argument of lookAt indicates our Up direction convention:
 	uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
 	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 	uniforms.time = 1.0f;
@@ -400,7 +448,8 @@ int main (int, char**) {
 	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
 
 	// Create a binding
-	std::vector<BindGroupEntry> bindings(2);
+	std::vector<BindGroupEntry> bindings(3);
+	//                                   ^ This was a 2
 
 	bindings[0].binding = 0;
 	bindings[0].buffer = uniformBuffer;
@@ -409,6 +458,9 @@ int main (int, char**) {
 
 	bindings[1].binding = 1;
 	bindings[1].textureView = textureView;
+
+	bindings[2].binding = 2;
+	bindings[2].sampler = sampler;
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = bindGroupLayout;
@@ -422,6 +474,9 @@ int main (int, char**) {
 		// Update uniform buffer
 		uniforms.time = static_cast<float>(glfwGetTime());
 		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
+		float viewZ = glm::mix(0.0f, 0.25f, cos(2 * PI * uniforms.time / 4) * 0.5 + 0.5);
+		uniforms.viewMatrix = glm::lookAt(vec3(-0.5f, -1.5f, viewZ + 0.25f), vec3(0.0f), vec3(0, 0, 1));
+		queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, viewMatrix), &uniforms.viewMatrix, sizeof(MyUniforms::viewMatrix));
 		
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {

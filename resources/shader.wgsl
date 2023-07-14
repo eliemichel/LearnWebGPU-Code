@@ -2,14 +2,14 @@ struct VertexInput {
 	@location(0) position: vec3f,
 	@location(1) normal: vec3f,
 	@location(2) color: vec3f,
-	@location(3) uv: vec2f, // new attribute
+	@location(3) uv: vec2f,
 };
 
 struct VertexOutput {
 	@builtin(position) position: vec4f,
 	@location(0) color: vec3f,
 	@location(1) normal: vec3f,
-	@location(2) uv: vec2f, // <--- Add a texture coordinate output
+	@location(2) uv: vec2f,
 };
 
 /**
@@ -24,9 +24,8 @@ struct MyUniforms {
 };
 
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
-
-// The texture binding
 @group(0) @binding(1) var gradientTexture: texture_2d<f32>;
+@group(0) @binding(2) var textureSampler: sampler;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -34,17 +33,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
     out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
 	out.color = in.color;
-	out.uv = in.uv;
+	// Repeat the texture 6 times along each axis
+	out.uv = in.uv * 6.0;
 	return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-	// We remap UV coords to actual texel coordinates
-	let texelCoords = vec2i(in.uv * vec2f(textureDimensions(gradientTexture)));
-	
-	// And we fetch a texel from the texture
-	let color = textureLoad(gradientTexture, texelCoords, 0).rgb;
+	// Get data from the texture using our new sampler
+	let color = textureSample(gradientTexture, textureSampler, in.uv).rgb;
 
 	// Gamma-correction
 	let corrected_color = pow(color, vec3f(2.2));
