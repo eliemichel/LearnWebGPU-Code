@@ -492,7 +492,7 @@ void Application::buildDepthBuffer() {
 	depthTextureDesc.format = depthTextureFormat;
 	depthTextureDesc.mipLevelCount = 1;
 	depthTextureDesc.sampleCount = 1;
-	depthTextureDesc.size = {640, 480, 1};
+	depthTextureDesc.size = { swapChainDesc.width, swapChainDesc.height, 1};
 	depthTextureDesc.usage = TextureUsage::RenderAttachment;
 	depthTextureDesc.viewFormatCount = 1;
 	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
