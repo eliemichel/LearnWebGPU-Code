@@ -46,6 +46,13 @@ public:
 	// A function that tells if the application is still running.
 	bool isRunning();
 
+	// A function called when the window is resized.
+	void onResize();
+
+private:
+    void buildSwapChain();
+    void buildDepthBuffer();
+
 private:
 	// (Just aliases to make notations lighter)
 	using mat4x4 = glm::mat4x4;
@@ -86,6 +93,10 @@ private:
 	wgpu::Buffer vertexBuffer = nullptr;
 	wgpu::Buffer uniformBuffer = nullptr;
 	wgpu::BindGroup bindGroup = nullptr;
+
+	wgpu::TextureFormat swapChainFormat = wgpu::TextureFormat::Undefined;
+	wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+	wgpu::SwapChainDescriptor swapChainDesc;
 
 	MyUniforms uniforms;
 	int vertexCount = 0;

@@ -47,6 +47,17 @@ using VertexAttributes = ResourceManager::VertexAttributes;
 
 constexpr float PI = 3.14159265358979323846f;
 
+// The raw GLFW callback
+void onWindowResize(GLFWwindow* window, int /* width */, int /* height */) {
+	// We know that even though from GLFW's point of view this is
+	// "just a pointer", in our case it is always a pointer to an
+	// instance of the class `Application`
+	auto that = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+
+	// Call the actual class-member callback
+	if (that != nullptr) that->onResize();
+}
+
 bool Application::onInit() {
 	instance = createInstance(InstanceDescriptor{});
 	if (!instance) {
@@ -60,7 +71,7 @@ bool Application::onInit() {
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
 	if (!window) {
 		std::cerr << "Could not open window!" << std::endl;
@@ -113,20 +124,8 @@ bool Application::onInit() {
 
 	queue = device.getQueue();
 
-	std::cout << "Creating swapchain..." << std::endl;
-#ifdef WEBGPU_BACKEND_WGPU
-	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
-#else
-	TextureFormat swapChainFormat = TextureFormat::BGRA8Unorm;
-#endif
-	SwapChainDescriptor swapChainDesc;
-	swapChainDesc.width = 640;
-	swapChainDesc.height = 480;
-	swapChainDesc.usage = TextureUsage::RenderAttachment;
-	swapChainDesc.format = swapChainFormat;
-	swapChainDesc.presentMode = PresentMode::Fifo;
-	swapChain = device.createSwapChain(surface, swapChainDesc);
-	std::cout << "Swapchain: " << swapChain << std::endl;
+	buildSwapChain();
+	buildDepthBuffer();
 
 	std::cout << "Creating shader module..." << std::endl;
 	shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", device);
@@ -203,7 +202,6 @@ bool Application::onInit() {
 	DepthStencilState depthStencilState = Default;
 	depthStencilState.depthCompare = CompareFunction::Less;
 	depthStencilState.depthWriteEnabled = true;
-	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
 	depthStencilState.format = depthTextureFormat;
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
@@ -216,7 +214,6 @@ bool Application::onInit() {
 
 	// Create binding layouts
 
-	// Since we now have 2 bindings, we use a vector to store them
 	std::vector<BindGroupLayoutEntry> bindingLayoutEntries(3, Default);
 
 	// The uniform buffer binding that we already had
@@ -254,31 +251,6 @@ bool Application::onInit() {
 
 	pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
-
-	// Create the depth texture
-	TextureDescriptor depthTextureDesc;
-	depthTextureDesc.dimension = TextureDimension::_2D;
-	depthTextureDesc.format = depthTextureFormat;
-	depthTextureDesc.mipLevelCount = 1;
-	depthTextureDesc.sampleCount = 1;
-	depthTextureDesc.size = {640, 480, 1};
-	depthTextureDesc.usage = TextureUsage::RenderAttachment;
-	depthTextureDesc.viewFormatCount = 1;
-	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
-	depthTexture = device.createTexture(depthTextureDesc);
-	std::cout << "Depth texture: " << depthTexture << std::endl;
-
-	// Create the view of the depth texture manipulated by the rasterizer
-	TextureViewDescriptor depthTextureViewDesc;
-	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
-	depthTextureViewDesc.baseArrayLayer = 0;
-	depthTextureViewDesc.arrayLayerCount = 1;
-	depthTextureViewDesc.baseMipLevel = 0;
-	depthTextureViewDesc.mipLevelCount = 1;
-	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
-	depthTextureViewDesc.format = depthTextureFormat;
-	depthTextureView = depthTexture.createView(depthTextureViewDesc);
-	std::cout << "Depth texture view: " << depthTextureView << std::endl;
 
 	// Create a sampler
 	SamplerDescriptor samplerDesc;
@@ -354,6 +326,12 @@ bool Application::onInit() {
 	bindGroupDesc.entryCount = (uint32_t)bindings.size();
 	bindGroupDesc.entries = bindings.data();
 	bindGroup = device.createBindGroup(bindGroupDesc);
+
+	// Setup GLFW callbacks
+	// Set the user pointer to be "this"
+    glfwSetWindowUserPointer(window, this);
+    // Add the raw `onWindowResize` as resize callback
+    glfwSetFramebufferSizeCallback(window, onWindowResize);
 
 	return true;
 }
@@ -458,4 +436,78 @@ void Application::onFinish() {
 
 bool Application::isRunning() {
 	return !glfwWindowShouldClose(window);
+}
+
+void Application::onResize() {
+	buildSwapChain();
+	buildDepthBuffer();
+
+	float ratio = swapChainDesc.width / (float)swapChainDesc.height;
+	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
+	queue.writeBuffer(
+		uniformBuffer,
+		offsetof(MyUniforms, projectionMatrix),
+		&uniforms.projectionMatrix,
+		sizeof(MyUniforms::projectionMatrix)
+	);
+}
+
+/* ***** Private methods ***** */
+
+void Application::buildSwapChain() {
+	int width, height;
+	glfwGetFramebufferSize(window, &width, &height);
+
+	// Destroy previously allocated swap chain
+	if (swapChain != nullptr) {
+		swapChain.release();
+	}
+
+	std::cout << "Creating swapchain..." << std::endl;
+#ifdef WEBGPU_BACKEND_WGPU
+	swapChainFormat = surface.getPreferredFormat(adapter);
+#else
+	swapChainFormat = TextureFormat::BGRA8Unorm;
+#endif
+	swapChainDesc.width = static_cast<uint32_t>(width);
+	swapChainDesc.height = static_cast<uint32_t>(height);
+	swapChainDesc.usage = TextureUsage::RenderAttachment;
+	swapChainDesc.format = swapChainFormat;
+	swapChainDesc.presentMode = PresentMode::Fifo;
+	swapChain = device.createSwapChain(surface, swapChainDesc);
+	std::cout << "Swapchain: " << swapChain << std::endl;
+}
+
+void Application::buildDepthBuffer() {
+	// Destroy previously allocated texture
+	if (depthTexture != nullptr) {
+		depthTextureView.release();
+		depthTexture.destroy();
+		depthTexture.release();
+	}
+
+	// Create the depth texture
+	TextureDescriptor depthTextureDesc;
+	depthTextureDesc.dimension = TextureDimension::_2D;
+	depthTextureDesc.format = depthTextureFormat;
+	depthTextureDesc.mipLevelCount = 1;
+	depthTextureDesc.sampleCount = 1;
+	depthTextureDesc.size = {640, 480, 1};
+	depthTextureDesc.usage = TextureUsage::RenderAttachment;
+	depthTextureDesc.viewFormatCount = 1;
+	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
+	depthTexture = device.createTexture(depthTextureDesc);
+	std::cout << "Depth texture: " << depthTexture << std::endl;
+
+	// Create the view of the depth texture manipulated by the rasterizer
+	TextureViewDescriptor depthTextureViewDesc;
+	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
+	depthTextureViewDesc.baseArrayLayer = 0;
+	depthTextureViewDesc.arrayLayerCount = 1;
+	depthTextureViewDesc.baseMipLevel = 0;
+	depthTextureViewDesc.mipLevelCount = 1;
+	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
+	depthTextureViewDesc.format = depthTextureFormat;
+	depthTextureView = depthTexture.createView(depthTextureViewDesc);
+	std::cout << "Depth texture view: " << depthTextureView << std::endl;
 }
