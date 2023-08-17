@@ -34,7 +34,7 @@
 
 using namespace wgpu;
 
-ShaderModule ResourceManager::loadShaderModule(const path& path, Device device) {
+ShaderModule ResourceManager::loadShaderModule(const path& path, Device m_device) {
 	std::ifstream file(path);
 	if (!file.is_open()) {
 		return nullptr;
@@ -56,7 +56,7 @@ ShaderModule ResourceManager::loadShaderModule(const path& path, Device device) 
 	shaderDesc.hints = nullptr;
 #endif
 
-	return device.createShaderModule(shaderDesc);
+	return m_device.createShaderModule(shaderDesc);
 }
 
 bool ResourceManager::loadGeometryFromObj(const path& path, std::vector<VertexAttributes>& vertexData) {
@@ -122,17 +122,17 @@ bool ResourceManager::loadGeometryFromObj(const path& path, std::vector<VertexAt
 
 // Auxiliary function for loadTexture
 static void writeMipMaps(
-	Device device,
-	Texture texture,
+	Device m_device,
+	Texture m_texture,
 	Extent3D textureSize,
 	uint32_t mipLevelCount,
 	const unsigned char* pixelData)
 {
-	Queue queue = device.getQueue();
+	Queue m_queue = m_device.getQueue();
 
 	// Arguments telling which part of the texture we upload to
 	ImageCopyTexture destination;
-	destination.texture = texture;
+	destination.texture = m_texture;
 	destination.origin = { 0, 0, 0 };
 	destination.aspect = TextureAspect::All;
 
@@ -175,7 +175,7 @@ static void writeMipMaps(
 		destination.mipLevel = level;
 		source.bytesPerRow = 4 * mipLevelSize.width;
 		source.rowsPerImage = mipLevelSize.height;
-		queue.writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
+		m_queue.writeTexture(destination, pixels.data(), pixels.size(), source, mipLevelSize);
 
 		previousLevelPixels = std::move(pixels);
 		previousMipLevelSize = mipLevelSize;
@@ -183,7 +183,7 @@ static void writeMipMaps(
 		mipLevelSize.height /= 2;
 	}
 
-	queue.release();
+	m_queue.release();
 }
 
 // Equivalent of std::bit_width that is available from C++20 onward
@@ -192,7 +192,7 @@ static uint32_t bit_width(uint32_t m) {
 	else { uint32_t w = 0; while (m >>= 1) ++w; return w; }
 }
 
-Texture ResourceManager::loadTexture(const path& path, Device device, TextureView* pTextureView) {
+Texture ResourceManager::loadTexture(const path& path, Device m_device, TextureView* pTextureView) {
 	int width, height, channels;
 	unsigned char *pixelData = stbi_load(path.string().c_str(), &width, &height, &channels, 4 /* force 4 channels */);
 	// If data is null, loading failed.
@@ -208,10 +208,10 @@ Texture ResourceManager::loadTexture(const path& path, Device device, TextureVie
 	textureDesc.usage = TextureUsage::TextureBinding | TextureUsage::CopyDst;
 	textureDesc.viewFormatCount = 0;
 	textureDesc.viewFormats = nullptr;
-	Texture texture = device.createTexture(textureDesc);
+	Texture m_texture = m_device.createTexture(textureDesc);
 
 	// Upload data to the GPU texture
-	writeMipMaps(device, texture, textureDesc.size, textureDesc.mipLevelCount, pixelData);
+	writeMipMaps(m_device, m_texture, textureDesc.size, textureDesc.mipLevelCount, pixelData);
 
 	stbi_image_free(pixelData);
 	// (Do not use data after this)
@@ -225,8 +225,8 @@ Texture ResourceManager::loadTexture(const path& path, Device device, TextureVie
 		textureViewDesc.mipLevelCount = textureDesc.mipLevelCount;
 		textureViewDesc.dimension = TextureViewDimension::_2D;
 		textureViewDesc.format = textureDesc.format;
-		*pTextureView = texture.createView(textureViewDesc);
+		*pTextureView = m_texture.createView(textureViewDesc);
 	}
 
-	return texture;
+	return m_texture;
 }

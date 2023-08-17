@@ -49,9 +49,16 @@ public:
 	// A function called when the window is resized.
 	void onResize();
 
+	// Mouse events
+	void onMouseMove(double xpos, double ypos);
+	void onMouseButton(int button, int action, int mods);
+	void onScroll(double xoffset, double yoffset);
+
 private:
     void buildSwapChain();
     void buildDepthBuffer();
+	void updateViewMatrix();
+	void updateDragInertia();
 
 private:
 	// (Just aliases to make notations lighter)
@@ -75,29 +82,65 @@ private:
 	// Have the compiler check byte alignment
 	static_assert(sizeof(MyUniforms) % 16 == 0);
 
+	/**
+	 * A representation of the camera view transform that is as close as
+	 * possible to the user input.
+	 */
+	struct CameraState {
+		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x
+		// angles.y is the rotation of the camera around its local horizontal axis, affected by mouse.y
+		vec2 angles = { 0.8f, 0.5f };
+		// zoom is the position of the camera along its local forward axis, affected by the scroll wheel
+		float zoom = -1.2f;
+	};
+
+	/**
+	 * State that the application remembers while dragging the mouse (which orbits the camera)
+	 */
+	struct DragState {
+		// Whether a drag action is ongoing (i.e., we are between mouse press and mouse release)
+		bool active = false;
+		// The position of the mouse at the beginning of the drag action
+		vec2 startMouse;
+		// The camera state at the beginning of the drag action
+		CameraState startCameraState;
+
+		// Inertia
+		vec2 velocity = { 0.0, 0.0 };
+		vec2 previousDelta;
+		float intertia = 0.9f;
+
+		// Constant settings
+		float sensitivity = 0.01f;
+		float scrollSensitivity = 0.1f;
+	};
+
+
 	// Everything that is initialized in `onInit` and needed in `onFrame`.
-	GLFWwindow* window = nullptr;
-	wgpu::Instance instance = nullptr;
-	wgpu::Surface surface = nullptr;
-	wgpu::Adapter adapter = nullptr;
-	wgpu::Device device = nullptr;
-	wgpu::Queue queue = nullptr;
-	wgpu::SwapChain swapChain = nullptr;
-	wgpu::ShaderModule shaderModule = nullptr;
-	wgpu::RenderPipeline pipeline = nullptr;
-	wgpu::Texture depthTexture = nullptr;
-	wgpu::TextureView depthTextureView = nullptr;
-	wgpu::Sampler sampler = nullptr;
-	wgpu::TextureView textureView = nullptr;
-	wgpu::Texture texture = nullptr;
-	wgpu::Buffer vertexBuffer = nullptr;
-	wgpu::Buffer uniformBuffer = nullptr;
-	wgpu::BindGroup bindGroup = nullptr;
+	GLFWwindow* m_window = nullptr;
+	wgpu::Instance m_instance = nullptr;
+	wgpu::Surface m_surface = nullptr;
+	wgpu::Adapter m_adapter = nullptr;
+	wgpu::Device m_device = nullptr;
+	wgpu::Queue m_queue = nullptr;
+	wgpu::SwapChain m_swapChain = nullptr;
+	wgpu::ShaderModule m_shaderModule = nullptr;
+	wgpu::RenderPipeline m_pipeline = nullptr;
+	wgpu::Texture m_depthTexture = nullptr;
+	wgpu::TextureView m_depthTextureView = nullptr;
+	wgpu::Sampler m_sampler = nullptr;
+	wgpu::TextureView m_textureView = nullptr;
+	wgpu::Texture m_texture = nullptr;
+	wgpu::Buffer m_vertexBuffer = nullptr;
+	wgpu::Buffer m_uniformBuffer = nullptr;
+	wgpu::BindGroup m_bindGroup = nullptr;
 
-	wgpu::TextureFormat swapChainFormat = wgpu::TextureFormat::Undefined;
-	wgpu::TextureFormat depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
-	wgpu::SwapChainDescriptor swapChainDesc;
+	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
+	wgpu::TextureFormat m_depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+	wgpu::SwapChainDescriptor m_swapChainDesc;
 
-	MyUniforms uniforms;
-	int vertexCount = 0;
+	MyUniforms m_uniforms;
+	CameraState m_cameraState;
+	DragState m_drag;
+	int m_vertexCount = 0;
 };

@@ -52,12 +52,12 @@ public:
 	};
 
 	// Load a shader from a WGSL file into a new shader module
-	static wgpu::ShaderModule loadShaderModule(const path& path, wgpu::Device device);
+	static wgpu::ShaderModule loadShaderModule(const path& path, wgpu::Device m_device);
 
 	// Load an 3D mesh from a standard .obj file into a vertex data buffer
 	static bool loadGeometryFromObj(const path& path, std::vector<VertexAttributes>& vertexData);
 
 	// Load an image from a standard image file into a new texture object
 	// NB: The texture must be destroyed after use
-	static wgpu::Texture loadTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
+	static wgpu::Texture loadTexture(const path& path, wgpu::Device m_device, wgpu::TextureView* pTextureView = nullptr);
 };

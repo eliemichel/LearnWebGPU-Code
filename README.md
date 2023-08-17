@@ -3,7 +3,7 @@ LearnWebGPU - Code
 
 This repository contains the reference code base accompanying the [Learn WebGPU](learnwgpu.com) web book.
 
-Branch `step080`: This corresponds to the code at the end of the page [Refactoring](http://localhost:8000/basic-3d-rendering/some-interaction/refactoring.html).
+Branch `step090`: This corresponds to the code at the end of the page [Camera control](http://localhost:8000/basic-3d-rendering/some-interaction/camera-control.html).
 
 Building
 --------
