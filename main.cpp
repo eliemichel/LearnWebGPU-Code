@@ -24,11 +24,10 @@
  * SOFTWARE.
  */
 
-#include <glfw3webgpu.h>
-#include <GLFW/glfw3.h>
-
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
+
+#include "save_image.h"
 
 #include <iostream>
 #include <cassert>
@@ -42,23 +41,10 @@ int main (int, char**) {
 		return 1;
 	}
 
-	if (!glfwInit()) {
-		std::cerr << "Could not initialize GLFW!" << std::endl;
-		return 1;
-	}
-
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
-	if (!window) {
-		std::cerr << "Could not open window!" << std::endl;
-		return 1;
-	}
-
 	std::cout << "Requesting adapter..." << std::endl;
-	Surface surface = glfwGetWGPUSurface(instance, window);
 	RequestAdapterOptions adapterOpts;
-	adapterOpts.compatibleSurface = surface;
+	adapterOpts.compatibleSurface = nullptr;
+	//                              ^^^^^^^ This was 'surface'
 	Adapter adapter = instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
@@ -80,20 +66,38 @@ int main (int, char**) {
 
 	Queue queue = device.getQueue();
 
-	std::cout << "Creating swapchain..." << std::endl;
-#ifdef WEBGPU_BACKEND_WGPU
-	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
-#else
-	TextureFormat swapChainFormat = TextureFormat::BGRA8Unorm;
-#endif
-	SwapChainDescriptor swapChainDesc;
-	swapChainDesc.width = 640;
-	swapChainDesc.height = 480;
-	swapChainDesc.usage = TextureUsage::RenderAttachment;
-	swapChainDesc.format = swapChainFormat;
-	swapChainDesc.presentMode = PresentMode::Fifo;
-	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
-	std::cout << "Swapchain: " << swapChain << std::endl;
+	// No more swap chain, but still a target format and a target texture
+	TextureFormat swapChainFormat = TextureFormat::RGBA8UnormSrgb;
+
+	TextureDescriptor targetTextureDesc;
+	targetTextureDesc.label = "Render texture";
+	targetTextureDesc.dimension = TextureDimension::_2D;
+	// Any size works here, this is the equivalent of the window size
+	targetTextureDesc.size = { 640, 480, 1 };
+	// Use the same format here and in the render pipeline's color target
+	targetTextureDesc.format = swapChainFormat;
+	// No need for MIP maps
+	targetTextureDesc.mipLevelCount = 1;
+	// You may set up supersampling here
+	targetTextureDesc.sampleCount = 1;
+	// At least RenderAttachment usage is needed. Also add CopySrc to be able
+	// to retrieve the texture afterwards.
+	targetTextureDesc.usage = TextureUsage::RenderAttachment | TextureUsage::CopySrc;
+	targetTextureDesc.viewFormats = nullptr;
+	targetTextureDesc.viewFormatCount = 0;
+	Texture targetTexture = device.createTexture(targetTextureDesc);
+
+	TextureViewDescriptor targetTextureViewDesc;
+	targetTextureViewDesc.label = "Render texture view";
+	// Render to a single layer
+	targetTextureViewDesc.baseArrayLayer = 0;
+	targetTextureViewDesc.arrayLayerCount = 1;
+	// Render to a single mip level
+	targetTextureViewDesc.baseMipLevel = 0;
+	targetTextureViewDesc.mipLevelCount = 1;
+	// Render to all channels
+	targetTextureViewDesc.aspect = TextureAspect::All;
+	TextureView targetTextureView = targetTexture.createView(targetTextureViewDesc);
 
 	std::cout << "Creating shader module..." << std::endl;
 	const char* shaderSource = R"(
@@ -211,10 +215,10 @@ fn fs_main() -> @location(0) vec4f {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
+	{ // Mock main "loop"
 
-		TextureView nextTexture = swapChain.getCurrentTextureView();
+		// Instead of swapChain.getCurrentTextureView()
+		TextureView nextTexture = targetTextureView;
 		if (!nextTexture) {
 			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 			return 1;
@@ -247,23 +251,20 @@ fn fs_main() -> @location(0) vec4f {
 		renderPass.draw(3, 1, 0, 0);
 
 		renderPass.end();
-		
-		nextTexture.release();
 
 		CommandBufferDescriptor cmdBufferDescriptor;
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 		queue.submit(command);
 
-		swapChain.present();
+		// Instead of swapChain.present()
+		saveTexture("output.png", device, targetTexture);
+		//saveTextureView("output.png", device, nextTexture, targetTexture.getWidth(), targetTexture.getHeight());
 	}
 
-	swapChain.release();
 	device.release();
 	adapter.release();
 	instance.release();
-	glfwDestroyWindow(window);
-	glfwTerminate();
 
 	return 0;
 }
