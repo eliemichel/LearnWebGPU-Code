@@ -138,6 +138,9 @@ private:
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
 
+	// Keep the error callback alive
+	std::unique_ptr<wgpu::ErrorCallback> m_errorCallbackHandle;
+
 	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
 	wgpu::TextureFormat m_depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
 	wgpu::SwapChainDescriptor m_swapChainDesc;
