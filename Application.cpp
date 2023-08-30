@@ -105,7 +105,7 @@ bool Application::onInit() {
 	std::cout << "Got device: " << device << std::endl;
 
 	// Add an error callback for more debug info
-	auto h = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
+	errorCallbackHandle = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;

@@ -87,6 +87,9 @@ private:
 	wgpu::Buffer uniformBuffer = nullptr;
 	wgpu::BindGroup bindGroup = nullptr;
 
+	// Keep the error callback alive
+	std::unique_ptr<wgpu::ErrorCallback> errorCallbackHandle;
+
 	MyUniforms uniforms;
 	int vertexCount = 0;
 };
