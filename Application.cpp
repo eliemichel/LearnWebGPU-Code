@@ -98,7 +98,15 @@ bool Application::onInit() {
 	std::cout << "Got adapter: " << m_adapter << std::endl;
 
 	SupportedLimits supportedLimits;
+#ifdef __EMSCRIPTEN__
+	// Error in Chrome: Aborted(TODO: wgpuAdapterGetLimits unimplemented)
+	// (as of September 4, 2023), so we hardcode values:
+	// These work for 99.95% of clients (source: https://web3dsurvey.com/webgpu)
+	supportedLimits.limits.minStorageBufferOffsetAlignment = 256;
+	supportedLimits.limits.minUniformBufferOffsetAlignment = 256;
+#else
 	m_adapter.getLimits(&supportedLimits);
+#endif
 
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
@@ -424,7 +432,9 @@ void Application::onFrame() {
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 	m_queue.submit(command);
 
+#ifndef __EMSCRIPTEN__
 	m_swapChain.present();
+#endif
 
 #ifdef WEBGPU_BACKEND_DAWN
 	// Check for pending error callbacks
