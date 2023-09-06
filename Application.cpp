@@ -71,7 +71,23 @@ void onWindowScroll(GLFWwindow* m_window, double xoffset, double yoffset) {
 }
 
 bool Application::onInit() {
-	m_instance = createInstance(InstanceDescriptor{});
+	InstanceDescriptor instanceDesc;
+#ifdef WEBGPU_BACKEND_DAWN
+	// Dawn-specific extension to enable/disable toggles
+	DawnTogglesDescriptor dawnToggles;
+	dawnToggles.chain.next = nullptr;
+	dawnToggles.chain.sType = SType::DawnTogglesDescriptor;
+
+	std::vector<const char*> enabledToggles = {
+		"allow_unsafe_apis",
+	};
+	dawnToggles.enabledToggles = enabledToggles.data();
+	dawnToggles.enabledTogglesCount = enabledToggles.size();
+	dawnToggles.disabledTogglesCount = 0;
+
+	instanceDesc.nextInChain = &dawnToggles.chain;
+#endif
+	m_instance = createInstance(instanceDesc);
 	if (!m_instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return false;
@@ -122,11 +138,19 @@ bool Application::onInit() {
 
 	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
-	deviceDesc.requiredFeaturesCount = 0;
+	// Require timestamp feature
+	std::vector<FeatureName> requiredFeatures;
+	if (m_adapter.hasFeature(FeatureName::TimestampQuery)) {
+		requiredFeatures.push_back(FeatureName::TimestampQuery);
+	}
+	deviceDesc.requiredFeatures = (const WGPUFeatureName*)requiredFeatures.data();
+	deviceDesc.requiredFeaturesCount = (uint32_t)requiredFeatures.size();
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = m_adapter.requestDevice(deviceDesc);
-	std::cout << "Got device: " << m_device << std::endl;
+	if (!m_device.hasFeature(FeatureName::TimestampQuery)) {
+		std::cout << "Timestamp queries are not supported!" << std::endl;
+	}
 
 	// Add an error callback for more debug info
 	m_errorCallbackHandle = m_device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
@@ -348,6 +372,7 @@ bool Application::onInit() {
 	glfwSetScrollCallback(m_window, onWindowScroll);
 
 	initGui();
+	initBenchmark();
 
 	return true;
 }
@@ -399,8 +424,16 @@ void Application::onFrame() {
 
 	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
 
-	renderPassDesc.timestampWriteCount = 0;
-	renderPassDesc.timestampWrites = nullptr;
+	std::vector<RenderPassTimestampWrite> timestampWrites(2);
+	timestampWrites[0].location = RenderPassTimestampLocation::Beginning;
+	timestampWrites[0].querySet = m_timestampQueries;
+	timestampWrites[0].queryIndex = 0; // first query = start time
+	timestampWrites[1].location = RenderPassTimestampLocation::End;
+	timestampWrites[1].querySet = m_timestampQueries;
+	timestampWrites[1].queryIndex = 1; // second query = end time
+
+	renderPassDesc.timestampWriteCount = (uint32_t)timestampWrites.size();
+	renderPassDesc.timestampWrites = timestampWrites.data();
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
 	renderPass.setPipeline(m_pipeline);
@@ -658,4 +691,12 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 	ImGui::Render();
 	// Execute the low-level drawing commands on the WebGPU backend
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
+}
+
+void Application::initBenchmark() {
+	// Create timestamp queries
+	QuerySetDescriptor querySetDesc;
+	querySetDesc.type = QueryType::Timestamp;
+	querySetDesc.count = 2; // start and end
+	m_timestampQueries = m_device.createQuerySet(querySetDesc);
 }

@@ -63,6 +63,9 @@ private:
 	void initGui(); // called in onInit
 	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
 
+	// Init benchmark-related things like tiemstamp queries
+	void initBenchmark();
+
 private:
 	// (Just aliases to make notations lighter)
 	using mat4x4 = glm::mat4x4;
@@ -137,6 +140,7 @@ private:
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
+	wgpu::QuerySet m_timestampQueries = nullptr;
 
 	// Keep the error callback alive
 	std::unique_ptr<wgpu::ErrorCallback> m_errorCallbackHandle;
