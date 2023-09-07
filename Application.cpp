@@ -466,6 +466,8 @@ void Application::onFrame() {
 }
 
 void Application::onFinish() {
+	terminateBenchmark();
+
 	m_vertexBuffer.destroy();
 	m_vertexBuffer.release();
 
@@ -699,4 +701,41 @@ void Application::initBenchmark() {
 	querySetDesc.type = QueryType::Timestamp;
 	querySetDesc.count = 2; // start and end
 	m_timestampQueries = m_device.createQuerySet(querySetDesc);
+
+	// Create buffer to store timestamps
+	BufferDescriptor bufferDesc;
+	bufferDesc.label = "timestamp resolve buffer";
+	bufferDesc.size = 2 * sizeof(uint32_t);
+	bufferDesc.usage = BufferUsage::QueryResolve | BufferUsage::CopySrc;
+	m_timestampResolveBuffer = m_device.createBuffer(bufferDesc);
+
+	bufferDesc.label = "timestamp map buffer";
+	bufferDesc.size = 2 * sizeof(uint32_t);
+	bufferDesc.usage = BufferUsage::MapRead | BufferUsage::CopyDst;
+	m_timestampMapBuffer = m_device.createBuffer(bufferDesc);
+}
+
+void Application::terminateBenchmark() {
+	m_timestampQueries.release();
+	m_timestampResolveBuffer.destroy();
+	m_timestampResolveBuffer.release();
+	m_timestampMapBuffer.destroy();
+	m_timestampMapBuffer.release();
+}
+
+void Application::fetchTimestamps(CommandEncoder encoder) {
+	// Resolve the timestamp queries (write their result to the resolve buffer)
+	encoder.resolveQuerySet(
+		m_timestampQueries,
+		0, 2, // get queries 0 to 0+2
+		m_timestampResolveBuffer,
+		0
+	);
+
+	// Copy to the map buffer
+	encoder.copyBufferToBuffer(
+		m_timestampResolveBuffer, 0,
+		m_timestampMapBuffer, 0,
+		2 * sizeof(uint32_t)
+	);
 }

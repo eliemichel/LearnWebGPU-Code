@@ -65,6 +65,8 @@ private:
 
 	// Init benchmark-related things like tiemstamp queries
 	void initBenchmark();
+	void terminateBenchmark();
+	void fetchTimestamps(wgpu::CommandEncoder encoder);
 
 private:
 	// (Just aliases to make notations lighter)
@@ -140,7 +142,11 @@ private:
 	wgpu::Buffer m_vertexBuffer = nullptr;
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	wgpu::BindGroup m_bindGroup = nullptr;
+
+	// Benchmarking
 	wgpu::QuerySet m_timestampQueries = nullptr;
+	wgpu::Buffer m_timestampResolveBuffer = nullptr;
+	wgpu::Buffer m_timestampMapBuffer = nullptr;
 
 	// Keep the error callback alive
 	std::unique_ptr<wgpu::ErrorCallback> m_errorCallbackHandle;
