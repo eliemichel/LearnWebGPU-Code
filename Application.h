@@ -147,6 +147,7 @@ private:
 	wgpu::QuerySet m_timestampQueries = nullptr;
 	wgpu::Buffer m_timestampResolveBuffer = nullptr;
 	wgpu::Buffer m_timestampMapBuffer = nullptr;
+	std::unique_ptr<wgpu::BufferMapCallback> m_timestampMapHandle;
 
 	// Keep the error callback alive
 	std::unique_ptr<wgpu::ErrorCallback> m_errorCallbackHandle;

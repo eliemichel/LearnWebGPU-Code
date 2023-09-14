@@ -449,6 +449,8 @@ void Application::onFrame() {
 	updateGui(renderPass);
 
 	renderPass.end();
+
+	fetchTimestamps(encoder);
 	
 	nextTexture.release();
 
@@ -705,12 +707,13 @@ void Application::initBenchmark() {
 	// Create buffer to store timestamps
 	BufferDescriptor bufferDesc;
 	bufferDesc.label = "timestamp resolve buffer";
-	bufferDesc.size = 2 * sizeof(uint32_t);
+	bufferDesc.size = 2 * sizeof(uint64_t);
 	bufferDesc.usage = BufferUsage::QueryResolve | BufferUsage::CopySrc;
+	bufferDesc.mappedAtCreation = false;
 	m_timestampResolveBuffer = m_device.createBuffer(bufferDesc);
 
 	bufferDesc.label = "timestamp map buffer";
-	bufferDesc.size = 2 * sizeof(uint32_t);
+	bufferDesc.size = 2 * sizeof(uint64_t);
 	bufferDesc.usage = BufferUsage::MapRead | BufferUsage::CopyDst;
 	m_timestampMapBuffer = m_device.createBuffer(bufferDesc);
 }
@@ -724,6 +727,11 @@ void Application::terminateBenchmark() {
 }
 
 void Application::fetchTimestamps(CommandEncoder encoder) {
+	// If we are already in the middle of a mapping operation,
+	// no need to trigger a new one.
+	if (m_timestampMapHandle) return;
+	assert(m_timestampMapBuffer.getMapState() == BufferMapState::Unmapped);
+
 	// Resolve the timestamp queries (write their result to the resolve buffer)
 	encoder.resolveQuerySet(
 		m_timestampQueries,
@@ -736,6 +744,28 @@ void Application::fetchTimestamps(CommandEncoder encoder) {
 	encoder.copyBufferToBuffer(
 		m_timestampResolveBuffer, 0,
 		m_timestampMapBuffer, 0,
-		2 * sizeof(uint32_t)
+		2 * sizeof(uint64_t)
 	);
+	
+	m_timestampMapHandle = m_timestampMapBuffer.mapAsync(MapMode::Read, 0, 2 * sizeof(uint64_t), [this](BufferMapAsyncStatus status) {
+		if (status != BufferMapAsyncStatus::Success) {
+			std::cerr << "Could not map buffer! status = " << status << std::endl;
+		}
+		else {
+			uint64_t* timestampData = (uint64_t*)m_timestampMapBuffer.getConstMappedRange(0, 2 * sizeof(uint64_t));
+			
+			// Use timestampData
+			uint64_t begin = timestampData[0];
+			uint64_t end = timestampData[1];
+			uint64_t nanoseconds = (end - begin);
+			float milliseconds = (float)nanoseconds * 1e-6;
+			std::cout << "Render pass took " << milliseconds << "ms" << std::endl;
+
+			m_timestampMapBuffer.unmap();
+		}
+
+		// Release the callback and signal that there is no longer an
+		// ongoing mapping operation.
+		m_timestampMapHandle.reset();
+	});
 }
