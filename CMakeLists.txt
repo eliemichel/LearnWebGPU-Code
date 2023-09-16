@@ -11,6 +11,8 @@ add_subdirectory(webgpu)
 
 add_executable(App
 	main.cpp
+	save_image.h
+	stb_image_write.h
 )
 
 target_link_libraries(App PRIVATE webgpu)
