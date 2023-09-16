@@ -26,6 +26,8 @@
 
 #pragma once
 
+#include "TinyTimer.h"
+
 #include <webgpu/webgpu.hpp>
 #include <glm/glm.hpp>
 
@@ -66,7 +68,8 @@ private:
 	// Init benchmark-related things like tiemstamp queries
 	void initBenchmark();
 	void terminateBenchmark();
-	void fetchTimestamps(wgpu::CommandEncoder encoder);
+	void resolveTimestamps(wgpu::CommandEncoder encoder);
+	void fetchTimestamps();
 
 private:
 	// (Just aliases to make notations lighter)
@@ -148,6 +151,7 @@ private:
 	wgpu::Buffer m_timestampResolveBuffer = nullptr;
 	wgpu::Buffer m_timestampMapBuffer = nullptr;
 	std::unique_ptr<wgpu::BufferMapCallback> m_timestampMapHandle;
+	TinyTimer::PerformanceCounter m_perf;
 
 	// Keep the error callback alive
 	std::unique_ptr<wgpu::ErrorCallback> m_errorCallbackHandle;

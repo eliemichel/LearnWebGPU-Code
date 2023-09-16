@@ -450,7 +450,7 @@ void Application::onFrame() {
 
 	renderPass.end();
 
-	fetchTimestamps(encoder);
+	resolveTimestamps(encoder);
 	
 	nextTexture.release();
 
@@ -458,6 +458,8 @@ void Application::onFrame() {
 	cmdBufferDescriptor.label = "Command buffer";
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 	m_queue.submit(command);
+
+	fetchTimestamps();
 
 	m_swapChain.present();
 
@@ -686,6 +688,8 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 
 		ImGuiIO& io = ImGui::GetIO();
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+		ImGui::Text("Render pass duration on GPU: %s", m_perf.summary().c_str());
 		ImGui::End();
 	}
 
@@ -726,7 +730,7 @@ void Application::terminateBenchmark() {
 	m_timestampMapBuffer.release();
 }
 
-void Application::fetchTimestamps(CommandEncoder encoder) {
+void Application::resolveTimestamps(CommandEncoder encoder) {
 	// If we are already in the middle of a mapping operation,
 	// no need to trigger a new one.
 	if (m_timestampMapHandle) return;
@@ -746,20 +750,28 @@ void Application::fetchTimestamps(CommandEncoder encoder) {
 		m_timestampMapBuffer, 0,
 		2 * sizeof(uint64_t)
 	);
-	
+}
+
+void Application::fetchTimestamps() {
+	// If we are already in the middle of a mapping operation,
+	// no need to trigger a new one.
+	if (m_timestampMapHandle) return;
+	assert(m_timestampMapBuffer.getMapState() == BufferMapState::Unmapped);
+
 	m_timestampMapHandle = m_timestampMapBuffer.mapAsync(MapMode::Read, 0, 2 * sizeof(uint64_t), [this](BufferMapAsyncStatus status) {
 		if (status != BufferMapAsyncStatus::Success) {
 			std::cerr << "Could not map buffer! status = " << status << std::endl;
 		}
 		else {
 			uint64_t* timestampData = (uint64_t*)m_timestampMapBuffer.getConstMappedRange(0, 2 * sizeof(uint64_t));
-			
+
 			// Use timestampData
 			uint64_t begin = timestampData[0];
 			uint64_t end = timestampData[1];
 			uint64_t nanoseconds = (end - begin);
 			float milliseconds = (float)nanoseconds * 1e-6;
 			std::cout << "Render pass took " << milliseconds << "ms" << std::endl;
+			m_perf.add_sample(milliseconds * 1e-3);
 
 			m_timestampMapBuffer.unmap();
 		}
