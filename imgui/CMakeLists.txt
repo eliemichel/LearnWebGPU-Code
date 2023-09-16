@@ -26,3 +26,4 @@ add_library(imgui STATIC
 
 target_include_directories(imgui PUBLIC .)
 target_link_libraries(imgui PUBLIC webgpu glfw)
+set_target_properties(imgui PROPERTIES CXX_STANDARD 11)
