@@ -27,20 +27,22 @@
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
 
-#include "webgpu/webgpu-ext-foo.h"
-
 #include <iostream>
 #include <cassert>
 
 using namespace wgpu;
 
 int main (int, char**) {
+	WGPUInstanceDescriptor instanceDesc = {};
+
+	// Force Vulkan backend
+#if defined(WEBGPU_BACKEND_WGPU)
 	WGPUInstanceExtras instanceExtras = {};
 	instanceExtras.chain.next = NULL;
 	instanceExtras.chain.sType = (WGPUSType)WGPUSType_InstanceExtras;
 	instanceExtras.backends = WGPUInstanceBackend_Vulkan;
-	WGPUInstanceDescriptor instanceDesc = {};
 	instanceDesc.nextInChain = &instanceExtras.chain;
+#endif // WEBGPU_BACKEND
 
 	Instance instance = createInstance(instanceDesc);
 	if (!instance) {
@@ -50,28 +52,33 @@ int main (int, char**) {
 
 	std::cout << "Requesting adapter..." << std::endl;
 	RequestAdapterOptions adapterOpts = Default;
+	// Force Vulkan backend
+#if defined(WEBGPU_BACKEND_DAWN)
+	adapterOpts.backendType = BackendType::Vulkan;
+#endif // WEBGPU_BACKEND
 	Adapter adapter = instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
-	if (wgpuAdapterHasFeature(adapter, (WGPUFeatureName)WGPUFeatureName_Foo)) {
+	if (wgpuAdapterHasFeature(adapter, WGPUFeatureName_Foo)) {
 		std::cout << "Feature 'Foo' supported by adapter" << std::endl;
 	}
 	else {
 		std::cout << "Feature 'Foo' NOT supported by adapter" << std::endl;
+		return 1;
 	}
 
 	std::cout << "Requesting device..." << std::endl;
 	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
 	deviceDesc.requiredFeaturesCount = 1;
-	WGPUFeatureName featureFoo = (WGPUFeatureName)WGPUFeatureName_Foo;
+	WGPUFeatureName featureFoo = WGPUFeatureName_Foo;
 	deviceDesc.requiredFeatures = &featureFoo;
 	deviceDesc.requiredLimits = nullptr;
 	deviceDesc.defaultQueue.label = "The default queue";
 	Device device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 
-	if (wgpuDeviceHasFeature(device, (WGPUFeatureName)WGPUFeatureName_Foo)) {
+	if (wgpuDeviceHasFeature(device, WGPUFeatureName_Foo)) {
 		std::cout << "Feature 'Foo' supported by device" << std::endl;
 	}
 	else {
@@ -235,7 +242,7 @@ fn fs_main() -> @location(0) vec4f {
 
 	WGPUFooRenderPipelineDescriptor fooRenderPipelineDesc;
 	fooRenderPipelineDesc.chain.next = nullptr;
-	fooRenderPipelineDesc.chain.sType = (WGPUSType)WGPUFooSType_FooRenderPipelineDescriptor;
+	fooRenderPipelineDesc.chain.sType = WGPUSType_FooRenderPipelineDescriptor;
 	fooRenderPipelineDesc.foo = 42;
 	pipelineDesc.nextInChain = &fooRenderPipelineDesc.chain;
 
