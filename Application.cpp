@@ -71,6 +71,13 @@ void onWindowScroll(GLFWwindow* m_window, double xoffset, double yoffset) {
 }
 
 bool Application::onInit() {
+#ifdef WEBGPU_BACKEND_WGPU
+	wgpuSetLogCallback([](WGPULogLevel level, const char* message, void*){
+		std::cout << "[wgpu:" << level << "] " << message << std::endl;
+	}, nullptr);
+	wgpuSetLogLevel(LogLevel::Warn);
+#endif
+
 	InstanceDescriptor instanceDesc;
 #ifdef WEBGPU_BACKEND_DAWN
 	// Dawn-specific extension to enable/disable toggles
@@ -126,7 +133,7 @@ bool Application::onInit() {
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 8;
 	requiredLimits.limits.maxBindGroups = 2;
-	//                                    ^ This was a 1
+	requiredLimits.limits.maxBindingsPerBindGroup = 3;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	// Allow textures up to 2K
@@ -734,7 +741,6 @@ void Application::resolveTimestamps(CommandEncoder encoder) {
 	// If we are already in the middle of a mapping operation,
 	// no need to trigger a new one.
 	if (m_timestampMapHandle) return;
-	assert(m_timestampMapBuffer.getMapState() == BufferMapState::Unmapped);
 
 	// Resolve the timestamp queries (write their result to the resolve buffer)
 	encoder.resolveQuerySet(
@@ -743,7 +749,7 @@ void Application::resolveTimestamps(CommandEncoder encoder) {
 		m_timestampResolveBuffer,
 		0
 	);
-
+	
 	// Copy to the map buffer
 	encoder.copyBufferToBuffer(
 		m_timestampResolveBuffer, 0,
@@ -756,7 +762,9 @@ void Application::fetchTimestamps() {
 	// If we are already in the middle of a mapping operation,
 	// no need to trigger a new one.
 	if (m_timestampMapHandle) return;
+#ifdef WEBGPU_BACKEND_DAWN // getMapState not implemented yet in wgpu-native
 	assert(m_timestampMapBuffer.getMapState() == BufferMapState::Unmapped);
+#endif
 
 	m_timestampMapHandle = m_timestampMapBuffer.mapAsync(MapMode::Read, 0, 2 * sizeof(uint64_t), [this](BufferMapAsyncStatus status) {
 		if (status != BufferMapAsyncStatus::Success) {
