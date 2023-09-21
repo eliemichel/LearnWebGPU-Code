@@ -83,6 +83,7 @@ int main (int, char**) {
 	std::cout << "Requesting adapter..." << std::endl;
 	Surface surface = glfwGetWGPUSurface(instance, window);
 	RequestAdapterOptions adapterOpts{};
+  adapterOpts.powerPreference = PowerPreference::HighPerformance;
 	adapterOpts.compatibleSurface = surface;
 	Adapter adapter = instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
