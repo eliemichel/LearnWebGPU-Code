@@ -69,10 +69,10 @@ bool Application::onInit() {
 	if (!initWindowAndDevice()) return false;
 	if (!initSwapChain()) return false;
 	if (!initDepthBuffer()) return false;
+	if (!initGeometry()) return false;
 	if (!initBindGroupLayout()) return false;
 	if (!initRenderPipeline()) return false;
 	if (!initTexture()) return false;
-	if (!initGeometry()) return false;
 	if (!initUniforms()) return false;
 	if (!initLightingUniforms()) return false;
 	if (!initBindGroup()) return false;
@@ -133,13 +133,9 @@ void Application::onFrame() {
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
 	renderPass.setPipeline(m_pipeline);
-
-	renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexCount * sizeof(VertexAttributes));
-
-	// Set binding group
 	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-	renderPass.draw(m_vertexCount, 1, 0, 0);
+	m_gpuScene.draw(renderPass);
 
 	// We add the GUI drawing commands to the render pass
 	updateGui(renderPass);
@@ -166,10 +162,10 @@ void Application::onFinish() {
 	terminateBindGroup();
 	terminateLightingUniforms();
 	terminateUniforms();
-	terminateGeometry();
 	terminateTexture();
 	terminateRenderPipeline();
 	terminateBindGroupLayout();
+	terminateGeometry();
 	terminateDepthBuffer();
 	terminateSwapChain();
 	terminateWindowAndDevice();
@@ -272,16 +268,14 @@ bool Application::initWindowAndDevice() {
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 4;
-	requiredLimits.limits.maxVertexBuffers = 1;
+	requiredLimits.limits.maxVertexBuffers = 3;
 	requiredLimits.limits.maxBufferSize = 150000 * sizeof(VertexAttributes);
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 8;
 	requiredLimits.limits.maxBindGroups = 2;
-	//                                    ^ This was a 1
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
-	//                                                      ^ This was a 1
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	// Allow textures up to 2K
 	requiredLimits.limits.maxTextureDimension1D = 2048;
@@ -419,36 +413,9 @@ bool Application::initRenderPipeline() {
 	RenderPipelineDescriptor pipelineDesc;
 
 	// Vertex fetch
-	std::vector<VertexAttribute> vertexAttribs(4);
-
-	// Position attribute
-	vertexAttribs[0].shaderLocation = 0;
-	vertexAttribs[0].format = VertexFormat::Float32x3;
-	vertexAttribs[0].offset = 0;
-
-	// Normal attribute
-	vertexAttribs[1].shaderLocation = 1;
-	vertexAttribs[1].format = VertexFormat::Float32x3;
-	vertexAttribs[1].offset = offsetof(VertexAttributes, normal);
-
-	// Color attribute
-	vertexAttribs[2].shaderLocation = 2;
-	vertexAttribs[2].format = VertexFormat::Float32x3;
-	vertexAttribs[2].offset = offsetof(VertexAttributes, color);
-
-	// UV attribute
-	vertexAttribs[3].shaderLocation = 3;
-	vertexAttribs[3].format = VertexFormat::Float32x2;
-	vertexAttribs[3].offset = offsetof(VertexAttributes, uv);
-
-	VertexBufferLayout vertexBufferLayout;
-	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
-	vertexBufferLayout.attributes = vertexAttribs.data();
-	vertexBufferLayout.arrayStride = sizeof(VertexAttributes);
-	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
-
-	pipelineDesc.vertex.bufferCount = 1;
-	pipelineDesc.vertex.buffers = &vertexBufferLayout;
+	std::vector<VertexBufferLayout> vertexBufferLayouts = m_gpuScene.vertexBufferLayouts(0);
+	pipelineDesc.vertex.bufferCount = static_cast<uint32_t>(vertexBufferLayouts.size());
+	pipelineDesc.vertex.buffers = vertexBufferLayouts.data();
 
 	pipelineDesc.vertex.module = m_shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
@@ -552,30 +519,19 @@ void Application::terminateTexture() {
 
 bool Application::initGeometry() {
 	// Load mesh data from OBJ file
-	std::vector<VertexAttributes> vertexData;
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", vertexData);
+	bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/DamagedHelmet.glb", m_cpuScene);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return false;
 	}
+	m_gpuScene.createFromModel(m_device, m_cpuScene);
 
-	// Create vertex buffer
-	BufferDescriptor bufferDesc;
-	bufferDesc.size = vertexData.size() * sizeof(VertexAttributes);
-	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
-	bufferDesc.mappedAtCreation = false;
-	m_vertexBuffer = m_device.createBuffer(bufferDesc);
-	m_queue.writeBuffer(m_vertexBuffer, 0, vertexData.data(), bufferDesc.size);
-
-	m_vertexCount = static_cast<int>(vertexData.size());
-
-	return m_vertexBuffer != nullptr;
+	return true;
 }
 
 void Application::terminateGeometry() {
-	m_vertexBuffer.destroy();
-	m_vertexBuffer.release();
-	m_vertexCount = 0;
+	m_gpuScene.destroy();
+	m_cpuScene = {};
 }
 
 

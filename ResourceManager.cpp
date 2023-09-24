@@ -28,6 +28,7 @@
 
 #include "stb_image.h"
 #include "tiny_obj_loader.h"
+#include "tiny_gltf.h"
 
 #include <fstream>
 #include <cstring>
@@ -118,6 +119,32 @@ bool ResourceManager::loadGeometryFromObj(const path& path, std::vector<VertexAt
 	}
 
 	return true;
+}
+
+bool ResourceManager::loadGeometryFromGltf(const path& path, tinygltf::Model& model) {
+	using namespace tinygltf;
+
+	TinyGLTF loader;
+	std::string err;
+	std::string warn;
+
+	bool success = false;
+	if (path.extension() == ".glb") {
+		success = loader.LoadBinaryFromFile(&model, &err, &warn, path.string());
+	}
+	else {
+		success = loader.LoadASCIIFromFile(&model, &err, &warn, path.string());
+	}
+
+	if (!warn.empty()) {
+		std::cout << "Warning: " << warn << std::endl;
+	}
+
+	if (!err.empty()) {
+		std::cerr << "Error: " << err << std::endl;
+	}
+
+	return success;
 }
 
 // Auxiliary function for loadTexture

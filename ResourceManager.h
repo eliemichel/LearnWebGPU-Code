@@ -32,6 +32,10 @@
 #include <vector>
 #include <filesystem>
 
+namespace tinygltf {
+class Model;
+}
+
 class ResourceManager {
 public:
 	// (Just aliases to make notations lighter)
@@ -56,6 +60,9 @@ public:
 
 	// Load an 3D mesh from a standard .obj file into a vertex data buffer
 	static bool loadGeometryFromObj(const path& path, std::vector<VertexAttributes>& vertexData);
+
+	// Load an 3D mesh from a standard .gltf file into a vertex data buffer
+	static bool loadGeometryFromGltf(const path& path, tinygltf::Model& model);
 
 	// Load an image from a standard image file into a new texture object
 	// NB: The texture must be destroyed after use

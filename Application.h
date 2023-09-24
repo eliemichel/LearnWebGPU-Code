@@ -26,6 +26,9 @@
 
 #pragma once
 
+#include "GpuScene.h"
+#include "tiny_gltf.h"
+
 #include <webgpu/webgpu.hpp>
 #include <glm/glm.hpp>
 
@@ -178,8 +181,8 @@ private:
 	wgpu::TextureView m_textureView = nullptr;
 	
 	// Geometry
-	wgpu::Buffer m_vertexBuffer = nullptr;
-	int m_vertexCount = 0;
+	tinygltf::Model m_cpuScene;
+	GpuScene m_gpuScene;
 
 	// Uniforms
 	wgpu::Buffer m_uniformBuffer = nullptr;

@@ -20,6 +20,8 @@ add_executable(App
 	main.cpp
 	Application.h
 	Application.cpp
+	GpuScene.h
+	GpuScene.cpp
 	ResourceManager.h
 	ResourceManager.cpp
 	implementations.cpp
