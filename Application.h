@@ -46,6 +46,9 @@ public:
 	// A function that tells if the application is still running.
 	bool isRunning();
 
+	// A function called when the window is resized.
+	void onResize();
+
 private:
 	bool initWindowAndDevice();
 	void terminateWindowAndDevice();
@@ -70,6 +73,8 @@ private:
 
 	bool initBindGroup();
 	void terminateBindGroup();
+
+	void updateProjectionMatrix();
 
 private:
 	// (Just aliases to make notations lighter)

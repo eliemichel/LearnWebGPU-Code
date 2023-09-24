@@ -134,7 +134,7 @@ void Application::onFrame() {
 
 #ifdef WEBGPU_BACKEND_DAWN
 	// Check for pending error callbacks
-	device.tick();
+	m_device.tick();
 #endif
 }
 
@@ -153,6 +153,18 @@ bool Application::isRunning() {
 	return !glfwWindowShouldClose(m_window);
 }
 
+void Application::onResize() {
+	// Terminate in reverse order
+	terminateDepthBuffer();
+	terminateSwapChain();
+
+	// Re-init
+	initSwapChain();
+	initDepthBuffer();
+
+	updateProjectionMatrix();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Private methods
 
@@ -169,7 +181,8 @@ bool Application::initWindowAndDevice() {
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+	//                             ^^^^^^^^^ This was GLFW_FALSE
 	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
 	if (!m_window) {
 		std::cerr << "Could not open window!" << std::endl;
@@ -229,6 +242,14 @@ bool Application::initWindowAndDevice() {
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #endif
 
+	// Set the user pointer to be "this"
+	glfwSetWindowUserPointer(m_window, this);
+	// Use a non-capturing lambda as resize callback
+	glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* window, int, int) {
+		auto that = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+		if (that != nullptr) that->onResize();
+	});
+
 	return m_device != nullptr;
 }
 
@@ -244,10 +265,14 @@ void Application::terminateWindowAndDevice() {
 
 
 bool Application::initSwapChain() {
+	// Get the current size of the window's framebuffer:
+	int width, height;
+	glfwGetFramebufferSize(m_window, &width, &height);
+
 	std::cout << "Creating swapchain..." << std::endl;
 	SwapChainDescriptor swapChainDesc;
-	swapChainDesc.width = 640;
-	swapChainDesc.height = 480;
+	swapChainDesc.width = static_cast<uint32_t>(width);
+	swapChainDesc.height = static_cast<uint32_t>(height);
 	swapChainDesc.usage = TextureUsage::RenderAttachment;
 	swapChainDesc.format = m_swapChainFormat;
 	swapChainDesc.presentMode = PresentMode::Fifo;
@@ -262,13 +287,17 @@ void Application::terminateSwapChain() {
 
 
 bool Application::initDepthBuffer() {
+	// Get the current size of the window's framebuffer:
+	int width, height;
+	glfwGetFramebufferSize(m_window, &width, &height);
+
 	// Create the depth texture
 	TextureDescriptor depthTextureDesc;
 	depthTextureDesc.dimension = TextureDimension::_2D;
 	depthTextureDesc.format = m_depthTextureFormat;
 	depthTextureDesc.mipLevelCount = 1;
 	depthTextureDesc.sampleCount = 1;
-	depthTextureDesc.size = { 640, 480, 1 };
+	depthTextureDesc.size = { static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1 };
 	depthTextureDesc.usage = TextureUsage::RenderAttachment;
 	depthTextureDesc.viewFormatCount = 1;
 	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&m_depthTextureFormat;
@@ -551,3 +580,16 @@ void Application::terminateBindGroup() {
 	m_bindGroup.release();
 }
 
+void Application::updateProjectionMatrix() {
+	// Update projection matrix
+	int width, height;
+	glfwGetFramebufferSize(m_window, &width, &height);
+	float ratio = width / (float)height;
+	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
+	m_queue.writeBuffer(
+		m_uniformBuffer,
+		offsetof(MyUniforms, projectionMatrix),
+		&m_uniforms.projectionMatrix,
+		sizeof(MyUniforms::projectionMatrix)
+	);
+}
