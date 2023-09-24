@@ -14,6 +14,7 @@ option(DEV_MODE "Set up development helper settings" ON)
 add_subdirectory(glfw)
 add_subdirectory(webgpu)
 add_subdirectory(glfw3webgpu)
+add_subdirectory(imgui)
 
 add_executable(App
 	main.cpp
@@ -41,7 +42,7 @@ endif()
 
 target_include_directories(App PRIVATE .)
 
-target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
+target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu imgui)
 
 set_target_properties(App PROPERTIES
 	CXX_STANDARD 17

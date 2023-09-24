@@ -83,6 +83,10 @@ private:
 	void updateViewMatrix();
 	void updateDragInertia();
 
+	bool initGui(); // called in onInit
+	void terminateGui(); // called in onFinish
+	void updateGui(wgpu::RenderPassEncoder renderPass); // called in onFrame
+
 private:
 	// (Just aliases to make notations lighter)
 	using mat4x4 = glm::mat4x4;
