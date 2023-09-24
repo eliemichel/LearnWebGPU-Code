@@ -186,6 +186,7 @@ private:
 	MyUniforms m_uniforms;
 	wgpu::Buffer m_lightingUniformBuffer = nullptr;
 	LightingUniforms m_lightingUniforms;
+	bool m_lightingUniformsChanged = true;
 
 	// Bind Group Layout
 	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;

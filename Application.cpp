@@ -34,6 +34,7 @@
 #define GLM_FORCE_LEFT_HANDED
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+#include <glm/gtx/polar_coordinates.hpp>
 
 #include <imgui.h>
 #include <backends/imgui_impl_wgpu.h>
@@ -50,6 +51,16 @@ using namespace wgpu;
 using VertexAttributes = ResourceManager::VertexAttributes;
 
 constexpr float PI = 3.14159265358979323846f;
+
+// Custom ImGui widgets
+namespace ImGui {
+bool DragDirection(const char* label, glm::vec4& direction) {
+	glm::vec2 angles = glm::degrees(glm::polar(glm::vec3(direction)));
+	bool changed = ImGui::DragFloat2(label, glm::value_ptr(angles));
+	direction = glm::vec4(glm::euclidean(glm::radians(angles)), direction.w);
+	return changed;
+}
+} // namespace ImGui
 
 ///////////////////////////////////////////////////////////////////////////////
 // Public methods
@@ -621,7 +632,10 @@ void Application::terminateLightingUniforms() {
 }
 
 void Application::updateLightingUniforms() {
-	m_queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
+	if (m_lightingUniformsChanged) {
+		m_queue.writeBuffer(m_lightingUniformBuffer, 0, &m_lightingUniforms, sizeof(LightingUniforms));
+		m_lightingUniformsChanged = false;
+	}
 }
 
 
@@ -775,12 +789,14 @@ void Application::updateGui(RenderPassEncoder renderPass) {
 
 	// Build our UI
 	{
+		bool changed = false;
 		ImGui::Begin("Lighting");
-		ImGui::ColorEdit3("Color #0", glm::value_ptr(m_lightingUniforms.colors[0]));
-		ImGui::DragFloat3("Direction #0", glm::value_ptr(m_lightingUniforms.directions[0]));
-		ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1]));
-		ImGui::DragFloat3("Direction #1", glm::value_ptr(m_lightingUniforms.directions[1]));
+		changed = ImGui::ColorEdit3("Color #0", glm::value_ptr(m_lightingUniforms.colors[0])) || changed;
+		changed = ImGui::DragDirection("Direction #0", m_lightingUniforms.directions[0]) || changed;
+		changed = ImGui::ColorEdit3("Color #1", glm::value_ptr(m_lightingUniforms.colors[1])) || changed;
+		changed = ImGui::DragDirection("Direction #1", m_lightingUniforms.directions[1]) || changed;
 		ImGui::End();
+		m_lightingUniformsChanged = changed;
 	}
 
 	// Draw the UI
