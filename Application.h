@@ -47,6 +47,31 @@ public:
 	bool isRunning();
 
 private:
+	bool initWindowAndDevice();
+	void terminateWindowAndDevice();
+
+	bool initSwapChain();
+	void terminateSwapChain();
+
+	bool initDepthBuffer();
+	void terminateDepthBuffer();
+
+	bool initRenderPipeline();
+	void terminateRenderPipeline();
+
+	bool initTexture();
+	void terminateTexture();
+
+	bool initGeometry();
+	void terminateGeometry();
+
+	bool initUniforms();
+	void terminateUniforms();
+
+	bool initBindGroup();
+	void terminateBindGroup();
+
+private:
 	// (Just aliases to make notations lighter)
 	using mat4x4 = glm::mat4x4;
 	using vec4 = glm::vec4;
@@ -68,28 +93,42 @@ private:
 	// Have the compiler check byte alignment
 	static_assert(sizeof(MyUniforms) % 16 == 0);
 
-	// Everything that is initialized in `onInit` and needed in `onFrame`.
-	GLFWwindow* window = nullptr;
-	wgpu::Instance instance = nullptr;
-	wgpu::Surface surface = nullptr;
-	wgpu::Adapter adapter = nullptr;
-	wgpu::Device device = nullptr;
-	wgpu::Queue queue = nullptr;
-	wgpu::SwapChain swapChain = nullptr;
-	wgpu::ShaderModule shaderModule = nullptr;
-	wgpu::RenderPipeline pipeline = nullptr;
-	wgpu::Texture depthTexture = nullptr;
-	wgpu::TextureView depthTextureView = nullptr;
-	wgpu::Sampler sampler = nullptr;
-	wgpu::TextureView textureView = nullptr;
-	wgpu::Texture texture = nullptr;
-	wgpu::Buffer vertexBuffer = nullptr;
-	wgpu::Buffer uniformBuffer = nullptr;
-	wgpu::BindGroup bindGroup = nullptr;
-
+	// Window and Device
+	GLFWwindow* m_window = nullptr;
+	wgpu::Instance m_instance = nullptr;
+	wgpu::Surface m_surface = nullptr;
+	wgpu::Device m_device = nullptr;
+	wgpu::Queue m_queue = nullptr;
+	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
 	// Keep the error callback alive
-	std::unique_ptr<wgpu::ErrorCallback> errorCallbackHandle;
+	std::unique_ptr<wgpu::ErrorCallback> m_errorCallbackHandle;
 
-	MyUniforms uniforms;
-	int vertexCount = 0;
+	// Swap Chain
+	wgpu::SwapChain m_swapChain = nullptr;
+
+	// Depth Buffer
+	wgpu::TextureFormat m_depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
+	wgpu::Texture m_depthTexture = nullptr;
+	wgpu::TextureView m_depthTextureView = nullptr;
+
+	// Render Pipeline
+	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
+	wgpu::ShaderModule m_shaderModule = nullptr;
+	wgpu::RenderPipeline m_pipeline = nullptr;
+
+	// Texture
+	wgpu::Sampler m_sampler = nullptr;
+	wgpu::Texture m_texture = nullptr;
+	wgpu::TextureView m_textureView = nullptr;
+	
+	// Geometry
+	wgpu::Buffer m_vertexBuffer = nullptr;
+	int m_vertexCount = 0;
+
+	// Uniforms
+	wgpu::Buffer m_uniformBuffer = nullptr;
+	MyUniforms m_uniforms;
+
+	// Bind Group
+	wgpu::BindGroup m_bindGroup = nullptr;
 };
