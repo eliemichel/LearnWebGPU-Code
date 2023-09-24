@@ -29,6 +29,8 @@
 #include <webgpu/webgpu.hpp>
 #include <glm/glm.hpp>
 
+#include <array>
+
 // Forward declare
 struct GLFWwindow;
 
@@ -76,6 +78,13 @@ private:
 	bool initUniforms();
 	void terminateUniforms();
 
+	bool initLightingUniforms();
+	void terminateLightingUniforms();
+	void updateLightingUniforms();
+
+	bool initBindGroupLayout();
+	void terminateBindGroupLayout();
+
 	bool initBindGroup();
 	void terminateBindGroup();
 
@@ -108,6 +117,12 @@ private:
 	};
 	// Have the compiler check byte alignment
 	static_assert(sizeof(MyUniforms) % 16 == 0);
+
+	struct LightingUniforms {
+		std::array<vec4, 2> directions;
+		std::array<vec4, 2> colors;
+	};
+	static_assert(sizeof(LightingUniforms) % 16 == 0);
 
 	struct CameraState {
 		// angles.x is the rotation of the camera around the global vertical axis, affected by mouse.x
@@ -154,7 +169,6 @@ private:
 	wgpu::TextureView m_depthTextureView = nullptr;
 
 	// Render Pipeline
-	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	wgpu::ShaderModule m_shaderModule = nullptr;
 	wgpu::RenderPipeline m_pipeline = nullptr;
 
@@ -170,6 +184,11 @@ private:
 	// Uniforms
 	wgpu::Buffer m_uniformBuffer = nullptr;
 	MyUniforms m_uniforms;
+	wgpu::Buffer m_lightingUniformBuffer = nullptr;
+	LightingUniforms m_lightingUniforms;
+
+	// Bind Group Layout
+	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 
 	// Bind Group
 	wgpu::BindGroup m_bindGroup = nullptr;
