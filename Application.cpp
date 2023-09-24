@@ -47,9 +47,118 @@ using VertexAttributes = ResourceManager::VertexAttributes;
 
 constexpr float PI = 3.14159265358979323846f;
 
+///////////////////////////////////////////////////////////////////////////////
+// Public methods
+
 bool Application::onInit() {
-	instance = createInstance(InstanceDescriptor{});
-	if (!instance) {
+	if (!initWindowAndDevice()) return false;
+	if (!initSwapChain()) return false;
+	if (!initDepthBuffer()) return false;
+	if (!initRenderPipeline()) return false;
+	if (!initTexture()) return false;
+	if (!initGeometry()) return false;
+	if (!initUniforms()) return false;
+	if (!initBindGroup()) return false;
+	return true;
+}
+
+void Application::onFrame() {
+	glfwPollEvents();
+
+	// Update uniform buffer
+	m_uniforms.time = static_cast<float>(glfwGetTime());
+	m_queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
+	
+	TextureView nextTexture = m_swapChain.getCurrentTextureView();
+	if (!nextTexture) {
+		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
+		return;
+	}
+
+	CommandEncoderDescriptor commandEncoderDesc;
+	commandEncoderDesc.label = "Command Encoder";
+	CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
+	
+	RenderPassDescriptor renderPassDesc{};
+
+	RenderPassColorAttachment renderPassColorAttachment{};
+	renderPassColorAttachment.view = nextTexture;
+	renderPassColorAttachment.resolveTarget = nullptr;
+	renderPassColorAttachment.loadOp = LoadOp::Clear;
+	renderPassColorAttachment.storeOp = StoreOp::Store;
+	renderPassColorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
+	renderPassDesc.colorAttachmentCount = 1;
+	renderPassDesc.colorAttachments = &renderPassColorAttachment;
+
+	RenderPassDepthStencilAttachment depthStencilAttachment;
+	depthStencilAttachment.view = m_depthTextureView;
+	depthStencilAttachment.depthClearValue = 1.0f;
+	depthStencilAttachment.depthLoadOp = LoadOp::Clear;
+	depthStencilAttachment.depthStoreOp = StoreOp::Store;
+	depthStencilAttachment.depthReadOnly = false;
+	depthStencilAttachment.stencilClearValue = 0;
+#ifdef WEBGPU_BACKEND_WGPU
+	depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
+	depthStencilAttachment.stencilStoreOp = StoreOp::Store;
+#else
+	depthStencilAttachment.stencilLoadOp = LoadOp::Undefined;
+	depthStencilAttachment.stencilStoreOp = StoreOp::Undefined;
+#endif
+	depthStencilAttachment.stencilReadOnly = true;
+
+	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
+
+	renderPassDesc.timestampWriteCount = 0;
+	renderPassDesc.timestampWrites = nullptr;
+	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+
+	renderPass.setPipeline(m_pipeline);
+
+	renderPass.setVertexBuffer(0, m_vertexBuffer, 0, m_vertexCount * sizeof(VertexAttributes));
+
+	// Set binding group
+	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
+
+	renderPass.draw(m_vertexCount, 1, 0, 0);
+
+	renderPass.end();
+	
+	nextTexture.release();
+
+	CommandBufferDescriptor cmdBufferDescriptor{};
+	cmdBufferDescriptor.label = "Command buffer";
+	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+	m_queue.submit(command);
+
+	m_swapChain.present();
+
+#ifdef WEBGPU_BACKEND_DAWN
+	// Check for pending error callbacks
+	device.tick();
+#endif
+}
+
+void Application::onFinish() {
+	terminateBindGroup();
+	terminateUniforms();
+	terminateGeometry();
+	terminateTexture();
+	terminateRenderPipeline();
+	terminateDepthBuffer();
+	terminateSwapChain();
+	terminateWindowAndDevice();
+}
+
+bool Application::isRunning() {
+	return !glfwWindowShouldClose(m_window);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Private methods
+
+bool Application::initWindowAndDevice() {
+	m_instance = createInstance(InstanceDescriptor{});
+	if (!m_instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return false;
 	}
@@ -61,17 +170,17 @@ bool Application::onInit() {
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
-	if (!window) {
+	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	if (!m_window) {
 		std::cerr << "Could not open window!" << std::endl;
 		return false;
 	}
 
 	std::cout << "Requesting adapter..." << std::endl;
-	surface = glfwGetWGPUSurface(instance, window);
+	m_surface = glfwGetWGPUSurface(m_instance, m_window);
 	RequestAdapterOptions adapterOpts{};
-	adapterOpts.compatibleSurface = surface;
-	adapter = instance.requestAdapter(adapterOpts);
+	adapterOpts.compatibleSurface = m_surface;
+	Adapter adapter = m_instance.requestAdapter(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 	SupportedLimits supportedLimits;
@@ -101,36 +210,97 @@ bool Application::onInit() {
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
-	device = adapter.requestDevice(deviceDesc);
-	std::cout << "Got device: " << device << std::endl;
+	m_device = adapter.requestDevice(deviceDesc);
+	adapter.release();
+	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
-	errorCallbackHandle = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
+	m_errorCallbackHandle = m_device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Device error: type " << type;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
 	});
 
-	queue = device.getQueue();
+	m_queue = m_device.getQueue();
 
-	std::cout << "Creating swapchain..." << std::endl;
 #ifdef WEBGPU_BACKEND_WGPU
-	TextureFormat swapChainFormat = surface.getPreferredFormat(adapter);
+	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
 #else
-	TextureFormat swapChainFormat = TextureFormat::BGRA8Unorm;
+	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #endif
+
+	return m_device != nullptr;
+}
+
+void Application::terminateWindowAndDevice() {
+	m_queue.release();
+	m_device.release();
+	m_surface.release();
+	m_instance.release();
+
+	glfwDestroyWindow(m_window);
+	glfwTerminate();
+}
+
+
+bool Application::initSwapChain() {
+	std::cout << "Creating swapchain..." << std::endl;
 	SwapChainDescriptor swapChainDesc;
 	swapChainDesc.width = 640;
 	swapChainDesc.height = 480;
 	swapChainDesc.usage = TextureUsage::RenderAttachment;
-	swapChainDesc.format = swapChainFormat;
+	swapChainDesc.format = m_swapChainFormat;
 	swapChainDesc.presentMode = PresentMode::Fifo;
-	swapChain = device.createSwapChain(surface, swapChainDesc);
-	std::cout << "Swapchain: " << swapChain << std::endl;
+	m_swapChain = m_device.createSwapChain(m_surface, swapChainDesc);
+	std::cout << "Swapchain: " << m_swapChain << std::endl;
+	return m_swapChain != nullptr;
+}
 
+void Application::terminateSwapChain() {
+	m_swapChain.release();
+}
+
+
+bool Application::initDepthBuffer() {
+	// Create the depth texture
+	TextureDescriptor depthTextureDesc;
+	depthTextureDesc.dimension = TextureDimension::_2D;
+	depthTextureDesc.format = m_depthTextureFormat;
+	depthTextureDesc.mipLevelCount = 1;
+	depthTextureDesc.sampleCount = 1;
+	depthTextureDesc.size = { 640, 480, 1 };
+	depthTextureDesc.usage = TextureUsage::RenderAttachment;
+	depthTextureDesc.viewFormatCount = 1;
+	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&m_depthTextureFormat;
+	m_depthTexture = m_device.createTexture(depthTextureDesc);
+	std::cout << "Depth texture: " << m_depthTexture << std::endl;
+
+	// Create the view of the depth texture manipulated by the rasterizer
+	TextureViewDescriptor depthTextureViewDesc;
+	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
+	depthTextureViewDesc.baseArrayLayer = 0;
+	depthTextureViewDesc.arrayLayerCount = 1;
+	depthTextureViewDesc.baseMipLevel = 0;
+	depthTextureViewDesc.mipLevelCount = 1;
+	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
+	depthTextureViewDesc.format = m_depthTextureFormat;
+	m_depthTextureView = m_depthTexture.createView(depthTextureViewDesc);
+	std::cout << "Depth texture view: " << m_depthTextureView << std::endl;
+
+	return m_depthTextureView != nullptr;
+}
+
+void Application::terminateDepthBuffer() {
+	m_depthTextureView.release();
+	m_depthTexture.destroy();
+	m_depthTexture.release();
+}
+
+
+bool Application::initRenderPipeline() {
 	std::cout << "Creating shader module..." << std::endl;
-	shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", device);
-	std::cout << "Shader module: " << shaderModule << std::endl;
+	m_shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
+	std::cout << "Shader module: " << m_shaderModule << std::endl;
 
 	std::cout << "Creating render pipeline..." << std::endl;
 	RenderPipelineDescriptor pipelineDesc;
@@ -167,7 +337,7 @@ bool Application::onInit() {
 	pipelineDesc.vertex.bufferCount = 1;
 	pipelineDesc.vertex.buffers = &vertexBufferLayout;
 
-	pipelineDesc.vertex.module = shaderModule;
+	pipelineDesc.vertex.module = m_shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
 	pipelineDesc.vertex.constantCount = 0;
 	pipelineDesc.vertex.constants = nullptr;
@@ -179,7 +349,7 @@ bool Application::onInit() {
 
 	FragmentState fragmentState;
 	pipelineDesc.fragment = &fragmentState;
-	fragmentState.module = shaderModule;
+	fragmentState.module = m_shaderModule;
 	fragmentState.entryPoint = "fs_main";
 	fragmentState.constantCount = 0;
 	fragmentState.constants = nullptr;
@@ -193,7 +363,7 @@ bool Application::onInit() {
 	blendState.alpha.operation = BlendOperation::Add;
 
 	ColorTargetState colorTarget;
-	colorTarget.format = swapChainFormat;
+	colorTarget.format = m_swapChainFormat;
 	colorTarget.blend = &blendState;
 	colorTarget.writeMask = ColorWriteMask::All;
 
@@ -203,11 +373,10 @@ bool Application::onInit() {
 	DepthStencilState depthStencilState = Default;
 	depthStencilState.depthCompare = CompareFunction::Less;
 	depthStencilState.depthWriteEnabled = true;
-	TextureFormat depthTextureFormat = TextureFormat::Depth24Plus;
-	depthStencilState.format = depthTextureFormat;
+	depthStencilState.format = m_depthTextureFormat;
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
-	
+
 	pipelineDesc.depthStencil = &depthStencilState;
 
 	pipelineDesc.multisample.count = 1;
@@ -243,43 +412,29 @@ bool Application::onInit() {
 	BindGroupLayoutDescriptor bindGroupLayoutDesc{};
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindingLayoutEntries.size();
 	bindGroupLayoutDesc.entries = bindingLayoutEntries.data();
-	BindGroupLayout bindGroupLayout = device.createBindGroupLayout(bindGroupLayoutDesc);
+	m_bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
 
 	// Create the pipeline layout
 	PipelineLayoutDescriptor layoutDesc{};
 	layoutDesc.bindGroupLayoutCount = 1;
-	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&bindGroupLayout;
-	PipelineLayout layout = device.createPipelineLayout(layoutDesc);
+	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)&m_bindGroupLayout;
+	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
-	pipeline = device.createRenderPipeline(pipelineDesc);
-	std::cout << "Render pipeline: " << pipeline << std::endl;
+	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
+	std::cout << "Render pipeline: " << m_pipeline << std::endl;
 
-	// Create the depth texture
-	TextureDescriptor depthTextureDesc;
-	depthTextureDesc.dimension = TextureDimension::_2D;
-	depthTextureDesc.format = depthTextureFormat;
-	depthTextureDesc.mipLevelCount = 1;
-	depthTextureDesc.sampleCount = 1;
-	depthTextureDesc.size = {640, 480, 1};
-	depthTextureDesc.usage = TextureUsage::RenderAttachment;
-	depthTextureDesc.viewFormatCount = 1;
-	depthTextureDesc.viewFormats = (WGPUTextureFormat*)&depthTextureFormat;
-	depthTexture = device.createTexture(depthTextureDesc);
-	std::cout << "Depth texture: " << depthTexture << std::endl;
+	return m_pipeline != nullptr;
+}
 
-	// Create the view of the depth texture manipulated by the rasterizer
-	TextureViewDescriptor depthTextureViewDesc;
-	depthTextureViewDesc.aspect = TextureAspect::DepthOnly;
-	depthTextureViewDesc.baseArrayLayer = 0;
-	depthTextureViewDesc.arrayLayerCount = 1;
-	depthTextureViewDesc.baseMipLevel = 0;
-	depthTextureViewDesc.mipLevelCount = 1;
-	depthTextureViewDesc.dimension = TextureViewDimension::_2D;
-	depthTextureViewDesc.format = depthTextureFormat;
-	depthTextureView = depthTexture.createView(depthTextureViewDesc);
-	std::cout << "Depth texture view: " << depthTextureView << std::endl;
+void Application::terminateRenderPipeline() {
+	m_pipeline.release();
+	m_shaderModule.release();
+	m_bindGroupLayout.release();
+}
 
+
+bool Application::initTexture() {
 	// Create a sampler
 	SamplerDescriptor samplerDesc;
 	samplerDesc.addressModeU = AddressMode::Repeat;
@@ -292,17 +447,29 @@ bool Application::onInit() {
 	samplerDesc.lodMaxClamp = 8.0f;
 	samplerDesc.compare = CompareFunction::Undefined;
 	samplerDesc.maxAnisotropy = 1;
-	sampler = device.createSampler(samplerDesc);
+	m_sampler = m_device.createSampler(samplerDesc);
 
 	// Create a texture
-	texture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", device, &textureView);
-	if (!texture) {
+	m_texture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", m_device, &m_textureView);
+	if (!m_texture) {
 		std::cerr << "Could not load texture!" << std::endl;
 		return false;
 	}
-	std::cout << "Texture: " << texture << std::endl;
-	std::cout << "Texture view: " << textureView << std::endl;
+	std::cout << "Texture: " << m_texture << std::endl;
+	std::cout << "Texture view: " << m_textureView << std::endl;
 
+	return m_textureView != nullptr;
+}
+
+void Application::terminateTexture() {
+	m_textureView.release();
+	m_texture.destroy();
+	m_texture.release();
+	m_sampler.release();
+}
+
+
+bool Application::initGeometry() {
 	// Load mesh data from OBJ file
 	std::vector<VertexAttributes> vertexData;
 	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", vertexData);
@@ -316,146 +483,71 @@ bool Application::onInit() {
 	bufferDesc.size = vertexData.size() * sizeof(VertexAttributes);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex;
 	bufferDesc.mappedAtCreation = false;
-	vertexBuffer = device.createBuffer(bufferDesc);
-	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+	m_vertexBuffer = m_device.createBuffer(bufferDesc);
+	m_queue.writeBuffer(m_vertexBuffer, 0, vertexData.data(), bufferDesc.size);
 
-	vertexCount = static_cast<int>(vertexData.size());
-	
+	m_vertexCount = static_cast<int>(vertexData.size());
+
+	return m_vertexBuffer != nullptr;
+}
+
+void Application::terminateGeometry() {
+	m_vertexBuffer.destroy();
+	m_vertexBuffer.release();
+	m_vertexCount = 0;
+}
+
+
+bool Application::initUniforms() {
 	// Create uniform buffer
+	BufferDescriptor bufferDesc;
 	bufferDesc.size = sizeof(MyUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
-	uniformBuffer = device.createBuffer(bufferDesc);
+	m_uniformBuffer = m_device.createBuffer(bufferDesc);
 
 	// Upload the initial value of the uniforms
-	uniforms.modelMatrix = mat4x4(1.0);
-	uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
-	uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
-	uniforms.time = 1.0f;
-	uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
-	queue.writeBuffer(uniformBuffer, 0, &uniforms, sizeof(MyUniforms));
+	m_uniforms.modelMatrix = mat4x4(1.0);
+	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
+	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
+	m_uniforms.time = 1.0f;
+	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
 
+	return m_uniformBuffer != nullptr;
+}
+
+void Application::terminateUniforms() {
+	m_uniformBuffer.destroy();
+	m_uniformBuffer.release();
+}
+
+
+bool Application::initBindGroup() {
 	// Create a binding
 	std::vector<BindGroupEntry> bindings(3);
 
 	bindings[0].binding = 0;
-	bindings[0].buffer = uniformBuffer;
+	bindings[0].buffer = m_uniformBuffer;
 	bindings[0].offset = 0;
 	bindings[0].size = sizeof(MyUniforms);
 
 	bindings[1].binding = 1;
-	bindings[1].textureView = textureView;
+	bindings[1].textureView = m_textureView;
 
 	bindings[2].binding = 2;
-	bindings[2].sampler = sampler;
+	bindings[2].sampler = m_sampler;
 
 	BindGroupDescriptor bindGroupDesc;
-	bindGroupDesc.layout = bindGroupLayout;
+	bindGroupDesc.layout = m_bindGroupLayout;
 	bindGroupDesc.entryCount = (uint32_t)bindings.size();
 	bindGroupDesc.entries = bindings.data();
-	bindGroup = device.createBindGroup(bindGroupDesc);
+	m_bindGroup = m_device.createBindGroup(bindGroupDesc);
 
-	return true;
+	return m_bindGroup != nullptr;
 }
 
-void Application::onFrame() {
-	glfwPollEvents();
-
-	// Update uniform buffer
-	uniforms.time = static_cast<float>(glfwGetTime());
-	queue.writeBuffer(uniformBuffer, offsetof(MyUniforms, time), &uniforms.time, sizeof(MyUniforms::time));
-	
-	TextureView nextTexture = swapChain.getCurrentTextureView();
-	if (!nextTexture) {
-		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
-		return;
-	}
-
-	CommandEncoderDescriptor commandEncoderDesc;
-	commandEncoderDesc.label = "Command Encoder";
-	CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
-	
-	RenderPassDescriptor renderPassDesc{};
-
-	RenderPassColorAttachment renderPassColorAttachment{};
-	renderPassColorAttachment.view = nextTexture;
-	renderPassColorAttachment.resolveTarget = nullptr;
-	renderPassColorAttachment.loadOp = LoadOp::Clear;
-	renderPassColorAttachment.storeOp = StoreOp::Store;
-	renderPassColorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
-	renderPassDesc.colorAttachmentCount = 1;
-	renderPassDesc.colorAttachments = &renderPassColorAttachment;
-
-	RenderPassDepthStencilAttachment depthStencilAttachment;
-	depthStencilAttachment.view = depthTextureView;
-	depthStencilAttachment.depthClearValue = 1.0f;
-	depthStencilAttachment.depthLoadOp = LoadOp::Clear;
-	depthStencilAttachment.depthStoreOp = StoreOp::Store;
-	depthStencilAttachment.depthReadOnly = false;
-	depthStencilAttachment.stencilClearValue = 0;
-#ifdef WEBGPU_BACKEND_WGPU
-	depthStencilAttachment.stencilLoadOp = LoadOp::Clear;
-	depthStencilAttachment.stencilStoreOp = StoreOp::Store;
-#else
-	depthStencilAttachment.stencilLoadOp = LoadOp::Undefined;
-	depthStencilAttachment.stencilStoreOp = StoreOp::Undefined;
-#endif
-	depthStencilAttachment.stencilReadOnly = true;
-
-	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
-
-	renderPassDesc.timestampWriteCount = 0;
-	renderPassDesc.timestampWrites = nullptr;
-	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
-
-	renderPass.setPipeline(pipeline);
-
-	renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexCount * sizeof(VertexAttributes));
-
-	// Set binding group
-	renderPass.setBindGroup(0, bindGroup, 0, nullptr);
-
-	renderPass.draw(vertexCount, 1, 0, 0);
-
-	renderPass.end();
-	
-	nextTexture.release();
-
-	CommandBufferDescriptor cmdBufferDescriptor{};
-	cmdBufferDescriptor.label = "Command buffer";
-	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
-	queue.submit(command);
-
-	swapChain.present();
-
-#ifdef WEBGPU_BACKEND_DAWN
-	// Check for pending error callbacks
-	device.tick();
-#endif
+void Application::terminateBindGroup() {
+	m_bindGroup.release();
 }
 
-void Application::onFinish() {
-	vertexBuffer.destroy();
-	vertexBuffer.release();
-
-	textureView.release();
-	texture.destroy();
-	texture.release();
-
-	depthTextureView.release();
-	depthTexture.destroy();
-	depthTexture.release();
-
-	swapChain.release();
-	queue.release();
-	device.release();
-	adapter.release();
-	instance.release();
-
-	glfwDestroyWindow(window);
-	glfwTerminate();
-}
-
-bool Application::isRunning() {
-	return !glfwWindowShouldClose(window);
-}
