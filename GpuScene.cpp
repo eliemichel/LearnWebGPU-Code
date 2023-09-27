@@ -1,4 +1,5 @@
 #include "GpuScene.h"
+#include "webgpu_utils.h"
 
 #include "tiny_gltf.h"
 
@@ -24,7 +25,12 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
 		for (size_t layoutIdx = 0; layoutIdx < dc.attributeBufferViews.size(); ++layoutIdx) {
 			const auto& view = dc.attributeBufferViews[layoutIdx];
 			uint32_t slot = static_cast<uint32_t>(layoutIdx);
-			renderPass.setVertexBuffer(slot, m_buffers[view.buffer], view.byteOffset, view.byteLength);
+			if (view.buffer != -1) {
+				renderPass.setVertexBuffer(slot, m_buffers[view.buffer], view.byteOffset, view.byteLength);
+			}
+			else {
+				renderPass.setVertexBuffer(slot, m_nullBuffer, 0, 4 * sizeof(float));
+			}
 		}
 		renderPass.setIndexBuffer(m_buffers[dc.indexBufferView.buffer], dc.indexFormat, dc.indexBufferView.byteOffset, dc.indexBufferView.byteLength);
 		renderPass.drawIndexed(dc.indexCount, 1, 0, 0, 0);
@@ -189,6 +195,14 @@ void GpuScene::initBuffers(const tinygltf::Model& model) {
 		m_buffers.push_back(gpuBuffer);
 		m_queue.writeBuffer(gpuBuffer, 0, buffer.data.data(), buffer.data.size());
 	}
+
+	{
+		BufferDescriptor bufferDesc = Default;
+		bufferDesc.label = "Null Buffer";
+		bufferDesc.size = static_cast<uint32_t>(4 * sizeof(float));
+		bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex | BufferUsage::Index;
+		m_nullBuffer = m_device.createBuffer(bufferDesc);
+	}
 }
 
 void GpuScene::terminateBuffers() {
@@ -197,17 +211,24 @@ void GpuScene::terminateBuffers() {
 		b.release();
 	}
 	m_buffers.clear();
+
+	if (m_nullBuffer) {
+		m_nullBuffer.destroy();
+		m_nullBuffer.release();
+	}
+	m_nullBuffer = nullptr;
 }
 
 void GpuScene::initDrawCalls(const tinygltf::Model& model) {
 	const Mesh& mesh = model.meshes[0];
 	const Primitive& prim = mesh.primitives[0];
 
-	std::unordered_map<std::string, uint32_t> semanticToLocation = {
-		{"POSITION", 0},
-		{"NORMAL", 1},
-		{"COLOR", 2},
-		{"TEXCOORD_0", 3},
+	std::vector<std::tuple<std::string, uint32_t, VertexFormat>> semanticToLocation = {
+		// GLTF Semantic, Shader input location, Default format
+		{"POSITION", 0, VertexFormat::Float32x3},
+		{"NORMAL", 1, VertexFormat::Float32x3},
+		{"COLOR", 2, VertexFormat::Float32x3},
+		{"TEXCOORD_0", 3, VertexFormat::Float32x2},
 	};
 
 	// We create one vertex buffer layout per bufferView
@@ -217,35 +238,55 @@ void GpuScene::initDrawCalls(const tinygltf::Model& model) {
 	// For each layout, there is a single buffer view
 	std::vector<tinygltf::BufferView> vertexBufferLayoutToBufferView;
 	// And we keep the map from bufferView to layout index
+	// NB: The index '-1' is used for attributes expected by the shader but not
+	// provided by the GLTF file.
 	std::unordered_map<int, size_t> bufferViewToVertexBufferLayout;
 
-	for (const auto& [attrSemantic, accessorIdx] : prim.attributes) {
-		auto locationIt = semanticToLocation.find(attrSemantic);
-		if (locationIt == semanticToLocation.end()) continue;
+	for (const auto& [attrSemantic, location, defaultFormat] : semanticToLocation) {
+		int bufferViewIdx;
+		BufferView bufferView = {};
+		VertexFormat format = VertexFormat::Undefined;
+		uint64_t byteOffset;
 
-		Accessor accessor = model.accessors[accessorIdx];
-		BufferView bufferView = model.bufferViews[accessor.bufferView];
+		auto accessorIt = prim.attributes.find(attrSemantic);
+		if (accessorIt != prim.attributes.end()) {
+			Accessor accessor = model.accessors[accessorIt->second];
+			bufferViewIdx = accessor.bufferView;
+			bufferView = model.bufferViews[bufferViewIdx];
+			format = vertexFormatFromAccessor(accessor);
+			byteOffset = static_cast<uint64_t>(accessor.byteOffset);
+			if (bufferView.byteStride == 0) {
+				bufferView.byteStride = vertexFormatByteSize(format);
+			}
+		}
+		else {
+			bufferViewIdx = -1;
+			bufferView.buffer = -1;
+			format = defaultFormat;
+			byteOffset = 0;
+		}
 
+		// Group attributes by bufferView
 		size_t layoutIdx = 0;
-		auto vertexBufferLayoutIt = bufferViewToVertexBufferLayout.find(accessor.bufferView);
+		auto vertexBufferLayoutIt = bufferViewToVertexBufferLayout.find(bufferViewIdx);
 		if (vertexBufferLayoutIt == bufferViewToVertexBufferLayout.end()) {
 			layoutIdx = vertexBufferLayouts.size();
 			VertexBufferLayout layout;
-			layout.arrayStride = bufferView.byteStride;
+			layout.arrayStride = static_cast<uint64_t>(bufferView.byteStride);
 			layout.stepMode = VertexStepMode::Vertex;
 			vertexBufferLayouts.push_back(layout);
 			vertexBufferLayoutToAttributes.push_back({});
 			vertexBufferLayoutToBufferView.push_back(bufferView);
-			bufferViewToVertexBufferLayout[accessor.bufferView] = layoutIdx;
+			bufferViewToVertexBufferLayout[bufferViewIdx] = layoutIdx;
 		}
 		else {
 			layoutIdx = vertexBufferLayoutIt->second;
 		}
 
 		VertexAttribute attrib;
-		attrib.shaderLocation = locationIt->second;
-		attrib.format = vertexFormatFromAccessor(accessor);
-		attrib.offset = accessor.byteOffset;
+		attrib.shaderLocation = location;
+		attrib.format = format;
+		attrib.offset = byteOffset;
 		vertexBufferLayoutToAttributes[layoutIdx].push_back(attrib);
 	}
 

@@ -520,6 +520,7 @@ void Application::terminateTexture() {
 bool Application::initGeometry() {
 	// Load mesh data from OBJ file
 	bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/DamagedHelmet.glb", m_cpuScene);
+	//bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/triangle.gltf", m_cpuScene);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return false;

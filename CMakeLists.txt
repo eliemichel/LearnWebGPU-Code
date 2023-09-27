@@ -25,6 +25,8 @@ add_executable(App
 	ResourceManager.h
 	ResourceManager.cpp
 	implementations.cpp
+	webgpu_utils.h
+	webgpu_utils.cpp
 )
 
 if(DEV_MODE)

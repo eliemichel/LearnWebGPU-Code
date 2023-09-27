@@ -1,7 +1,7 @@
 struct VertexInput {
 	@location(0) position: vec3f,
 	@location(1) normal: vec3f,
-	//@location(2) color: vec3f,
+	@location(2) color: vec3f,
 	@location(3) uv: vec2f,
 };
 
@@ -41,7 +41,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
 	out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
-	out.color = vec3f(1.0);//in.color;
+	out.color = in.color;
 	out.uv = in.uv;
 	return out;
 }

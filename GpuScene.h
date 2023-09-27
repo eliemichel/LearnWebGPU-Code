@@ -42,6 +42,7 @@ private:
 
 	// Buffers
 	std::vector<wgpu::Buffer> m_buffers;
+	wgpu::Buffer m_nullBuffer = nullptr; // for attributes that are not provided
 
 	// Draw Calls + Vertex Buffer Layouts
 	struct DrawCall {
