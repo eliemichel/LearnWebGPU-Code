@@ -43,5 +43,9 @@ size_t vertexFormatByteSize(VertexFormat format) {
 	}
 }
 
+uint32_t maximumMipLevelCount(Extent3D size) {
+	// TODO
+}
+
 } // namespace wgpu
 

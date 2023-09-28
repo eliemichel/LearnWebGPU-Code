@@ -17,6 +17,8 @@ void GpuScene::createFromModel(wgpu::Device device, const tinygltf::Model& model
 
 	initDevice(device);
 	initBuffers(model);
+	initTextures(model);
+	initSamplers(model);
 	initDrawCalls(model);
 }
 
@@ -39,6 +41,8 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
 
 void GpuScene::destroy() {
 	terminateDrawCalls();
+	terminateSamplers();
+	terminateTextures();
 	terminateBuffers();
 	terminateDevice();
 }
@@ -165,6 +169,67 @@ static IndexFormat indexFormatFromAccessor(const Accessor& accessor) {
 	}
 }
 
+// Return Force32 if not supported
+static FilterMode filterModeFromGltf(int tinygltfFilter) {
+	switch (tinygltfFilter) {
+	case TINYGLTF_TEXTURE_FILTER_LINEAR:
+	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR:
+	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST:
+		return FilterMode::Linear;
+		break;
+	case TINYGLTF_TEXTURE_FILTER_NEAREST:
+	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR:
+	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST:
+		return FilterMode::Nearest;
+		break;
+	default:
+		return FilterMode::Force32;
+		break;
+	}
+}
+
+// Return Force32 if not supported
+static MipmapFilterMode mipmapFilterModeFromGltf(int tinygltfFilter) {
+	switch (tinygltfFilter) {
+	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR:
+	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR:
+		return MipmapFilterMode::Linear;
+		break;
+	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST:
+	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST:
+		return MipmapFilterMode::Nearest;
+		break;
+	default:
+		return MipmapFilterMode::Force32;
+		break;
+	}
+}
+
+// Return Force32 if not supported
+static AddressMode addressModeFromGltf(int tinygltfWrap) {
+	switch (tinygltfWrap) {
+	case TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE:
+		return AddressMode::ClampToEdge;
+		break;
+	case TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT:
+		return AddressMode::MirrorRepeat;
+		break;
+	case TINYGLTF_TEXTURE_WRAP_REPEAT:
+		return AddressMode::Repeat;
+		break;
+	default:
+		return AddressMode::Force32;
+		break;
+	}
+}
+
+static TextureFormat textureFormatFromGltfImage(const tinygltf::Image& image) {
+	image.bits;
+	image.component == 4;
+	image.pixel_type == TINYGLTF_COMPONENT_TYPE_BYTE;
+	// TODO
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Private methods
 
@@ -217,6 +282,61 @@ void GpuScene::terminateBuffers() {
 		m_nullBuffer.release();
 	}
 	m_nullBuffer = nullptr;
+}
+
+void GpuScene::initTextures(const tinygltf::Model& model) {
+	TextureDescriptor desc;
+	for (const tinygltf::Image& image : model.images) {
+		desc.label = image.name.c_str();
+		desc.dimension = TextureDimension::_2D;
+		desc.format = textureFormatFromGltfImage(image);
+		desc.sampleCount = 1;
+		desc.size = { static_cast<uint32_t>(image.width) , static_cast<uint32_t>(image.height), 1};
+		desc.mipLevelCount = maximumMipLevelCount(desc.size);
+		desc.usage = TextureUsage::CopyDst | TextureUsage::TextureBinding;
+		desc.viewFormatCount = 0;
+		desc.viewFormats = nullptr;
+		wgpu::Texture gpuTexture = m_device.createTexture(desc);
+		m_textures.push_back(gpuTexture);
+
+		// Upload (TODO)
+		m_queue.copyBufferToTexture(gpuTexture, 0, image.bufferView);
+		// or
+		m_queue.writeTexture(gpuTexture, image.image.data(), image.image.size());
+	}
+}
+
+void GpuScene::terminateTextures() {
+	for (wgpu::Texture t : m_textures) {
+		t.destroy();
+		t.release();
+	}
+	m_textures.clear();
+}
+
+void GpuScene::initSamplers(const tinygltf::Model& model) {
+	SamplerDescriptor desc;
+	for (const tinygltf::Sampler& sampler : model.samplers) {
+		desc.label = sampler.name.c_str();
+		desc.magFilter = filterModeFromGltf(sampler.magFilter);
+		desc.minFilter = filterModeFromGltf(sampler.minFilter);
+		desc.mipmapFilter = mipmapFilterModeFromGltf(sampler.minFilter);
+		desc.addressModeU = addressModeFromGltf(sampler.wrapS);
+		desc.addressModeV = addressModeFromGltf(sampler.wrapT);
+		desc.addressModeW = AddressMode::Repeat;
+		desc.lodMinClamp = 0.0;
+		desc.lodMaxClamp = 1.0;
+		desc.maxAnisotropy = 1.0;
+		wgpu::Sampler gpuSampler = m_device.createSampler(desc);
+		m_samplers.push_back(gpuSampler);
+	}
+}
+
+void GpuScene::terminateSamplers() {
+	for (wgpu::Sampler s : m_samplers) {
+		s.release();
+	}
+	m_samplers.clear();
 }
 
 void GpuScene::initDrawCalls(const tinygltf::Model& model) {

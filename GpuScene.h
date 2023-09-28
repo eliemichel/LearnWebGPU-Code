@@ -32,6 +32,12 @@ private:
 	void initBuffers(const tinygltf::Model& model);
 	void terminateBuffers();
 
+	void initTextures(const tinygltf::Model& model);
+	void terminateTextures();
+
+	void initSamplers(const tinygltf::Model& model);
+	void terminateSamplers();
+
 	void initDrawCalls(const tinygltf::Model& model);
 	void terminateDrawCalls();
 
@@ -43,6 +49,12 @@ private:
 	// Buffers
 	std::vector<wgpu::Buffer> m_buffers;
 	wgpu::Buffer m_nullBuffer = nullptr; // for attributes that are not provided
+
+	// Texture
+	std::vector<wgpu::Texture> m_textures;
+
+	// Samplers
+	std::vector<wgpu::Sampler> m_samplers;
 
 	// Draw Calls + Vertex Buffer Layouts
 	struct DrawCall {
