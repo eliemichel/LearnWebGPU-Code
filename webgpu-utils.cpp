@@ -1,4 +1,4 @@
-#include "webgpu_utils.h"
+#include "webgpu-utils.h"
 
 #include <algorithm>
 
