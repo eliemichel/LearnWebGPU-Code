@@ -58,13 +58,10 @@ static VertexFormat vertexFormatFromAccessor(const Accessor& accessor) {
 		switch (accessor.type) {
 		case TINYGLTF_TYPE_VEC2:
 			return VertexFormat::Float32x2;
-			break;
 		case TINYGLTF_TYPE_VEC3:
 			return VertexFormat::Float32x3;
-			break;
 		case TINYGLTF_TYPE_VEC4:
 			return VertexFormat::Float32x4;
-			break;
 		default:
 			return VertexFormat::Undefined;
 		}
@@ -74,13 +71,10 @@ static VertexFormat vertexFormatFromAccessor(const Accessor& accessor) {
 		switch (accessor.type) {
 		case TINYGLTF_TYPE_VEC2:
 			return VertexFormat::Sint32x2;
-			break;
 		case TINYGLTF_TYPE_VEC3:
 			return VertexFormat::Sint32x3;
-			break;
 		case TINYGLTF_TYPE_VEC4:
 			return VertexFormat::Sint32x4;
-			break;
 		default:
 			return VertexFormat::Undefined;
 		}
@@ -89,10 +83,8 @@ static VertexFormat vertexFormatFromAccessor(const Accessor& accessor) {
 		switch (accessor.type) {
 		case TINYGLTF_TYPE_VEC2:
 			return accessor.normalized ? VertexFormat::Snorm16x2 : VertexFormat::Sint16x2;
-			break;
 		case TINYGLTF_TYPE_VEC4:
 			return accessor.normalized ? VertexFormat::Snorm16x4 : VertexFormat::Sint16x4;
-			break;
 		default:
 			return VertexFormat::Undefined;
 		}
@@ -101,10 +93,8 @@ static VertexFormat vertexFormatFromAccessor(const Accessor& accessor) {
 		switch (accessor.type) {
 		case TINYGLTF_TYPE_VEC2:
 			return accessor.normalized ? VertexFormat::Snorm8x2 : VertexFormat::Sint8x2;
-			break;
 		case TINYGLTF_TYPE_VEC4:
 			return accessor.normalized ? VertexFormat::Snorm8x4 : VertexFormat::Sint8x4;
-			break;
 		default:
 			return VertexFormat::Undefined;
 		}
@@ -114,13 +104,10 @@ static VertexFormat vertexFormatFromAccessor(const Accessor& accessor) {
 		switch (accessor.type) {
 		case TINYGLTF_TYPE_VEC2:
 			return VertexFormat::Uint32x2;
-			break;
 		case TINYGLTF_TYPE_VEC3:
 			return VertexFormat::Uint32x3;
-			break;
 		case TINYGLTF_TYPE_VEC4:
 			return VertexFormat::Uint32x4;
-			break;
 		default:
 			return VertexFormat::Undefined;
 		}
@@ -129,10 +116,8 @@ static VertexFormat vertexFormatFromAccessor(const Accessor& accessor) {
 		switch (accessor.type) {
 		case TINYGLTF_TYPE_VEC2:
 			return accessor.normalized ? VertexFormat::Unorm16x2 : VertexFormat::Uint16x2;
-			break;
 		case TINYGLTF_TYPE_VEC4:
 			return accessor.normalized ? VertexFormat::Unorm16x4 : VertexFormat::Uint16x4;
-			break;
 		default:
 			return VertexFormat::Undefined;
 		}
@@ -141,10 +126,8 @@ static VertexFormat vertexFormatFromAccessor(const Accessor& accessor) {
 		switch (accessor.type) {
 		case TINYGLTF_TYPE_VEC2:
 			return accessor.normalized ? VertexFormat::Unorm8x2 : VertexFormat::Uint8x2;
-			break;
 		case TINYGLTF_TYPE_VEC4:
 			return accessor.normalized ? VertexFormat::Unorm8x4 : VertexFormat::Uint8x4;
-			break;
 		default:
 			return VertexFormat::Undefined;
 		}
@@ -159,49 +142,44 @@ static IndexFormat indexFormatFromAccessor(const Accessor& accessor) {
 	switch (accessor.componentType) {
 	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
 		return IndexFormat::Uint16;
-		break;
 	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
 		return IndexFormat::Uint32;
-		break;
 	default:
 		return IndexFormat::Undefined;
-		break;
 	}
 }
 
 // Return Force32 if not supported
 static FilterMode filterModeFromGltf(int tinygltfFilter) {
 	switch (tinygltfFilter) {
+	case -1: // no filter was provided, arbitrary default value
+		return FilterMode::Linear;
 	case TINYGLTF_TEXTURE_FILTER_LINEAR:
 	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR:
 	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST:
 		return FilterMode::Linear;
-		break;
 	case TINYGLTF_TEXTURE_FILTER_NEAREST:
 	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR:
 	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST:
 		return FilterMode::Nearest;
-		break;
 	default:
 		return FilterMode::Force32;
-		break;
 	}
 }
 
 // Return Force32 if not supported
 static MipmapFilterMode mipmapFilterModeFromGltf(int tinygltfFilter) {
 	switch (tinygltfFilter) {
+	case -1: // no filter was provided, arbitrary default value
+		return MipmapFilterMode::Linear;
 	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR:
 	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR:
 		return MipmapFilterMode::Linear;
-		break;
 	case TINYGLTF_TEXTURE_FILTER_LINEAR_MIPMAP_NEAREST:
 	case TINYGLTF_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST:
 		return MipmapFilterMode::Nearest;
-		break;
 	default:
 		return MipmapFilterMode::Force32;
-		break;
 	}
 }
 
@@ -210,24 +188,113 @@ static AddressMode addressModeFromGltf(int tinygltfWrap) {
 	switch (tinygltfWrap) {
 	case TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE:
 		return AddressMode::ClampToEdge;
-		break;
 	case TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT:
 		return AddressMode::MirrorRepeat;
-		break;
 	case TINYGLTF_TEXTURE_WRAP_REPEAT:
 		return AddressMode::Repeat;
-		break;
 	default:
 		return AddressMode::Force32;
-		break;
 	}
 }
 
-static TextureFormat textureFormatFromGltfImage(const tinygltf::Image& image) {
-	image.bits;
-	image.component == 4;
-	image.pixel_type == TINYGLTF_COMPONENT_TYPE_BYTE;
-	// TODO
+// Return Undefined if not supported
+// If useClosestMatch is true, return a format that can contain the provided image, even though it has additional channels
+static TextureFormat textureFormatFromGltfImage(const tinygltf::Image& image, bool useClosestMatch = false) {
+	switch (image.pixel_type) {
+	case TINYGLTF_COMPONENT_TYPE_BYTE:
+		switch (image.component) {
+		case 1:
+			return TextureFormat::R8Sint;
+		case 2:
+			return TextureFormat::RG8Sint;
+		case 3:
+			return useClosestMatch ? TextureFormat::RGBA8Sint : TextureFormat::Undefined;
+		case 4:
+			return TextureFormat::RGBA8Sint;
+		default:
+			return TextureFormat::Undefined;
+		}
+	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE:
+		switch (image.component) {
+		case 1:
+			return TextureFormat::R8Uint;
+		case 2:
+			return TextureFormat::RG8Uint;
+		case 3:
+			return useClosestMatch ? TextureFormat::RGBA8Uint : TextureFormat::Undefined;
+		case 4:
+			return TextureFormat::RGBA8Uint;
+		default:
+			return TextureFormat::Undefined;
+		}
+	case TINYGLTF_COMPONENT_TYPE_SHORT:
+		switch (image.component) {
+		case 1:
+			return TextureFormat::R16Sint;
+		case 2:
+			return TextureFormat::RG16Sint;
+		case 3:
+			return useClosestMatch ? TextureFormat::RGBA16Sint : TextureFormat::Undefined;
+		case 4:
+			return TextureFormat::RGBA16Sint;
+		default:
+			return TextureFormat::Undefined;
+		}
+	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT:
+		switch (image.component) {
+		case 1:
+			return TextureFormat::R16Uint;
+		case 2:
+			return TextureFormat::RG16Uint;
+		case 3:
+			return useClosestMatch ? TextureFormat::RGBA16Uint : TextureFormat::Undefined;
+		case 4:
+			return TextureFormat::RGBA16Uint;
+		default:
+			return TextureFormat::Undefined;
+		}
+	case TINYGLTF_COMPONENT_TYPE_INT:
+		switch (image.component) {
+		case 1:
+			return TextureFormat::R32Sint;
+		case 2:
+			return TextureFormat::RG32Sint;
+		case 3:
+			return useClosestMatch ? TextureFormat::RGBA32Sint : TextureFormat::Undefined;
+		case 4:
+			return TextureFormat::RGBA32Sint;
+		default:
+			return TextureFormat::Undefined;
+		}
+	case TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT:
+		switch (image.component) {
+		case 1:
+			return TextureFormat::R32Uint;
+		case 2:
+			return TextureFormat::RG32Uint;
+		case 3:
+			return useClosestMatch ? TextureFormat::RGBA32Uint : TextureFormat::Undefined;
+		case 4:
+			return TextureFormat::RGBA32Uint;
+		default:
+			return TextureFormat::Undefined;
+		}
+	case TINYGLTF_COMPONENT_TYPE_FLOAT:
+		switch (image.component) {
+		case 1:
+			return TextureFormat::R32Float;
+		case 2:
+			return TextureFormat::RG32Float;
+		case 3:
+			return useClosestMatch ? TextureFormat::RGBA32Float : TextureFormat::Undefined;
+		case 4:
+			return TextureFormat::RGBA32Float;
+		default:
+			return TextureFormat::Undefined;
+		}
+	default:
+		return TextureFormat::Undefined;
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -292,17 +359,25 @@ void GpuScene::initTextures(const tinygltf::Model& model) {
 		desc.format = textureFormatFromGltfImage(image);
 		desc.sampleCount = 1;
 		desc.size = { static_cast<uint32_t>(image.width) , static_cast<uint32_t>(image.height), 1};
-		desc.mipLevelCount = maximumMipLevelCount(desc.size);
+		desc.mipLevelCount = maxMipLevelCount2D(desc.size);
 		desc.usage = TextureUsage::CopyDst | TextureUsage::TextureBinding;
 		desc.viewFormatCount = 0;
 		desc.viewFormats = nullptr;
 		wgpu::Texture gpuTexture = m_device.createTexture(desc);
 		m_textures.push_back(gpuTexture);
 
-		// Upload (TODO)
-		m_queue.copyBufferToTexture(gpuTexture, 0, image.bufferView);
-		// or
-		m_queue.writeTexture(gpuTexture, image.image.data(), image.image.size());
+		// Upload
+		ImageCopyTexture destination;
+		destination.aspect = TextureAspect::All;
+		destination.mipLevel = 0;
+		destination.origin = { 0, 0, 0 };
+		destination.texture = gpuTexture;
+		TextureDataLayout sourceLayout;
+		sourceLayout.offset = 0;
+		uint32_t bitsPerPixel = textureFormatBitsPerTexel(desc.format);
+		sourceLayout.bytesPerRow = bitsPerPixel * desc.size.width / 8;
+		sourceLayout.rowsPerImage = desc.size.height;
+		m_queue.writeTexture(destination, image.image.data(), image.image.size(), sourceLayout, desc.size);
 	}
 }
 
