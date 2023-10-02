@@ -3,6 +3,7 @@
 #include "tiny_gltf.h"
 
 #include <webgpu/webgpu.hpp>
+#include <glm/glm.hpp>
 
 #include <vector>
 
@@ -38,6 +39,9 @@ private:
 	void initSamplers(const tinygltf::Model& model);
 	void terminateSamplers();
 
+	void initMaterials(const tinygltf::Model& model);
+	void terminateMaterials();
+
 	void initDrawCalls(const tinygltf::Model& model);
 	void terminateDrawCalls();
 
@@ -52,9 +56,27 @@ private:
 
 	// Texture
 	std::vector<wgpu::Texture> m_textures;
+	std::vector<wgpu::TextureView> m_textureViews;
 
 	// Samplers
 	std::vector<wgpu::Sampler> m_samplers;
+
+	// Materials
+	struct MaterialUniforms {
+		glm::vec4 baseColorFactor;
+		float metallicFactor;
+		float roughnessFactor;
+		uint32_t baseColorTexCoords;
+		float _pad[1];
+	};
+	static_assert(sizeof(MaterialUniforms) % 16 == 0);
+	struct Material {
+		wgpu::BindGroupLayout bindGroupLayout = nullptr;
+		wgpu::BindGroup bindGroup = nullptr;
+		wgpu::Buffer uniformBuffer = nullptr;
+		MaterialUniforms uniforms;
+	};
+	std::vector<Material> m_materials;
 
 	// Draw Calls + Vertex Buffer Layouts
 	struct DrawCall {
@@ -67,6 +89,7 @@ private:
 		tinygltf::BufferView indexBufferView;
 		wgpu::IndexFormat indexFormat;
 		uint32_t indexCount;
+		uint32_t materialIndex;
 	};
 	std::vector<DrawCall> m_drawCalls;
 	

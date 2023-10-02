@@ -64,4 +64,19 @@ uint32_t textureFormatChannelCount(TextureFormat format);
  */
 uint32_t textureFormatBitsPerTexel(TextureFormat format);
 
+/**
+ * Provide an example of sample type that can be used with the texture
+ * 
+ * @param format the texel format of the texture
+ *
+ * @return one supported sample type from a given texture format
+ * 
+ * NB: Among the possibilities, UnfilterableFloat is not returned unless it is
+ * the only possibility
+ * 
+ * NB: For mixed depth/stencil textures the query is ambiguous because it
+ * depends on the aspect. In such a case this function returns Depth.
+ */
+TextureSampleType textureFormatSupportedSampleType(TextureFormat format);
+
 } // namespace wgpu

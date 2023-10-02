@@ -4,6 +4,8 @@
 
 #include "tiny_gltf.h"
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include <cassert>
 #include <unordered_map>
 
@@ -21,6 +23,7 @@ void GpuScene::createFromModel(wgpu::Device device, const tinygltf::Model& model
 	initBuffers(model);
 	initTextures(model);
 	initSamplers(model);
+	initMaterials(model);
 	initDrawCalls(model);
 }
 
@@ -36,6 +39,9 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
 				renderPass.setVertexBuffer(slot, m_nullBuffer, 0, 4 * sizeof(float));
 			}
 		}
+		if (dc.materialIndex != WGPU_LIMIT_U32_UNDEFINED) {
+			renderPass.setBindGroup(1, m_materials[dc.materialIndex].bindGroup, 0, nullptr);
+		}
 		renderPass.setIndexBuffer(m_buffers[dc.indexBufferView.buffer], dc.indexFormat, dc.indexBufferView.byteOffset, dc.indexBufferView.byteLength);
 		renderPass.drawIndexed(dc.indexCount, 1, 0, 0, 0);
 	}
@@ -43,6 +49,7 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
 
 void GpuScene::destroy() {
 	terminateDrawCalls();
+	terminateMaterials();
 	terminateSamplers();
 	terminateTextures();
 	terminateBuffers();
@@ -106,6 +113,7 @@ void GpuScene::terminateBuffers() {
 void GpuScene::initTextures(const tinygltf::Model& model) {
 	TextureDescriptor desc;
 	for (const tinygltf::Image& image : model.images) {
+		// Texture
 		desc.label = image.name.c_str();
 		desc.dimension = TextureDimension::_2D;
 		desc.format = textureFormatFromGltfImage(image);
@@ -117,6 +125,19 @@ void GpuScene::initTextures(const tinygltf::Model& model) {
 		desc.viewFormats = nullptr;
 		wgpu::Texture gpuTexture = m_device.createTexture(desc);
 		m_textures.push_back(gpuTexture);
+
+		// View
+		TextureViewDescriptor viewDesc;
+		viewDesc.label = image.name.c_str();
+		viewDesc.aspect = TextureAspect::All;
+		viewDesc.baseMipLevel = 0;
+		viewDesc.mipLevelCount = desc.mipLevelCount;
+		viewDesc.baseArrayLayer = 0;
+		viewDesc.arrayLayerCount = 1;
+		viewDesc.dimension = TextureViewDimension::_2D;
+		viewDesc.format = desc.format;
+		wgpu::TextureView gpuTextureView = gpuTexture.createView(viewDesc);
+		m_textureViews.push_back(gpuTextureView);
 
 		// Upload
 		ImageCopyTexture destination;
@@ -134,6 +155,10 @@ void GpuScene::initTextures(const tinygltf::Model& model) {
 }
 
 void GpuScene::terminateTextures() {
+	for (wgpu::TextureView v : m_textureViews) {
+		v.release();
+	}
+	m_textureViews.clear();
 	for (wgpu::Texture t : m_textures) {
 		t.destroy();
 		t.release();
@@ -164,6 +189,84 @@ void GpuScene::terminateSamplers() {
 		s.release();
 	}
 	m_samplers.clear();
+}
+
+void GpuScene::initMaterials(const tinygltf::Model& model) {
+	for (const tinygltf::Material& material : model.materials) {
+		GpuScene::Material gpuMaterial;
+
+		TextureSampleType baseColorSampleType = TextureSampleType::Undefined;
+		int baseColorTextureIdx = material.pbrMetallicRoughness.baseColorTexture.index;
+		if (baseColorTextureIdx >= 0) {
+			baseColorSampleType = textureFormatSupportedSampleType(m_textures[baseColorTextureIdx].getFormat());
+		}
+
+		// Bind Group Layout
+		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(2, Default);
+		bindGroupLayoutEntries[0].binding = 0;
+		bindGroupLayoutEntries[0].visibility = ShaderStage::Fragment;
+		bindGroupLayoutEntries[0].texture.sampleType = baseColorSampleType;
+		bindGroupLayoutEntries[0].texture.viewDimension = TextureViewDimension::_2D;
+
+		bindGroupLayoutEntries[1].binding = 1;
+		bindGroupLayoutEntries[1].visibility = ShaderStage::Fragment;
+		bindGroupLayoutEntries[1].buffer.type = BufferBindingType::Uniform;
+		bindGroupLayoutEntries[1].buffer.minBindingSize = sizeof(MaterialUniforms);
+
+		BindGroupLayoutDescriptor bindGroupLayoutDesc;
+		bindGroupLayoutDesc.label = material.name.c_str();
+		bindGroupLayoutDesc.entryCount = static_cast<uint32_t>(bindGroupLayoutEntries.size());
+		bindGroupLayoutDesc.entries = bindGroupLayoutEntries.data();
+		gpuMaterial.bindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+
+		// Uniforms
+		BufferDescriptor bufferDesc;
+		bufferDesc.label = material.name.c_str();
+		bufferDesc.mappedAtCreation = false;
+		bufferDesc.usage = BufferUsage::Uniform | BufferUsage::CopyDst;
+		bufferDesc.size = sizeof(MaterialUniforms);
+		gpuMaterial.uniformBuffer = m_device.createBuffer(bufferDesc);
+
+		// Uniform Values
+		gpuMaterial.uniforms.baseColorFactor = glm::make_vec4(material.pbrMetallicRoughness.baseColorFactor.data());
+		gpuMaterial.uniforms.metallicFactor = material.pbrMetallicRoughness.metallicFactor;
+		gpuMaterial.uniforms.roughnessFactor = material.pbrMetallicRoughness.roughnessFactor;
+		if (baseColorTextureIdx >= 0) {
+			gpuMaterial.uniforms.baseColorTexCoords = static_cast<uint32_t>(material.pbrMetallicRoughness.baseColorTexture.texCoord);
+		}
+		else {
+			gpuMaterial.uniforms.baseColorTexCoords = WGPU_LIMIT_U32_UNDEFINED;
+		}
+		m_queue.writeBuffer(gpuMaterial.uniformBuffer, 0, &gpuMaterial.uniforms, sizeof(MaterialUniforms));
+
+		// Bind Group
+		std::vector<BindGroupEntry> bindGroupEntries(2, Default);
+		bindGroupEntries[0].binding = 0;
+		bindGroupEntries[0].textureView = baseColorTextureIdx >= 0 ? m_textureViews[baseColorTextureIdx] : nullptr;
+
+		bindGroupEntries[1].binding = 1;
+		bindGroupEntries[1].buffer = gpuMaterial.uniformBuffer;
+		bindGroupEntries[1].size = sizeof(MaterialUniforms);
+
+		BindGroupDescriptor bindGroupDesc;
+		bindGroupDesc.label = material.name.c_str();
+		bindGroupDesc.entryCount = static_cast<uint32_t>(bindGroupEntries.size());
+		bindGroupDesc.entries = bindGroupEntries.data();
+		bindGroupDesc.layout = gpuMaterial.bindGroupLayout;
+		gpuMaterial.bindGroup = m_device.createBindGroup(bindGroupDesc);
+
+		m_materials.push_back(gpuMaterial);
+	}
+}
+
+void GpuScene::terminateMaterials() {
+	for (Material& mat : m_materials) {
+		mat.bindGroup.release();
+		mat.bindGroupLayout.release();
+		mat.uniformBuffer.destroy();
+		mat.uniformBuffer.release();
+	}
+	m_materials.clear();
 }
 
 void GpuScene::initDrawCalls(const tinygltf::Model& model) {
@@ -250,7 +353,8 @@ void GpuScene::initDrawCalls(const tinygltf::Model& model) {
 		vertexBufferLayoutToBufferView,
 		indexBufferView,
 		indexFormat,
-		static_cast<uint32_t>(indexAccessor.count)
+		static_cast<uint32_t>(indexAccessor.count),
+		prim.material > 0 ? static_cast<uint32_t>(prim.material) : WGPU_LIMIT_U32_UNDEFINED, // TODO: create a default material
 	});
 }
 

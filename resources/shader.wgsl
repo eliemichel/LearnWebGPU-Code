@@ -31,10 +31,20 @@ struct LightingUniforms {
 	colors: array<vec4f, 2>,
 }
 
+struct MaterialUniforms {
+	baseColorFactor: vec4f,
+	metallicFactor: f32,
+	roughnessFactor: f32,
+	baseColorTexCoords: u32,
+}
+
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 @group(0) @binding(1) var baseColorTexture: texture_2d<f32>;
 @group(0) @binding(2) var textureSampler: sampler;
 @group(0) @binding(3) var<uniform> uLighting: LightingUniforms;
+
+@group(1) @binding(0) var baseColorTexture2: texture_2d<f32>;
+@group(1) @binding(1) var<uniform> uMaterial: MaterialUniforms;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -58,7 +68,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	}
 	
 	// Sample texture
-	let baseColor = textureSample(baseColorTexture, textureSampler, in.uv).rgb;
+	let baseColor = textureSample(baseColorTexture2, textureSampler, in.uv).rgb;
 
 	// Combine texture and lighting
 	let color = baseColor * shading;
