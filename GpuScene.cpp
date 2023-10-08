@@ -195,9 +195,17 @@ void GpuScene::initTextures(const tinygltf::Model& model) {
 		uint32_t data = 0;
 		m_queue.writeTexture(destination, &data, 4, sourceLayout, desc.size);
 	}
+
+	for (const tinygltf::Texture& texture : model.textures) {
+		m_sampledTextures.push_back(SampledTexture{
+			static_cast<uint32_t>(texture.source),
+			static_cast<uint32_t>(texture.sampler),
+		});
+	}
 }
 
 void GpuScene::terminateTextures() {
+	m_sampledTextures.clear();
 	for (wgpu::TextureView v : m_textureViews) {
 		v.release();
 	}
@@ -222,9 +230,12 @@ void GpuScene::initSamplers(const tinygltf::Model& model) {
 		desc.lodMinClamp = 0.0;
 		desc.lodMaxClamp = 1.0;
 		desc.maxAnisotropy = 1.0;
-		wgpu::Sampler gpuSampler = m_device.createSampler(desc);
-		m_samplers.push_back(gpuSampler);
+		m_samplers.push_back(m_device.createSampler(desc));
 	}
+
+	m_defaultSamplerIdx = static_cast<uint32_t>(m_samplers.size());
+	desc.label = "Default";
+	m_samplers.push_back(m_device.createSampler(desc));
 }
 
 void GpuScene::terminateSamplers() {
@@ -239,8 +250,12 @@ void GpuScene::initMaterials(const tinygltf::Model& model, BindGroupLayout bindG
 		GpuScene::Material gpuMaterial;
 
 		TextureSampleType baseColorSampleType = TextureSampleType::Undefined;
-		int baseColorTextureIdx = material.pbrMetallicRoughness.baseColorTexture.index;
-		if (baseColorTextureIdx >= 0) {
+		int baseColorSampledTextureIdx = material.pbrMetallicRoughness.baseColorTexture.index;
+		int baseColorTextureIdx = -1;
+		int baseColorSamplerIdx = -1;
+		if (baseColorSampledTextureIdx >= 0) {
+			baseColorTextureIdx = m_sampledTextures[baseColorSampledTextureIdx].textureIndex;
+			baseColorSamplerIdx = m_sampledTextures[baseColorSampledTextureIdx].samplerIndex;
 			baseColorSampleType = textureFormatSupportedSampleType(m_textures[baseColorTextureIdx].getFormat());
 		}
 
@@ -265,13 +280,18 @@ void GpuScene::initMaterials(const tinygltf::Model& model, BindGroupLayout bindG
 		m_queue.writeBuffer(gpuMaterial.uniformBuffer, 0, &gpuMaterial.uniforms, sizeof(MaterialUniforms));
 
 		// Bind Group
-		std::vector<BindGroupEntry> bindGroupEntries(2, Default);
+		std::vector<BindGroupEntry> bindGroupEntries(3, Default);
 		bindGroupEntries[0].binding = 0;
-		bindGroupEntries[0].textureView = m_textureViews[baseColorTextureIdx >= 0 ? baseColorTextureIdx : m_defaultTextureIdx];
+		bindGroupEntries[0].buffer = gpuMaterial.uniformBuffer;
+		bindGroupEntries[0].size = sizeof(MaterialUniforms);
 
 		bindGroupEntries[1].binding = 1;
-		bindGroupEntries[1].buffer = gpuMaterial.uniformBuffer;
-		bindGroupEntries[1].size = sizeof(MaterialUniforms);
+		int idx = baseColorTextureIdx >= 0 ? baseColorTextureIdx : m_defaultTextureIdx;
+		bindGroupEntries[1].textureView = m_textureViews[idx];
+
+		bindGroupEntries[2].binding = 2;
+		idx = baseColorSamplerIdx >= 0 ? baseColorSamplerIdx : m_defaultSamplerIdx;
+		bindGroupEntries[2].sampler = m_samplers[idx];
 
 		BindGroupDescriptor bindGroupDesc;
 		bindGroupDesc.label = material.name.c_str();
@@ -304,13 +324,16 @@ void GpuScene::initMaterials(const tinygltf::Model& model, BindGroupLayout bindG
 		m_queue.writeBuffer(gpuMaterial.uniformBuffer, 0, &gpuMaterial.uniforms, sizeof(MaterialUniforms));
 
 		// Bind Group
-		std::vector<BindGroupEntry> bindGroupEntries(2, Default);
+		std::vector<BindGroupEntry> bindGroupEntries(3, Default);
 		bindGroupEntries[0].binding = 0;
-		bindGroupEntries[0].textureView = m_textureViews[m_defaultTextureIdx];
+		bindGroupEntries[0].buffer = gpuMaterial.uniformBuffer;
+		bindGroupEntries[0].size = sizeof(MaterialUniforms);
 
 		bindGroupEntries[1].binding = 1;
-		bindGroupEntries[1].buffer = gpuMaterial.uniformBuffer;
-		bindGroupEntries[1].size = sizeof(MaterialUniforms);
+		bindGroupEntries[1].textureView = m_textureViews[m_defaultTextureIdx];
+
+		bindGroupEntries[2].binding = 2;
+		bindGroupEntries[2].sampler = m_samplers[m_defaultSamplerIdx];
 
 		BindGroupDescriptor bindGroupDesc;
 		bindGroupDesc.label = "Default Material";

@@ -69,15 +69,27 @@ bool Application::onInit() {
 	if (!initWindowAndDevice()) return false;
 	if (!initSwapChain()) return false;
 	if (!initDepthBuffer()) return false;
-	if (!initBindGroupLayout()) return false;
+	if (!initBindGroupLayouts()) return false;
 	if (!initGeometry()) return false;
 	if (!initRenderPipeline()) return false;
-	if (!initTexture()) return false;
 	if (!initUniforms()) return false;
 	if (!initLightingUniforms()) return false;
 	if (!initBindGroup()) return false;
 	if (!initGui()) return false;
 	return true;
+}
+
+void Application::onFinish() {
+	terminateGui();
+	terminateBindGroup();
+	terminateLightingUniforms();
+	terminateUniforms();
+	terminateRenderPipeline();
+	terminateGeometry();
+	terminateBindGroupLayouts();
+	terminateDepthBuffer();
+	terminateSwapChain();
+	terminateWindowAndDevice();
 }
 
 void Application::onFrame() {
@@ -155,20 +167,6 @@ void Application::onFrame() {
 	// Check for pending error callbacks
 	m_device.tick();
 #endif
-}
-
-void Application::onFinish() {
-	terminateGui();
-	terminateBindGroup();
-	terminateLightingUniforms();
-	terminateUniforms();
-	terminateTexture();
-	terminateRenderPipeline();
-	terminateGeometry();
-	terminateBindGroupLayout();
-	terminateDepthBuffer();
-	terminateSwapChain();
-	terminateWindowAndDevice();
 }
 
 bool Application::isRunning() {
@@ -487,41 +485,6 @@ void Application::terminateRenderPipeline() {
 }
 
 
-bool Application::initTexture() {
-	// Create a sampler
-	SamplerDescriptor samplerDesc;
-	samplerDesc.addressModeU = AddressMode::Repeat;
-	samplerDesc.addressModeV = AddressMode::Repeat;
-	samplerDesc.addressModeW = AddressMode::Repeat;
-	samplerDesc.magFilter = FilterMode::Linear;
-	samplerDesc.minFilter = FilterMode::Linear;
-	samplerDesc.mipmapFilter = MipmapFilterMode::Linear;
-	samplerDesc.lodMinClamp = 0.0f;
-	samplerDesc.lodMaxClamp = 8.0f;
-	samplerDesc.compare = CompareFunction::Undefined;
-	samplerDesc.maxAnisotropy = 1;
-	m_sampler = m_device.createSampler(samplerDesc);
-
-	// Create a texture
-	m_texture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", m_device, &m_textureView);
-	if (!m_texture) {
-		std::cerr << "Could not load texture!" << std::endl;
-		return false;
-	}
-	std::cout << "Texture: " << m_texture << std::endl;
-	std::cout << "Texture view: " << m_textureView << std::endl;
-
-	return m_textureView != nullptr;
-}
-
-void Application::terminateTexture() {
-	m_textureView.release();
-	m_texture.destroy();
-	m_texture.release();
-	m_sampler.release();
-}
-
-
 bool Application::initGeometry() {
 	// Load mesh data from OBJ file
 	bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/DamagedHelmet.glb", m_cpuScene);
@@ -601,9 +564,9 @@ void Application::updateLightingUniforms() {
 }
 
 
-bool Application::initBindGroupLayout() {
+bool Application::initBindGroupLayouts() {
 	{
-		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(4, Default);
+		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(2, Default);
 
 		// The uniform buffer binding
 		BindGroupLayoutEntry& bindingLayout = bindGroupLayoutEntries[0];
@@ -612,22 +575,9 @@ bool Application::initBindGroupLayout() {
 		bindingLayout.buffer.type = BufferBindingType::Uniform;
 		bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
 
-		// The texture binding
-		BindGroupLayoutEntry& textureBindingLayout = bindGroupLayoutEntries[1];
-		textureBindingLayout.binding = 1;
-		textureBindingLayout.visibility = ShaderStage::Fragment;
-		textureBindingLayout.texture.sampleType = TextureSampleType::Float;
-		textureBindingLayout.texture.viewDimension = TextureViewDimension::_2D;
-
-		// The texture sampler binding
-		BindGroupLayoutEntry& samplerBindingLayout = bindGroupLayoutEntries[2];
-		samplerBindingLayout.binding = 2;
-		samplerBindingLayout.visibility = ShaderStage::Fragment;
-		samplerBindingLayout.sampler.type = SamplerBindingType::Filtering;
-
 		// The lighting uniform buffer binding
-		BindGroupLayoutEntry& lightingUniformLayout = bindGroupLayoutEntries[3];
-		lightingUniformLayout.binding = 3;
+		BindGroupLayoutEntry& lightingUniformLayout = bindGroupLayoutEntries[1];
+		lightingUniformLayout.binding = 1;
 		lightingUniformLayout.visibility = ShaderStage::Fragment; // only Fragment is needed
 		lightingUniformLayout.buffer.type = BufferBindingType::Uniform;
 		lightingUniformLayout.buffer.minBindingSize = sizeof(LightingUniforms);
@@ -641,16 +591,20 @@ bool Application::initBindGroupLayout() {
 
 	// Material bind group
 	{
-		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(2, Default);
+		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(3, Default);
 		bindGroupLayoutEntries[0].binding = 0;
 		bindGroupLayoutEntries[0].visibility = ShaderStage::Fragment;
-		bindGroupLayoutEntries[0].texture.sampleType = TextureSampleType::Float;
-		bindGroupLayoutEntries[0].texture.viewDimension = TextureViewDimension::_2D;
+		bindGroupLayoutEntries[0].buffer.type = BufferBindingType::Uniform;
+		bindGroupLayoutEntries[0].buffer.minBindingSize = sizeof(GpuScene::MaterialUniforms);
 
 		bindGroupLayoutEntries[1].binding = 1;
 		bindGroupLayoutEntries[1].visibility = ShaderStage::Fragment;
-		bindGroupLayoutEntries[1].buffer.type = BufferBindingType::Uniform;
-		bindGroupLayoutEntries[1].buffer.minBindingSize = sizeof(GpuScene::MaterialUniforms);
+		bindGroupLayoutEntries[1].texture.sampleType = TextureSampleType::Float;
+		bindGroupLayoutEntries[1].texture.viewDimension = TextureViewDimension::_2D;
+
+		bindGroupLayoutEntries[2].binding = 2;
+		bindGroupLayoutEntries[2].visibility = ShaderStage::Fragment;
+		bindGroupLayoutEntries[2].sampler.type = SamplerBindingType::Filtering;
 
 		BindGroupLayoutDescriptor bindGroupLayoutDesc{};
 		bindGroupLayoutDesc.label = "Material";
@@ -662,7 +616,7 @@ bool Application::initBindGroupLayout() {
 	return m_bindGroupLayout != nullptr && m_materialBindGroupLayout != nullptr;
 }
 
-void Application::terminateBindGroupLayout() {
+void Application::terminateBindGroupLayouts() {
 	m_bindGroupLayout.release();
 	m_materialBindGroupLayout.release();
 }
@@ -670,8 +624,7 @@ void Application::terminateBindGroupLayout() {
 
 bool Application::initBindGroup() {
 	// Create a binding
-	std::vector<BindGroupEntry> bindings(4);
-	//                                   ^ This was a 3
+	std::vector<BindGroupEntry> bindings(2);
 
 	bindings[0].binding = 0;
 	bindings[0].buffer = m_uniformBuffer;
@@ -679,15 +632,9 @@ bool Application::initBindGroup() {
 	bindings[0].size = sizeof(MyUniforms);
 
 	bindings[1].binding = 1;
-	bindings[1].textureView = m_textureView;
-
-	bindings[2].binding = 2;
-	bindings[2].sampler = m_sampler;
-
-	bindings[3].binding = 3;
-	bindings[3].buffer = m_lightingUniformBuffer;
-	bindings[3].offset = 0;
-	bindings[3].size = sizeof(LightingUniforms);
+	bindings[1].buffer = m_lightingUniformBuffer;
+	bindings[1].offset = 0;
+	bindings[1].size = sizeof(LightingUniforms);
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;

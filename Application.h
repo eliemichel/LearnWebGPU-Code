@@ -72,9 +72,6 @@ private:
 	bool initRenderPipeline();
 	void terminateRenderPipeline();
 
-	bool initTexture();
-	void terminateTexture();
-
 	bool initGeometry();
 	void terminateGeometry();
 
@@ -85,8 +82,8 @@ private:
 	void terminateLightingUniforms();
 	void updateLightingUniforms();
 
-	bool initBindGroupLayout();
-	void terminateBindGroupLayout();
+	bool initBindGroupLayouts();
+	void terminateBindGroupLayouts();
 
 	bool initBindGroup();
 	void terminateBindGroup();
