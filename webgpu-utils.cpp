@@ -57,11 +57,11 @@ uint32_t maxMipLevelCount1D(WGPUExtent3D size) {
 }
 
 uint32_t maxMipLevelCount2D(WGPUExtent3D size) {
-	return bit_width(std::max(size.width, size.height));
+	return std::max(1U, bit_width(std::max(size.width, size.height)));
 }
 
 uint32_t maxMipLevelCount3D(WGPUExtent3D size) {
-	return bit_width(std::max(size.width, std::max(size.height, size.depthOrArrayLayers)));
+	return std::max(1U, bit_width(std::max(size.width, std::max(size.height, size.depthOrArrayLayers))));
 }
 
 uint32_t maxMipLevelCount(Extent3D size, TextureDimension dimension) {
@@ -402,6 +402,41 @@ TextureSampleType textureFormatSupportedSampleType(TextureFormat format) {
 		return TextureSampleType::UnfilterableFloat;
 	default:
 		throw std::runtime_error("Unhandled format");
+	}
+}
+
+TextureFormat textureFormatToFloatFormat(TextureFormat format) {
+	switch (format) {
+	case TextureFormat::R8Sint:
+		return TextureFormat::R8Snorm;
+	case TextureFormat::R8Uint:
+		return TextureFormat::R8Unorm;
+	case TextureFormat::RG8Sint:
+		return TextureFormat::RG8Snorm;
+	case TextureFormat::RG8Uint:
+		return TextureFormat::RG8Unorm;
+	case TextureFormat::RGBA8Sint:
+		return TextureFormat::RGBA8Snorm;
+	case TextureFormat::RGBA8Uint:
+		return TextureFormat::RGBA8Unorm;
+	case TextureFormat::R16Sint:
+	case TextureFormat::R16Uint:
+	case TextureFormat::R32Sint:
+	case TextureFormat::R32Uint:
+	case TextureFormat::RG16Sint:
+	case TextureFormat::RG16Uint:
+	case TextureFormat::RG32Sint:
+	case TextureFormat::RG32Uint:
+	case TextureFormat::RGBA16Sint:
+	case TextureFormat::RGBA16Uint:
+	case TextureFormat::RGBA32Sint:
+	case TextureFormat::RGBA32Uint:
+	case TextureFormat::Stencil8:
+		// no I/Unorm counterpart exists
+		return TextureFormat::Undefined;
+	default:
+		// format is already float
+		return format;
 	}
 }
 

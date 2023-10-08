@@ -79,4 +79,15 @@ uint32_t textureFormatBitsPerTexel(TextureFormat format);
  */
 TextureSampleType textureFormatSupportedSampleType(TextureFormat format);
 
+/**
+ * Return a format that is has the same data layout but that can be sampled as
+ * Float (basically map int to norm).
+ * 
+ * @param format any format
+ * 
+ * @return a format that is compatible with TextureSampleType::Float and has
+ * the same data layout than the input format, or Undefined if not supported.
+ */
+TextureFormat textureFormatToFloatFormat(TextureFormat format);
+
 } // namespace wgpu

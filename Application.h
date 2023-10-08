@@ -193,6 +193,7 @@ private:
 
 	// Bind Group Layout
 	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
+	wgpu::BindGroupLayout m_materialBindGroupLayout = nullptr;
 
 	// Bind Group
 	wgpu::BindGroup m_bindGroup = nullptr;
