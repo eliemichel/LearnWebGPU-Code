@@ -12,3 +12,6 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#define WEBGPU_STD_UTILS_IMPLEMENTATION
+#include "webgpu_std_utils.hpp"

@@ -25,8 +25,7 @@ add_executable(App
 	ResourceManager.h
 	ResourceManager.cpp
 	implementations.cpp
-	webgpu-utils.h
-	webgpu-utils.cpp
+	webgpu_std_utils.hpp
 	webgpu-gltf-utils.h
 	webgpu-gltf-utils.cpp
 )

@@ -1,5 +1,5 @@
 #include "GpuScene.h"
-#include "webgpu-utils.h"
+#include "webgpu_std_utils.hpp"
 #include "webgpu-gltf-utils.h"
 
 #include "tiny_gltf.h"
