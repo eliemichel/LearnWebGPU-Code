@@ -17,7 +17,9 @@ public:
 		float metallicFactor;
 		float roughnessFactor;
 		uint32_t baseColorTexCoords;
-		float _pad[1];
+		uint32_t metallicRoughnessTexCoords;
+		uint32_t normalTexCoords;
+		float _pad[3];
 	};
 	static_assert(sizeof(MaterialUniforms) % 16 == 0);
 

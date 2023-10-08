@@ -26,6 +26,7 @@
 
 #include "Application.h"
 #include "ResourceManager.h"
+#include "webgpu_std_utils.hpp"
 
 #include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
@@ -118,7 +119,8 @@ void Application::onFrame() {
 	renderPassColorAttachment.resolveTarget = nullptr;
 	renderPassColorAttachment.loadOp = LoadOp::Clear;
 	renderPassColorAttachment.storeOp = StoreOp::Store;
-	renderPassColorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
+	float grey = std::pow(0.25, textureFormatGamma(m_swapChainFormat));
+	renderPassColorAttachment.clearValue = Color{ grey, grey, grey, 1.0 };
 	renderPassDesc.colorAttachmentCount = 1;
 	renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
@@ -271,7 +273,7 @@ bool Application::initWindowAndDevice() {
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
-	requiredLimits.limits.maxInterStageShaderComponents = 8;
+	requiredLimits.limits.maxInterStageShaderComponents = 11;
 	requiredLimits.limits.maxBindGroups = 2;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
@@ -279,8 +281,8 @@ bool Application::initWindowAndDevice() {
 	requiredLimits.limits.maxTextureDimension1D = 2048;
 	requiredLimits.limits.maxTextureDimension2D = 2048;
 	requiredLimits.limits.maxTextureArrayLayers = 1;
-	requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
-	requiredLimits.limits.maxSamplersPerShaderStage = 1;
+	requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
+	requiredLimits.limits.maxSamplersPerShaderStage = 3;
 
 	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
@@ -518,6 +520,7 @@ bool Application::initUniforms() {
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 	m_uniforms.time = 1.0f;
 	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
+	m_uniforms.gamma = textureFormatGamma(m_swapChainFormat);
 	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
 
 	updateProjectionMatrix();
@@ -591,20 +594,45 @@ bool Application::initBindGroupLayouts() {
 
 	// Material bind group
 	{
-		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(3, Default);
+		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(7, Default);
+		// Material uniforms
 		bindGroupLayoutEntries[0].binding = 0;
 		bindGroupLayoutEntries[0].visibility = ShaderStage::Fragment;
 		bindGroupLayoutEntries[0].buffer.type = BufferBindingType::Uniform;
 		bindGroupLayoutEntries[0].buffer.minBindingSize = sizeof(GpuScene::MaterialUniforms);
 
+		// Base color texture
 		bindGroupLayoutEntries[1].binding = 1;
 		bindGroupLayoutEntries[1].visibility = ShaderStage::Fragment;
 		bindGroupLayoutEntries[1].texture.sampleType = TextureSampleType::Float;
 		bindGroupLayoutEntries[1].texture.viewDimension = TextureViewDimension::_2D;
 
+		// Base color sampler
 		bindGroupLayoutEntries[2].binding = 2;
 		bindGroupLayoutEntries[2].visibility = ShaderStage::Fragment;
 		bindGroupLayoutEntries[2].sampler.type = SamplerBindingType::Filtering;
+
+		// Metallic roughness texture
+		bindGroupLayoutEntries[3].binding = 3;
+		bindGroupLayoutEntries[3].visibility = ShaderStage::Fragment;
+		bindGroupLayoutEntries[3].texture.sampleType = TextureSampleType::Float;
+		bindGroupLayoutEntries[3].texture.viewDimension = TextureViewDimension::_2D;
+
+		// Metallic roughness sampler
+		bindGroupLayoutEntries[4].binding = 4;
+		bindGroupLayoutEntries[4].visibility = ShaderStage::Fragment;
+		bindGroupLayoutEntries[4].sampler.type = SamplerBindingType::Filtering;
+
+		// Normal texture
+		bindGroupLayoutEntries[5].binding = 5;
+		bindGroupLayoutEntries[5].visibility = ShaderStage::Fragment;
+		bindGroupLayoutEntries[5].texture.sampleType = TextureSampleType::Float;
+		bindGroupLayoutEntries[5].texture.viewDimension = TextureViewDimension::_2D;
+
+		// Normal sampler
+		bindGroupLayoutEntries[6].binding = 6;
+		bindGroupLayoutEntries[6].visibility = ShaderStage::Fragment;
+		bindGroupLayoutEntries[6].sampler.type = SamplerBindingType::Filtering;
 
 		BindGroupLayoutDescriptor bindGroupLayoutDesc{};
 		bindGroupLayoutDesc.label = "Material";
@@ -675,6 +703,14 @@ void Application::updateViewMatrix() {
 		offsetof(MyUniforms, viewMatrix),
 		&m_uniforms.viewMatrix,
 		sizeof(MyUniforms::viewMatrix)
+	);
+
+	m_uniforms.cameraWorldPosition = position;
+	m_queue.writeBuffer(
+		m_uniformBuffer,
+		offsetof(MyUniforms, cameraWorldPosition),
+		&m_uniforms.cameraWorldPosition,
+		sizeof(MyUniforms::cameraWorldPosition)
 	);
 }
 

@@ -112,8 +112,10 @@ private:
 		mat4x4 viewMatrix;
 		mat4x4 modelMatrix;
 		vec4 color;
+		vec3 cameraWorldPosition;
 		float time;
-		float _pad[3];
+		float gamma;
+		float _pad1[3];
 	};
 	// Have the compiler check byte alignment
 	static_assert(sizeof(MyUniforms) % 16 == 0);
