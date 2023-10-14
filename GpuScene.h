@@ -37,13 +37,15 @@ public:
 		wgpu::BindGroupLayout nodeBindGroupLayout
 	);
 
-	void draw(wgpu::RenderPassEncoder renderPass);
+	// Draw all nodes that use a given renderPipeline
+	void draw(wgpu::RenderPassEncoder renderPass, uint32_t renderPipelineIndex);
 
 	// Destroy and release all resources
 	void destroy();
 
 	// Accessors
-	std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts(uint32_t drawCallIndex) const;
+	uint32_t renderPipelineCount() const;
+	std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts(uint32_t renderPipelineIndex) const;
 
 private:
 	// NB: All init functions assume that the object is new (empty) or that
@@ -103,20 +105,30 @@ private:
 	std::vector<Material> m_materials;
 	uint32_t m_defaultMaterialIdx;
 
-	// Draw Calls + Vertex Buffer Layouts
-	struct DrawCall { // TO be renamed Mesh, or even MeshPrimitive
-		// Vertex Buffer Layout Data
+	// We need to build one Render Pipeline per vertex buffer layout and per
+	// shader, we try to detect which calls use the same layout to minimize the
+	// number of Render Pipelines.
+	struct RenderPipelineSettings {
 		std::vector<std::vector<wgpu::VertexAttribute>> vertexAttributes;
 		std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts;
+	};
+	std::vector<RenderPipelineSettings> m_renderPipelines;
 
+	// Draw Calls + Vertex Buffer Layouts
+	struct MeshPrimitive {
 		// Draw Call Data
 		std::vector<tinygltf::BufferView> attributeBufferViews;
 		tinygltf::BufferView indexBufferView;
+		uint32_t indexBufferByteOffset;
 		wgpu::IndexFormat indexFormat;
 		uint32_t indexCount;
 		uint32_t materialIndex;
+		uint32_t renderPipelineIndex;
 	};
-	std::vector<DrawCall> m_drawCalls;
+	struct Mesh {
+		std::vector<MeshPrimitive> primitives;
+	};
+	std::vector<Mesh> m_meshes;
 
 	// Nodes
 	struct Node {
@@ -127,5 +139,8 @@ private:
 	};
 	std::vector<Node> m_nodes;
 	
+private:
+	uint32_t getOrCreateRenderPipelineIndex(const RenderPipelineSettings& newSettings);
+	bool isCompatible(const RenderPipelineSettings& a, const RenderPipelineSettings& b) const;
 };
 

@@ -33,23 +33,33 @@ void GpuScene::createFromModel(
 	initDrawCalls(model);
 }
 
-void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
+void GpuScene::draw(wgpu::RenderPassEncoder renderPass, uint32_t renderPipelineIndex) {
 	for (const Node& node : m_nodes) {
-		const DrawCall& dc = m_drawCalls[node.meshIndex];
-		for (size_t layoutIdx = 0; layoutIdx < dc.attributeBufferViews.size(); ++layoutIdx) {
-			const auto& view = dc.attributeBufferViews[layoutIdx];
-			uint32_t slot = static_cast<uint32_t>(layoutIdx);
-			if (view.buffer != -1) {
-				renderPass.setVertexBuffer(slot, m_buffers[view.buffer], view.byteOffset, view.byteLength);
-			}
-			else {
-				renderPass.setVertexBuffer(slot, m_nullBuffer, 0, 4 * sizeof(float));
-			}
-		}
-		renderPass.setBindGroup(1, m_materials[dc.materialIndex].bindGroup, 0, nullptr);
+		if (node.meshIndex != 1) continue;
+		const Mesh& mesh = m_meshes[node.meshIndex];
 		renderPass.setBindGroup(2, node.bindGroup, 0, nullptr);
-		renderPass.setIndexBuffer(m_buffers[dc.indexBufferView.buffer], dc.indexFormat, dc.indexBufferView.byteOffset, dc.indexBufferView.byteLength);
-		renderPass.drawIndexed(dc.indexCount, 1, 0, 0, 0);
+		for (const MeshPrimitive& prim : mesh.primitives) {
+			if (prim.renderPipelineIndex != renderPipelineIndex) continue;
+			for (size_t layoutIdx = 0; layoutIdx < prim.attributeBufferViews.size(); ++layoutIdx) {
+				const auto& view = prim.attributeBufferViews[layoutIdx];
+				uint32_t slot = static_cast<uint32_t>(layoutIdx);
+				if (view.buffer != -1) {
+					renderPass.setVertexBuffer(slot, m_buffers[view.buffer], view.byteOffset, view.byteLength);
+				}
+				else {
+					renderPass.setVertexBuffer(slot, m_nullBuffer, 0, 4 * sizeof(float));
+				}
+			}
+			renderPass.setBindGroup(1, m_materials[prim.materialIndex].bindGroup, 0, nullptr);
+			assert(prim.indexBufferView.byteStride == 0 || prim.indexBufferView.byteStride == indexFormatByteSize(prim.indexFormat));
+			renderPass.setIndexBuffer(
+				m_buffers[prim.indexBufferView.buffer],
+				prim.indexFormat,
+				prim.indexBufferView.byteOffset + prim.indexBufferByteOffset,
+				prim.indexBufferView.byteLength
+			);
+			renderPass.drawIndexed(prim.indexCount, 1, 0, 0, 0);
+		}
 	}
 }
 
@@ -87,11 +97,11 @@ void GpuScene::initBuffers(const tinygltf::Model& model) {
 	for (const tinygltf::Buffer& buffer : model.buffers) {
 		BufferDescriptor bufferDesc = Default;
 		bufferDesc.label = buffer.name.c_str();
-		bufferDesc.size = static_cast<uint32_t>(buffer.data.size());
+		bufferDesc.size = alignToNextMultipleOf(static_cast<uint32_t>(buffer.data.size()), 4);
 		bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex | BufferUsage::Index;
 		wgpu::Buffer gpuBuffer = m_device.createBuffer(bufferDesc);
 		m_buffers.push_back(gpuBuffer);
-		m_queue.writeBuffer(gpuBuffer, 0, buffer.data.data(), buffer.data.size());
+		m_queue.writeBuffer(gpuBuffer, 0, buffer.data.data(), bufferDesc.size);
 	}
 
 	{
@@ -479,107 +489,164 @@ void GpuScene::terminateNodes() {
 }
 
 void GpuScene::initDrawCalls(const tinygltf::Model& model) {
-	for (const Mesh& mesh : model.meshes) {
-		const Primitive& prim = mesh.primitives[0]; // TODO
+	for (const tinygltf::Mesh& mesh : model.meshes) {
+		Mesh gpuMesh;
+		for (const tinygltf::Primitive& prim : mesh.primitives) {
 
-		std::vector<std::tuple<std::string, uint32_t, VertexFormat>> semanticToLocation = {
-			// GLTF Semantic, Shader input location, Default format
-			{"POSITION", 0, VertexFormat::Float32x3},
-			{"NORMAL", 1, VertexFormat::Float32x3},
-			{"COLOR", 2, VertexFormat::Float32x3},
-			{"TEXCOORD_0", 3, VertexFormat::Float32x2},
-		};
+			std::vector<std::tuple<std::string, uint32_t, VertexFormat>> semanticToLocation = {
+				// GLTF Semantic, Shader input location, Default format
+				{"POSITION", 0, VertexFormat::Float32x3},
+				{"NORMAL", 1, VertexFormat::Float32x3},
+				{"COLOR", 2, VertexFormat::Float32x3},
+				{"TEXCOORD_0", 3, VertexFormat::Float32x2},
+			};
 
-		// We create one vertex buffer layout per bufferView
-		std::vector<VertexBufferLayout> vertexBufferLayouts;
-		// For each layout, there are multiple attributes
-		std::vector<std::vector<VertexAttribute>> vertexBufferLayoutToAttributes;
-		// For each layout, there is a single buffer view
-		std::vector<tinygltf::BufferView> vertexBufferLayoutToBufferView;
-		// And we keep the map from bufferView to layout index
-		// NB: The index '-1' is used for attributes expected by the shader but not
-		// provided by the GLTF file.
-		std::unordered_map<int, size_t> bufferViewToVertexBufferLayout;
+			// We create one vertex buffer layout per bufferView
+			std::vector<VertexBufferLayout> vertexBufferLayouts;
+			// For each layout, there are multiple attributes
+			std::vector<std::vector<VertexAttribute>> vertexBufferLayoutToAttributes;
+			// For each layout, there is a single buffer view
+			std::vector<tinygltf::BufferView> vertexBufferLayoutToBufferView;
+			// And we keep the map from bufferView to layout index
+			// NB: The index '-1' is used for attributes expected by the shader but not
+			// provided by the GLTF file.
+			std::unordered_map<int, size_t> bufferViewToVertexBufferLayout;
 
-		for (const auto& [attrSemantic, location, defaultFormat] : semanticToLocation) {
-			int bufferViewIdx;
-			BufferView bufferView = {};
-			VertexFormat format = VertexFormat::Undefined;
-			uint64_t byteOffset;
+			for (const auto& [attrSemantic, location, defaultFormat] : semanticToLocation) {
+				int bufferViewIdx;
+				BufferView bufferView = {};
+				VertexFormat format = VertexFormat::Undefined;
+				uint64_t byteOffset;
 
-			auto accessorIt = prim.attributes.find(attrSemantic);
-			if (accessorIt != prim.attributes.end()) {
-				Accessor accessor = model.accessors[accessorIt->second];
-				bufferViewIdx = accessor.bufferView;
-				bufferView = model.bufferViews[bufferViewIdx];
-				format = vertexFormatFromAccessor(accessor);
-				byteOffset = static_cast<uint64_t>(accessor.byteOffset);
-				if (bufferView.byteStride == 0) {
-					bufferView.byteStride = vertexFormatByteSize(format);
+				auto accessorIt = prim.attributes.find(attrSemantic);
+				if (accessorIt != prim.attributes.end()) {
+					Accessor accessor = model.accessors[accessorIt->second];
+					bufferViewIdx = accessor.bufferView;
+					bufferView = model.bufferViews[bufferViewIdx];
+					format = vertexFormatFromAccessor(accessor);
+					byteOffset = static_cast<uint64_t>(accessor.byteOffset);
+					if (bufferView.byteStride == 0) {
+						bufferView.byteStride = vertexFormatByteSize(format);
+					}
 				}
-			}
-			else {
-				bufferViewIdx = -1;
-				bufferView.buffer = -1;
-				format = defaultFormat;
-				byteOffset = 0;
+				else {
+					bufferViewIdx = -1;
+					bufferView.buffer = -1;
+					format = defaultFormat;
+					byteOffset = 0;
+				}
+
+				// Group attributes by bufferView
+				size_t layoutIdx = 0;
+				auto vertexBufferLayoutIt = bufferViewToVertexBufferLayout.find(bufferViewIdx);
+				if (vertexBufferLayoutIt == bufferViewToVertexBufferLayout.end()) {
+					layoutIdx = vertexBufferLayouts.size();
+					VertexBufferLayout layout;
+					layout.arrayStride = static_cast<uint64_t>(bufferView.byteStride);
+					layout.stepMode = VertexStepMode::Vertex;
+					vertexBufferLayouts.push_back(layout);
+					vertexBufferLayoutToAttributes.push_back({});
+					vertexBufferLayoutToBufferView.push_back(bufferView);
+					bufferViewToVertexBufferLayout[bufferViewIdx] = layoutIdx;
+				}
+				else {
+					layoutIdx = vertexBufferLayoutIt->second;
+				}
+
+				VertexAttribute attrib;
+				attrib.shaderLocation = location;
+				attrib.format = format;
+				attrib.offset = byteOffset;
+				vertexBufferLayoutToAttributes[layoutIdx].push_back(attrib);
 			}
 
-			// Group attributes by bufferView
-			size_t layoutIdx = 0;
-			auto vertexBufferLayoutIt = bufferViewToVertexBufferLayout.find(bufferViewIdx);
-			if (vertexBufferLayoutIt == bufferViewToVertexBufferLayout.end()) {
-				layoutIdx = vertexBufferLayouts.size();
-				VertexBufferLayout layout;
-				layout.arrayStride = static_cast<uint64_t>(bufferView.byteStride);
-				layout.stepMode = VertexStepMode::Vertex;
-				vertexBufferLayouts.push_back(layout);
-				vertexBufferLayoutToAttributes.push_back({});
-				vertexBufferLayoutToBufferView.push_back(bufferView);
-				bufferViewToVertexBufferLayout[bufferViewIdx] = layoutIdx;
-			}
-			else {
-				layoutIdx = vertexBufferLayoutIt->second;
-			}
+			// Index data
+			const Accessor& indexAccessor = model.accessors[prim.indices];
+			const BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+			IndexFormat indexFormat = indexFormatFromAccessor(indexAccessor);
+			assert(indexFormat != IndexFormat::Undefined);
+			assert(indexAccessor.type == TINYGLTF_TYPE_SCALAR);
 
-			VertexAttribute attrib;
-			attrib.shaderLocation = location;
-			attrib.format = format;
-			attrib.offset = byteOffset;
-			vertexBufferLayoutToAttributes[layoutIdx].push_back(attrib);
+			RenderPipelineSettings renderPipelineSettings = {
+				vertexBufferLayoutToAttributes,
+				vertexBufferLayouts
+			};
+
+			gpuMesh.primitives.push_back(MeshPrimitive{
+				vertexBufferLayoutToBufferView,
+				indexBufferView,
+				static_cast<uint32_t>(indexAccessor.byteOffset),
+				indexFormat,
+				static_cast<uint32_t>(indexAccessor.count),
+				prim.material >= 0 ? static_cast<uint32_t>(prim.material) : m_defaultMaterialIdx,
+				getOrCreateRenderPipelineIndex(renderPipelineSettings)
+			});
 		}
-
-		// Index data
-		const Accessor& indexAccessor = model.accessors[prim.indices];
-		const BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
-		IndexFormat indexFormat = indexFormatFromAccessor(indexAccessor);
-		assert(indexFormat != IndexFormat::Undefined);
-		assert(indexAccessor.type == TINYGLTF_TYPE_SCALAR);
-
-		m_drawCalls.push_back(DrawCall{
-			vertexBufferLayoutToAttributes,
-			vertexBufferLayouts,
-			vertexBufferLayoutToBufferView,
-			indexBufferView,
-			indexFormat,
-			static_cast<uint32_t>(indexAccessor.count),
-			prim.material >= 0 ? static_cast<uint32_t>(prim.material) : m_defaultMaterialIdx, // TODO: create a default material
-		});
+		m_meshes.push_back(std::move(gpuMesh));
 	}
 }
 
-void GpuScene::terminateDrawCalls() {
-	m_drawCalls.clear();
+bool GpuScene::isCompatible(const RenderPipelineSettings& a, const RenderPipelineSettings& b) const {
+	if (a.vertexBufferLayouts.size() != b.vertexBufferLayouts.size()) return false;
+	assert(a.vertexAttributes.size() == a.vertexBufferLayouts.size());
+	assert(b.vertexAttributes.size() == b.vertexBufferLayouts.size());
+
+	for (int bufferIdx = 0; bufferIdx < a.vertexBufferLayouts.size(); ++bufferIdx) {
+		if (a.vertexAttributes[bufferIdx].size() != b.vertexAttributes[bufferIdx].size()) return false;
+		const auto& bufferLayoutA = a.vertexBufferLayouts[bufferIdx];
+		const auto& bufferLayoutB = b.vertexBufferLayouts[bufferIdx];
+		if (bufferLayoutA.arrayStride != bufferLayoutB.arrayStride) return false;
+		if (bufferLayoutA.stepMode != bufferLayoutB.stepMode) return false;
+
+		std::unordered_map<uint32_t, uint32_t> locationToFormatA;
+		std::unordered_map<uint32_t, uint64_t> locationToOffsetA;
+		std::unordered_map<uint32_t, uint32_t> locationToFormatB;
+		std::unordered_map<uint32_t, uint64_t> locationToOffsetB;
+		for (int attrIdx = 0; attrIdx < a.vertexAttributes[bufferIdx].size(); ++attrIdx) {
+			const auto& attrA = a.vertexAttributes[bufferIdx][attrIdx];
+			const auto& attrB = b.vertexAttributes[bufferIdx][attrIdx];
+			locationToFormatA[attrA.shaderLocation] = (uint32_t)attrA.format;
+			locationToOffsetA[attrA.shaderLocation] = attrA.offset;
+			locationToFormatB[attrB.shaderLocation] = (uint32_t)attrB.format;
+			locationToOffsetB[attrB.shaderLocation] = attrB.offset;
+		}
+		if (locationToFormatA != locationToFormatB) return false;
+		if (locationToOffsetA != locationToOffsetB) return false;
+	}
+
+	return true;
 }
 
-std::vector<wgpu::VertexBufferLayout> GpuScene::vertexBufferLayouts(uint32_t drawCallIndex) const {
-	const auto& dc = m_drawCalls[drawCallIndex];
-	std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts = dc.vertexBufferLayouts;
+uint32_t GpuScene::getOrCreateRenderPipelineIndex(const RenderPipelineSettings& newSettings) {
+	for (uint32_t idx = 0; idx < m_renderPipelines.size(); ++idx) {
+		const RenderPipelineSettings& settings = m_renderPipelines[idx];
+		if (isCompatible(settings, newSettings)) {
+			return idx;
+		}
+	}
+
+	// No appropriate render pipeline was found, register a new one
+	m_renderPipelines.push_back(newSettings);
+	return static_cast<uint32_t>(m_renderPipelines.size() - 1);
+}
+
+void GpuScene::terminateDrawCalls() {
+	m_meshes.clear();
+	m_renderPipelines.clear();
+}
+
+uint32_t GpuScene::renderPipelineCount() const {
+	return static_cast<uint32_t>(m_renderPipelines.size());
+}
+
+std::vector<wgpu::VertexBufferLayout> GpuScene::vertexBufferLayouts(uint32_t renderPipelineIndex) const {
+	const auto& rp = m_renderPipelines[renderPipelineIndex];
+	std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts = rp.vertexBufferLayouts;
 
 	// Assign pointer addresses (should be done upon foreign access)
-	for (size_t layoutIdx = 0; layoutIdx < dc.vertexBufferLayouts.size(); ++layoutIdx) {
+	for (size_t layoutIdx = 0; layoutIdx < rp.vertexBufferLayouts.size(); ++layoutIdx) {
 		VertexBufferLayout& layout = vertexBufferLayouts[layoutIdx];
-		const auto& attributes = dc.vertexAttributes[layoutIdx];
+		const auto& attributes = rp.vertexAttributes[layoutIdx];
 		layout.attributeCount = static_cast<uint32_t>(attributes.size());
 		layout.attributes = attributes.data();
 	}

@@ -72,7 +72,7 @@ bool Application::onInit() {
 	if (!initDepthBuffer()) return false;
 	if (!initBindGroupLayouts()) return false;
 	if (!initGeometry()) return false;
-	if (!initRenderPipeline()) return false;
+	if (!initRenderPipelines()) return false;
 	if (!initUniforms()) return false;
 	if (!initLightingUniforms()) return false;
 	if (!initBindGroup()) return false;
@@ -85,7 +85,7 @@ void Application::onFinish() {
 	terminateBindGroup();
 	terminateLightingUniforms();
 	terminateUniforms();
-	terminateRenderPipeline();
+	terminateRenderPipelines();
 	terminateGeometry();
 	terminateBindGroupLayouts();
 	terminateDepthBuffer();
@@ -146,10 +146,12 @@ void Application::onFrame() {
 	renderPassDesc.timestampWrites = nullptr;
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
-	renderPass.setPipeline(m_pipeline);
-	renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
+	for (uint32_t pipelineIdx = 0; pipelineIdx < m_pipelines.size(); ++pipelineIdx) {
+		renderPass.setPipeline(m_pipelines[pipelineIdx]);
+		renderPass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-	m_gpuScene.draw(renderPass);
+		m_gpuScene.draw(renderPass, pipelineIdx);
+	}
 
 	// We add the GUI drawing commands to the render pass
 	updateGui(renderPass);
@@ -269,7 +271,7 @@ bool Application::initWindowAndDevice() {
 	RequiredLimits requiredLimits = Default;
 	requiredLimits.limits.maxVertexAttributes = 4;
 	requiredLimits.limits.maxVertexBuffers = 4;
-	requiredLimits.limits.maxBufferSize = 150000 * sizeof(VertexAttributes);
+	requiredLimits.limits.maxBufferSize = 1500000 * sizeof(VertexAttributes);
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
@@ -404,18 +406,14 @@ void Application::terminateDepthBuffer() {
 }
 
 
-bool Application::initRenderPipeline() {
+bool Application::initRenderPipelines() {
+	// TODO: Build pipelines in GpuScene
 	std::cout << "Creating shader module..." << std::endl;
 	m_shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
 	std::cout << "Shader module: " << m_shaderModule << std::endl;
 
 	std::cout << "Creating render pipeline..." << std::endl;
 	RenderPipelineDescriptor pipelineDesc;
-
-	// Vertex fetch
-	std::vector<VertexBufferLayout> vertexBufferLayouts = m_gpuScene.vertexBufferLayouts(0);
-	pipelineDesc.vertex.bufferCount = static_cast<uint32_t>(vertexBufferLayouts.size());
-	pipelineDesc.vertex.buffers = vertexBufferLayouts.data();
 
 	pipelineDesc.vertex.module = m_shaderModule;
 	pipelineDesc.vertex.entryPoint = "vs_main";
@@ -476,21 +474,34 @@ bool Application::initRenderPipeline() {
 	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
 	pipelineDesc.layout = layout;
 
-	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
-	std::cout << "Render pipeline: " << m_pipeline << std::endl;
+	for (uint32_t pipelineIdx = 0; pipelineIdx < m_gpuScene.renderPipelineCount(); ++pipelineIdx) {
+		// Vertex fetch
+		std::vector<VertexBufferLayout> vertexBufferLayouts = m_gpuScene.vertexBufferLayouts(0);
+		pipelineDesc.vertex.bufferCount = static_cast<uint32_t>(vertexBufferLayouts.size());
+		pipelineDesc.vertex.buffers = vertexBufferLayouts.data();
 
-	return m_pipeline != nullptr;
+		RenderPipeline pipeline = m_device.createRenderPipeline(pipelineDesc);
+		std::cout << "Render pipeline: " << pipeline << std::endl;
+		if (pipeline == nullptr) return false;
+		m_pipelines.push_back(pipeline);
+	}
+
+	return true;
 }
 
-void Application::terminateRenderPipeline() {
-	m_pipeline.release();
+void Application::terminateRenderPipelines() {
+	for (RenderPipeline pipeline : m_pipelines) {
+		pipeline.release();
+	}
+	m_pipelines.clear();
 	m_shaderModule.release();
 }
 
 
 bool Application::initGeometry() {
 	// Load mesh data from OBJ file
-	bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/DamagedHelmet.glb", m_cpuScene);
+	bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/BusterDrone.glb", m_cpuScene);
+	//bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/DamagedHelmet.glb", m_cpuScene);
 	//bool success = ResourceManager::loadGeometryFromGltf(RESOURCE_DIR "/triangle.gltf", m_cpuScene);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;

@@ -153,6 +153,24 @@ TextureFormat textureFormatToFloatFormat(TextureFormat format);
  */
 size_t vertexFormatByteSize(VertexFormat format);
 
+/**
+ * Tell how many bytes a given index format occupies
+ *
+ * @param format the index format
+ *
+ * @return the number of bytes
+ */
+size_t indexFormatByteSize(IndexFormat format);
+
+/**
+ * @param value can be any non-negative value
+ * 
+ * @param alignmentPowOfTwo must be a power of 2
+ * 
+ * @return the next multiple of 'alignmentPowOfTwo' greater or equal to 'value'
+ */
+uint32_t alignToNextMultipleOf(uint32_t value, uint32_t alignmentPowOfTwo);
+
 } // namespace wgpu
 
 #ifdef WEBGPU_STD_UTILS_IMPLEMENTATION
@@ -625,8 +643,25 @@ size_t vertexFormatByteSize(VertexFormat format) {
 	case VertexFormat::Uint32x4:
 		return 32 / 8 * 4;
 	default:
-		return 0;
+		throw std::runtime_error("Unhandled format");
 	}
+}
+
+size_t indexFormatByteSize(IndexFormat format) {
+	switch (format) {
+	case IndexFormat::Uint16:
+		return 8 / 8 * 2;
+	case IndexFormat::Uint32:
+		return 8 / 8 * 4;
+	default:
+		throw std::runtime_error("Unhandled format");
+	}
+}
+
+uint32_t alignToNextMultipleOf(uint32_t value, uint32_t alignmentPowOfTwo) {
+	assert((alignmentPowOfTwo & (alignmentPowOfTwo - 1)) == 0); // must be a power of 2
+	uint32_t bits = alignmentPowOfTwo - 1;
+	return (value + bits) & ~bits;
 }
 
 } // namespace wgpu
