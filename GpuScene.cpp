@@ -16,19 +16,26 @@ using namespace wgpu::gltf; // conversion utils
 ///////////////////////////////////////////////////////////////////////////////
 // Public methods
 
-void GpuScene::createFromModel(wgpu::Device device, const tinygltf::Model& model, BindGroupLayout bindGroupLayout) {
+void GpuScene::createFromModel(
+	Device device,
+	const tinygltf::Model& model,
+	BindGroupLayout materialBindGroupLayout,
+	BindGroupLayout nodeBindGroupLayout
+) {
 	destroy();
 
 	initDevice(device);
 	initBuffers(model);
 	initTextures(model);
 	initSamplers(model);
-	initMaterials(model, bindGroupLayout);
+	initMaterials(model, materialBindGroupLayout);
+	initNodes(model, nodeBindGroupLayout);
 	initDrawCalls(model);
 }
 
 void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
-	for (const DrawCall& dc : m_drawCalls) {
+	for (const Node& node : m_nodes) {
+		const DrawCall& dc = m_drawCalls[node.meshIndex];
 		for (size_t layoutIdx = 0; layoutIdx < dc.attributeBufferViews.size(); ++layoutIdx) {
 			const auto& view = dc.attributeBufferViews[layoutIdx];
 			uint32_t slot = static_cast<uint32_t>(layoutIdx);
@@ -40,6 +47,7 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
 			}
 		}
 		renderPass.setBindGroup(1, m_materials[dc.materialIndex].bindGroup, 0, nullptr);
+		renderPass.setBindGroup(2, node.bindGroup, 0, nullptr);
 		renderPass.setIndexBuffer(m_buffers[dc.indexBufferView.buffer], dc.indexFormat, dc.indexBufferView.byteOffset, dc.indexBufferView.byteLength);
 		renderPass.drawIndexed(dc.indexCount, 1, 0, 0, 0);
 	}
@@ -47,6 +55,7 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass) {
 
 void GpuScene::destroy() {
 	terminateDrawCalls();
+	terminateNodes();
 	terminateMaterials();
 	terminateSamplers();
 	terminateTextures();
@@ -403,93 +412,160 @@ void GpuScene::terminateMaterials() {
 	m_materials.clear();
 }
 
-void GpuScene::initDrawCalls(const tinygltf::Model& model) {
-	const Mesh& mesh = model.meshes[0];
-	const Primitive& prim = mesh.primitives[0];
+void GpuScene::initNodes(const tinygltf::Model& model, BindGroupLayout bindGroupLayout) {
+	std::function<void(const std::vector<int>&, const glm::mat4&)> addNodes;
+	addNodes = [&](const std::vector<int>& nodeIndices, const glm::mat4& parentGlobalTransform) {
+		for (int idx : nodeIndices) {
+			const tinygltf::Node& node = model.nodes[idx];
+			std::cout << " - Adding node '" << node.name << "'" << std::endl;
+			const glm::mat4 localTransform = nodeMatrix(node);
+			const glm::mat4 globalTransform = parentGlobalTransform * localTransform;
 
-	std::vector<std::tuple<std::string, uint32_t, VertexFormat>> semanticToLocation = {
-		// GLTF Semantic, Shader input location, Default format
-		{"POSITION", 0, VertexFormat::Float32x3},
-		{"NORMAL", 1, VertexFormat::Float32x3},
-		{"COLOR", 2, VertexFormat::Float32x3},
-		{"TEXCOORD_0", 3, VertexFormat::Float32x2},
+			if (node.mesh > -1) {
+				Node gpuNode;
+				gpuNode.meshIndex = static_cast<uint32_t>(node.mesh);
+
+				// Uniforms
+				BufferDescriptor bufferDesc;
+				bufferDesc.label = node.name.c_str();
+				bufferDesc.mappedAtCreation = false;
+				bufferDesc.usage = BufferUsage::Uniform | BufferUsage::CopyDst;
+				bufferDesc.size = sizeof(NodeUniforms);
+				gpuNode.uniformBuffer = m_device.createBuffer(bufferDesc);
+
+				// Uniform Values
+				gpuNode.uniforms.modelMatrix = globalTransform;
+				m_queue.writeBuffer(gpuNode.uniformBuffer, 0, &gpuNode.uniforms, sizeof(NodeUniforms));
+
+				// Bind Group
+				std::vector<BindGroupEntry> bindGroupEntries(1, Default);
+				bindGroupEntries[0].binding = 0;
+				bindGroupEntries[0].buffer = gpuNode.uniformBuffer;
+				bindGroupEntries[0].size = sizeof(NodeUniforms);
+
+				BindGroupDescriptor bindGroupDesc;
+				bindGroupDesc.label = node.name.c_str();
+				bindGroupDesc.entryCount = static_cast<uint32_t>(bindGroupEntries.size());
+				bindGroupDesc.entries = bindGroupEntries.data();
+				bindGroupDesc.layout = bindGroupLayout;
+				gpuNode.bindGroup = m_device.createBindGroup(bindGroupDesc);
+
+				m_nodes.push_back(gpuNode);
+			}
+
+			// Recursive call
+			addNodes(node.children, globalTransform);
+		}
 	};
 
-	// We create one vertex buffer layout per bufferView
-	std::vector<VertexBufferLayout> vertexBufferLayouts;
-	// For each layout, there are multiple attributes
-	std::vector<std::vector<VertexAttribute>> vertexBufferLayoutToAttributes;
-	// For each layout, there is a single buffer view
-	std::vector<tinygltf::BufferView> vertexBufferLayoutToBufferView;
-	// And we keep the map from bufferView to layout index
-	// NB: The index '-1' is used for attributes expected by the shader but not
-	// provided by the GLTF file.
-	std::unordered_map<int, size_t> bufferViewToVertexBufferLayout;
+	const tinygltf::Scene& scene = model.scenes[model.defaultScene];
+	std::cout << "Loading scene '" << scene.name << "'..." << std::endl;
+	glm::mat4 swapYandZ = { // because GLTF specifies Y as being up, and our viewer uses Z
+		1.0, 0.0, 0.0, 0.0,
+		0.0, 0.0, 1.0, 0.0,
+		0.0, -1.0, 0.0, 0.0,
+		0.0, 0.0, 0.0, 1.0
+	};
+	addNodes(scene.nodes, swapYandZ);
+}
 
-	for (const auto& [attrSemantic, location, defaultFormat] : semanticToLocation) {
-		int bufferViewIdx;
-		BufferView bufferView = {};
-		VertexFormat format = VertexFormat::Undefined;
-		uint64_t byteOffset;
-
-		auto accessorIt = prim.attributes.find(attrSemantic);
-		if (accessorIt != prim.attributes.end()) {
-			Accessor accessor = model.accessors[accessorIt->second];
-			bufferViewIdx = accessor.bufferView;
-			bufferView = model.bufferViews[bufferViewIdx];
-			format = vertexFormatFromAccessor(accessor);
-			byteOffset = static_cast<uint64_t>(accessor.byteOffset);
-			if (bufferView.byteStride == 0) {
-				bufferView.byteStride = vertexFormatByteSize(format);
-			}
-		}
-		else {
-			bufferViewIdx = -1;
-			bufferView.buffer = -1;
-			format = defaultFormat;
-			byteOffset = 0;
-		}
-
-		// Group attributes by bufferView
-		size_t layoutIdx = 0;
-		auto vertexBufferLayoutIt = bufferViewToVertexBufferLayout.find(bufferViewIdx);
-		if (vertexBufferLayoutIt == bufferViewToVertexBufferLayout.end()) {
-			layoutIdx = vertexBufferLayouts.size();
-			VertexBufferLayout layout;
-			layout.arrayStride = static_cast<uint64_t>(bufferView.byteStride);
-			layout.stepMode = VertexStepMode::Vertex;
-			vertexBufferLayouts.push_back(layout);
-			vertexBufferLayoutToAttributes.push_back({});
-			vertexBufferLayoutToBufferView.push_back(bufferView);
-			bufferViewToVertexBufferLayout[bufferViewIdx] = layoutIdx;
-		}
-		else {
-			layoutIdx = vertexBufferLayoutIt->second;
-		}
-
-		VertexAttribute attrib;
-		attrib.shaderLocation = location;
-		attrib.format = format;
-		attrib.offset = byteOffset;
-		vertexBufferLayoutToAttributes[layoutIdx].push_back(attrib);
+void GpuScene::terminateNodes() {
+	for (Node& node : m_nodes) {
+		node.bindGroup.release();
+		node.uniformBuffer.destroy();
+		node.uniformBuffer.release();
 	}
+	m_nodes.clear();
+}
 
-	// Index data
-	const Accessor& indexAccessor = model.accessors[prim.indices];
-	const BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
-	IndexFormat indexFormat = indexFormatFromAccessor(indexAccessor);
-	assert(indexFormat != IndexFormat::Undefined);
-	assert(indexAccessor.type == TINYGLTF_TYPE_SCALAR);
+void GpuScene::initDrawCalls(const tinygltf::Model& model) {
+	for (const Mesh& mesh : model.meshes) {
+		const Primitive& prim = mesh.primitives[0]; // TODO
 
-	m_drawCalls.push_back(DrawCall{
-		vertexBufferLayoutToAttributes,
-		vertexBufferLayouts,
-		vertexBufferLayoutToBufferView,
-		indexBufferView,
-		indexFormat,
-		static_cast<uint32_t>(indexAccessor.count),
-		prim.material >= 0 ? static_cast<uint32_t>(prim.material) : m_defaultMaterialIdx, // TODO: create a default material
-	});
+		std::vector<std::tuple<std::string, uint32_t, VertexFormat>> semanticToLocation = {
+			// GLTF Semantic, Shader input location, Default format
+			{"POSITION", 0, VertexFormat::Float32x3},
+			{"NORMAL", 1, VertexFormat::Float32x3},
+			{"COLOR", 2, VertexFormat::Float32x3},
+			{"TEXCOORD_0", 3, VertexFormat::Float32x2},
+		};
+
+		// We create one vertex buffer layout per bufferView
+		std::vector<VertexBufferLayout> vertexBufferLayouts;
+		// For each layout, there are multiple attributes
+		std::vector<std::vector<VertexAttribute>> vertexBufferLayoutToAttributes;
+		// For each layout, there is a single buffer view
+		std::vector<tinygltf::BufferView> vertexBufferLayoutToBufferView;
+		// And we keep the map from bufferView to layout index
+		// NB: The index '-1' is used for attributes expected by the shader but not
+		// provided by the GLTF file.
+		std::unordered_map<int, size_t> bufferViewToVertexBufferLayout;
+
+		for (const auto& [attrSemantic, location, defaultFormat] : semanticToLocation) {
+			int bufferViewIdx;
+			BufferView bufferView = {};
+			VertexFormat format = VertexFormat::Undefined;
+			uint64_t byteOffset;
+
+			auto accessorIt = prim.attributes.find(attrSemantic);
+			if (accessorIt != prim.attributes.end()) {
+				Accessor accessor = model.accessors[accessorIt->second];
+				bufferViewIdx = accessor.bufferView;
+				bufferView = model.bufferViews[bufferViewIdx];
+				format = vertexFormatFromAccessor(accessor);
+				byteOffset = static_cast<uint64_t>(accessor.byteOffset);
+				if (bufferView.byteStride == 0) {
+					bufferView.byteStride = vertexFormatByteSize(format);
+				}
+			}
+			else {
+				bufferViewIdx = -1;
+				bufferView.buffer = -1;
+				format = defaultFormat;
+				byteOffset = 0;
+			}
+
+			// Group attributes by bufferView
+			size_t layoutIdx = 0;
+			auto vertexBufferLayoutIt = bufferViewToVertexBufferLayout.find(bufferViewIdx);
+			if (vertexBufferLayoutIt == bufferViewToVertexBufferLayout.end()) {
+				layoutIdx = vertexBufferLayouts.size();
+				VertexBufferLayout layout;
+				layout.arrayStride = static_cast<uint64_t>(bufferView.byteStride);
+				layout.stepMode = VertexStepMode::Vertex;
+				vertexBufferLayouts.push_back(layout);
+				vertexBufferLayoutToAttributes.push_back({});
+				vertexBufferLayoutToBufferView.push_back(bufferView);
+				bufferViewToVertexBufferLayout[bufferViewIdx] = layoutIdx;
+			}
+			else {
+				layoutIdx = vertexBufferLayoutIt->second;
+			}
+
+			VertexAttribute attrib;
+			attrib.shaderLocation = location;
+			attrib.format = format;
+			attrib.offset = byteOffset;
+			vertexBufferLayoutToAttributes[layoutIdx].push_back(attrib);
+		}
+
+		// Index data
+		const Accessor& indexAccessor = model.accessors[prim.indices];
+		const BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+		IndexFormat indexFormat = indexFormatFromAccessor(indexAccessor);
+		assert(indexFormat != IndexFormat::Undefined);
+		assert(indexAccessor.type == TINYGLTF_TYPE_SCALAR);
+
+		m_drawCalls.push_back(DrawCall{
+			vertexBufferLayoutToAttributes,
+			vertexBufferLayouts,
+			vertexBufferLayoutToBufferView,
+			indexBufferView,
+			indexFormat,
+			static_cast<uint32_t>(indexAccessor.count),
+			prim.material >= 0 ? static_cast<uint32_t>(prim.material) : m_defaultMaterialIdx, // TODO: create a default material
+		});
+	}
 }
 
 void GpuScene::terminateDrawCalls() {

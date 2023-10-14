@@ -110,7 +110,6 @@ private:
 		// We add transform matrices
 		mat4x4 projectionMatrix;
 		mat4x4 viewMatrix;
-		mat4x4 modelMatrix;
 		vec4 color;
 		vec3 cameraWorldPosition;
 		float time;
@@ -193,6 +192,7 @@ private:
 	// Bind Group Layout
 	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	wgpu::BindGroupLayout m_materialBindGroupLayout = nullptr;
+	wgpu::BindGroupLayout m_nodeBindGroupLayout = nullptr;
 
 	// Bind Group
 	wgpu::BindGroup m_bindGroup = nullptr;

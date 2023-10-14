@@ -6,6 +6,7 @@
 #include "tiny_gltf.h"
 
 #include <webgpu/webgpu.hpp>
+#include <glm/glm.hpp>
 
 namespace wgpu::gltf {
 
@@ -27,5 +28,8 @@ wgpu::AddressMode addressModeFromGltf(int tinygltfWrap);
 // Return Undefined if not supported
 // If useClosestMatch is true, return a format that can contain the provided image, even though it has additional channels
 wgpu::TextureFormat textureFormatFromGltfImage(const tinygltf::Image& image, bool useClosestMatch = false);
+
+// Build a transform matrix either from node.matrix or the TRS fields
+glm::mat4 nodeMatrix(const tinygltf::Node& node);
 
 } // namespace wgpu::gltf

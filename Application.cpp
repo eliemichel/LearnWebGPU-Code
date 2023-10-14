@@ -274,7 +274,7 @@ bool Application::initWindowAndDevice() {
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
 	requiredLimits.limits.maxInterStageShaderComponents = 11;
-	requiredLimits.limits.maxBindGroups = 2;
+	requiredLimits.limits.maxBindGroups = 3;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
 	// Allow textures up to 2K
@@ -465,7 +465,8 @@ bool Application::initRenderPipeline() {
 
 	std::vector<BindGroupLayout> bindGroupLayouts = {
 		m_bindGroupLayout,
-		m_materialBindGroupLayout
+		m_materialBindGroupLayout,
+		m_nodeBindGroupLayout
 	};
 
 	// Create the pipeline layout
@@ -495,7 +496,7 @@ bool Application::initGeometry() {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return false;
 	}
-	m_gpuScene.createFromModel(m_device, m_cpuScene, m_materialBindGroupLayout);
+	m_gpuScene.createFromModel(m_device, m_cpuScene, m_materialBindGroupLayout, m_nodeBindGroupLayout);
 
 	return true;
 }
@@ -515,7 +516,6 @@ bool Application::initUniforms() {
 	m_uniformBuffer = m_device.createBuffer(bufferDesc);
 
 	// Upload the initial value of the uniforms
-	m_uniforms.modelMatrix = mat4x4(1.0);
 	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 	m_uniforms.time = 1.0f;
@@ -641,7 +641,27 @@ bool Application::initBindGroupLayouts() {
 		m_materialBindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
 	}
 
-	return m_bindGroupLayout != nullptr && m_materialBindGroupLayout != nullptr;
+	// Material bind group
+	{
+		std::vector<BindGroupLayoutEntry> bindGroupLayoutEntries(1, Default);
+		// Material uniforms
+		bindGroupLayoutEntries[0].binding = 0;
+		bindGroupLayoutEntries[0].visibility = ShaderStage::Vertex;
+		bindGroupLayoutEntries[0].buffer.type = BufferBindingType::Uniform;
+		bindGroupLayoutEntries[0].buffer.minBindingSize = sizeof(GpuScene::NodeUniforms);
+
+		BindGroupLayoutDescriptor bindGroupLayoutDesc{};
+		bindGroupLayoutDesc.label = "Node";
+		bindGroupLayoutDesc.entryCount = (uint32_t)bindGroupLayoutEntries.size();
+		bindGroupLayoutDesc.entries = bindGroupLayoutEntries.data();
+		m_nodeBindGroupLayout = m_device.createBindGroupLayout(bindGroupLayoutDesc);
+	}
+
+	return (
+		m_bindGroupLayout != nullptr &&
+		m_materialBindGroupLayout != nullptr &&
+		m_nodeBindGroupLayout != nullptr
+	);
 }
 
 void Application::terminateBindGroupLayouts() {

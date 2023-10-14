@@ -1,5 +1,8 @@
 #include "webgpu-gltf-utils.h"
 
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/quaternion.hpp>
+
 namespace wgpu::gltf {
 
 using namespace tinygltf;
@@ -241,6 +244,31 @@ TextureFormat textureFormatFromGltfImage(const tinygltf::Image& image, bool useC
 		}
 	default:
 		return TextureFormat::Undefined;
+	}
+}
+
+glm::mat4 nodeMatrix(const tinygltf::Node& node) {
+	if (!node.matrix.empty()) {
+		return glm::make_mat4(node.matrix.data());
+		
+	}
+	else {
+		const glm::vec3 T =
+			node.translation.empty()
+			? glm::vec3(0.0)
+			: glm::make_vec3(node.translation.data());
+
+		const glm::quat R =
+			node.rotation.empty()
+			? glm::quat()
+			: glm::make_quat(node.rotation.data());
+
+		const glm::vec3 S =
+			node.scale.empty()
+			? glm::vec3(1.0)
+			: glm::make_vec3(node.scale.data());
+
+		return glm::translate(glm::mat4(1.0), T) * glm::toMat4(R) * glm::scale(glm::mat4(1.0), S);
 	}
 }
 

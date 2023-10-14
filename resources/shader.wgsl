@@ -144,7 +144,6 @@ struct VertexOutput {
 struct MyUniforms {
 	projectionMatrix: mat4x4f,
 	viewMatrix: mat4x4f,
-	modelMatrix: mat4x4f,
 	color: vec4f,
 	cameraWorldPosition: vec3f,
 	time: f32,
@@ -159,6 +158,16 @@ struct LightingUniforms {
 	colors: array<vec4f, 2>,
 }
 
+/**
+ * Uniforms specific to a given GLTF node.
+ */
+struct NodeUniforms {
+	modelMatrix: mat4x4f,
+}
+
+/**
+ * A structure holding material properties as they are provided from the CPU code
+ */
 struct MaterialUniforms {
 	baseColorFactor: vec4f,
 	metallicFactor: f32,
@@ -168,9 +177,11 @@ struct MaterialUniforms {
 	roughnessTexCoords: u32,
 }
 
+// General bind group
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 @group(0) @binding(1) var<uniform> uLighting: LightingUniforms;
 
+// Material bind group
 @group(1) @binding(0) var<uniform> uMaterial: MaterialUniforms;
 @group(1) @binding(1) var baseColorTexture: texture_2d<f32>;
 @group(1) @binding(2) var baseColorSampler: sampler;
@@ -179,14 +190,17 @@ struct MaterialUniforms {
 @group(1) @binding(3) var normalTexture: texture_2d<f32>;
 @group(1) @binding(4) var normalSampler: sampler;
 
+// Node bind group
+@group(2) @binding(0) var<uniform> uNode: NodeUniforms;
+
 /* **************** VERTEX MAIN **************** */
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
-	let worldPosition = uMyUniforms.modelMatrix * vec4f(in.position, 1.0);
+	let worldPosition = uNode.modelMatrix * vec4f(in.position, 1.0);
 	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * worldPosition;
-	out.normal = (uMyUniforms.modelMatrix * vec4f(in.normal, 0.0)).xyz;
+	out.normal = (uNode.modelMatrix * vec4f(in.normal, 0.0)).xyz;
 	out.color = in.color;
 	out.uv = in.uv;
 	out.viewDirection = uMyUniforms.cameraWorldPosition - worldPosition.xyz;

@@ -12,6 +12,11 @@
  */
 class GpuScene {
 public:
+	struct NodeUniforms {
+		glm::mat4 modelMatrix;
+	};
+	static_assert(sizeof(NodeUniforms) % 16 == 0);
+
 	struct MaterialUniforms {
 		glm::vec4 baseColorFactor;
 		float metallicFactor;
@@ -25,7 +30,12 @@ public:
 
 public:
 	// Create from a CPU-side tinygltf model (destroy previous data)
-	void createFromModel(wgpu::Device device, const tinygltf::Model& model, wgpu::BindGroupLayout bindGroupLayout);
+	void createFromModel(
+		wgpu::Device device,
+		const tinygltf::Model& model,
+		wgpu::BindGroupLayout materialBindGroupLayout,
+		wgpu::BindGroupLayout nodeBindGroupLayout
+	);
 
 	void draw(wgpu::RenderPassEncoder renderPass);
 
@@ -53,6 +63,9 @@ private:
 
 	void initMaterials(const tinygltf::Model& model, wgpu::BindGroupLayout bindGroupLayout);
 	void terminateMaterials();
+
+	void initNodes(const tinygltf::Model& model, wgpu::BindGroupLayout bindGroupLayout);
+	void terminateNodes();
 
 	void initDrawCalls(const tinygltf::Model& model);
 	void terminateDrawCalls();
@@ -91,7 +104,7 @@ private:
 	uint32_t m_defaultMaterialIdx;
 
 	// Draw Calls + Vertex Buffer Layouts
-	struct DrawCall {
+	struct DrawCall { // TO be renamed Mesh, or even MeshPrimitive
 		// Vertex Buffer Layout Data
 		std::vector<std::vector<wgpu::VertexAttribute>> vertexAttributes;
 		std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts;
@@ -104,6 +117,15 @@ private:
 		uint32_t materialIndex;
 	};
 	std::vector<DrawCall> m_drawCalls;
+
+	// Nodes
+	struct Node {
+		wgpu::BindGroup bindGroup = nullptr;
+		wgpu::Buffer uniformBuffer = nullptr;
+		NodeUniforms uniforms;
+		uint32_t meshIndex;
+	};
+	std::vector<Node> m_nodes;
 	
 };
 
