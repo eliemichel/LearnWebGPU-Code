@@ -46,6 +46,7 @@ public:
 	// Accessors
 	uint32_t renderPipelineCount() const;
 	std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts(uint32_t renderPipelineIndex) const;
+	wgpu::PrimitiveTopology primitiveTopology(uint32_t renderPipelineIndex) const;
 
 private:
 	// NB: All init functions assume that the object is new (empty) or that
@@ -111,6 +112,7 @@ private:
 	struct RenderPipelineSettings {
 		std::vector<std::vector<wgpu::VertexAttribute>> vertexAttributes;
 		std::vector<wgpu::VertexBufferLayout> vertexBufferLayouts;
+		wgpu::PrimitiveTopology primitiveTopology;
 	};
 	std::vector<RenderPipelineSettings> m_renderPipelines;
 

@@ -272,4 +272,25 @@ glm::mat4 nodeMatrix(const tinygltf::Node& node) {
 	}
 }
 
+PrimitiveTopology primitiveTopologyFromGltf(const tinygltf::Primitive& prim) {
+	switch (prim.mode) {
+	case TINYGLTF_MODE_LINE:
+		return PrimitiveTopology::LineList;
+	case TINYGLTF_MODE_LINE_LOOP:
+		return PrimitiveTopology::Force32;
+	case TINYGLTF_MODE_LINE_STRIP:
+		return PrimitiveTopology::LineStrip;
+	case TINYGLTF_MODE_POINTS:
+		return PrimitiveTopology::PointList;
+	case TINYGLTF_MODE_TRIANGLES:
+		return PrimitiveTopology::TriangleList;
+	case TINYGLTF_MODE_TRIANGLE_FAN:
+		return PrimitiveTopology::Force32;
+	case TINYGLTF_MODE_TRIANGLE_STRIP:
+		return PrimitiveTopology::TriangleStrip;
+	default:
+		return PrimitiveTopology::Force32;
+	}
+}
+
 } // namespace wgpu::gltf

@@ -35,7 +35,7 @@ void GpuScene::createFromModel(
 
 void GpuScene::draw(wgpu::RenderPassEncoder renderPass, uint32_t renderPipelineIndex) {
 	for (const Node& node : m_nodes) {
-		if (node.meshIndex != 1) continue;
+		if (node.meshIndex != 3) continue;
 		const Mesh& mesh = m_meshes[node.meshIndex];
 		renderPass.setBindGroup(2, node.bindGroup, 0, nullptr);
 		for (const MeshPrimitive& prim : mesh.primitives) {
@@ -569,7 +569,8 @@ void GpuScene::initDrawCalls(const tinygltf::Model& model) {
 
 			RenderPipelineSettings renderPipelineSettings = {
 				vertexBufferLayoutToAttributes,
-				vertexBufferLayouts
+				vertexBufferLayouts,
+				primitiveTopologyFromGltf(prim)
 			};
 
 			gpuMesh.primitives.push_back(MeshPrimitive{
@@ -590,6 +591,8 @@ bool GpuScene::isCompatible(const RenderPipelineSettings& a, const RenderPipelin
 	if (a.vertexBufferLayouts.size() != b.vertexBufferLayouts.size()) return false;
 	assert(a.vertexAttributes.size() == a.vertexBufferLayouts.size());
 	assert(b.vertexAttributes.size() == b.vertexBufferLayouts.size());
+
+	if (a.primitiveTopology != b.primitiveTopology) return false;
 
 	for (int bufferIdx = 0; bufferIdx < a.vertexBufferLayouts.size(); ++bufferIdx) {
 		if (a.vertexAttributes[bufferIdx].size() != b.vertexAttributes[bufferIdx].size()) return false;
@@ -652,4 +655,8 @@ std::vector<wgpu::VertexBufferLayout> GpuScene::vertexBufferLayouts(uint32_t ren
 	}
 
 	return vertexBufferLayouts;
+}
+
+PrimitiveTopology GpuScene::primitiveTopology(uint32_t renderPipelineIndex) const {
+	return m_renderPipelines[renderPipelineIndex].primitiveTopology;
 }

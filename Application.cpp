@@ -420,7 +420,6 @@ bool Application::initRenderPipelines() {
 	pipelineDesc.vertex.constantCount = 0;
 	pipelineDesc.vertex.constants = nullptr;
 
-	pipelineDesc.primitive.topology = PrimitiveTopology::TriangleList;
 	pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
 	pipelineDesc.primitive.frontFace = FrontFace::CCW;
 	pipelineDesc.primitive.cullMode = CullMode::None;
@@ -476,9 +475,10 @@ bool Application::initRenderPipelines() {
 
 	for (uint32_t pipelineIdx = 0; pipelineIdx < m_gpuScene.renderPipelineCount(); ++pipelineIdx) {
 		// Vertex fetch
-		std::vector<VertexBufferLayout> vertexBufferLayouts = m_gpuScene.vertexBufferLayouts(0);
+		std::vector<VertexBufferLayout> vertexBufferLayouts = m_gpuScene.vertexBufferLayouts(pipelineIdx);
 		pipelineDesc.vertex.bufferCount = static_cast<uint32_t>(vertexBufferLayouts.size());
 		pipelineDesc.vertex.buffers = vertexBufferLayouts.data();
+		pipelineDesc.primitive.topology = m_gpuScene.primitiveTopology(pipelineIdx);
 
 		RenderPipeline pipeline = m_device.createRenderPipeline(pipelineDesc);
 		std::cout << "Render pipeline: " << pipeline << std::endl;

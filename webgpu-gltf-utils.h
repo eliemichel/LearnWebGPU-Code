@@ -32,4 +32,8 @@ wgpu::TextureFormat textureFormatFromGltfImage(const tinygltf::Image& image, boo
 // Build a transform matrix either from node.matrix or the TRS fields
 glm::mat4 nodeMatrix(const tinygltf::Node& node);
 
+// Get the topology from prim.mode
+// return Force32 if not compatible
+wgpu::PrimitiveTopology primitiveTopologyFromGltf(const tinygltf::Primitive& prim);
+
 } // namespace wgpu::gltf
