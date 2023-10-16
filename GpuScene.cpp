@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <unordered_map>
+#include <map>
 
 using namespace wgpu;
 using namespace tinygltf;
@@ -35,7 +36,6 @@ void GpuScene::createFromModel(
 
 void GpuScene::draw(wgpu::RenderPassEncoder renderPass, uint32_t renderPipelineIndex) {
 	for (const Node& node : m_nodes) {
-		if (node.meshIndex != 3) continue;
 		const Mesh& mesh = m_meshes[node.meshIndex];
 		renderPass.setBindGroup(2, node.bindGroup, 0, nullptr);
 		for (const MeshPrimitive& prim : mesh.primitives) {
@@ -43,8 +43,8 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass, uint32_t renderPipelineI
 			for (size_t layoutIdx = 0; layoutIdx < prim.attributeBufferViews.size(); ++layoutIdx) {
 				const auto& view = prim.attributeBufferViews[layoutIdx];
 				uint32_t slot = static_cast<uint32_t>(layoutIdx);
-				if (view.buffer != -1) {
-					renderPass.setVertexBuffer(slot, m_buffers[view.buffer], view.byteOffset, view.byteLength);
+				if (view.bufferIndex != WGPU_LIMIT_U32_UNDEFINED) {
+					renderPass.setVertexBuffer(slot, m_buffers[view.bufferIndex], view.byteOffset, view.byteLength);
 				}
 				else {
 					renderPass.setVertexBuffer(slot, m_nullBuffer, 0, 4 * sizeof(float));
@@ -53,7 +53,7 @@ void GpuScene::draw(wgpu::RenderPassEncoder renderPass, uint32_t renderPipelineI
 			renderPass.setBindGroup(1, m_materials[prim.materialIndex].bindGroup, 0, nullptr);
 			assert(prim.indexBufferView.byteStride == 0 || prim.indexBufferView.byteStride == indexFormatByteSize(prim.indexFormat));
 			renderPass.setIndexBuffer(
-				m_buffers[prim.indexBufferView.buffer],
+				m_buffers[prim.indexBufferView.bufferIndex],
 				prim.indexFormat,
 				prim.indexBufferView.byteOffset + prim.indexBufferByteOffset,
 				prim.indexBufferView.byteLength
@@ -489,6 +489,29 @@ void GpuScene::terminateNodes() {
 }
 
 void GpuScene::initDrawCalls(const tinygltf::Model& model) {
+	struct Comp {
+		bool operator()(const GpuBufferView& a, const GpuBufferView& b) const {
+			return std::tie(a.bufferIndex, a.byteOffset, a.byteLength, a.byteStride) < std::tie(b.bufferIndex, b.byteOffset, b.byteLength, b.byteStride);
+		}
+	};
+
+	// We create our own set of buffer views, where attribute offsets cannot be
+	// larger than the vertex buffer stride.
+	std::vector<GpuBufferView> gpuBufferViews;
+	std::map<GpuBufferView, uint32_t, Comp> gpuBufferViewLut;
+	auto getOrCreateGpuBufferViewIndex = [&](const GpuBufferView& view) {
+		auto it = gpuBufferViewLut.find(view);
+		if (it != gpuBufferViewLut.end()) {
+			return it->second;
+		}
+		else {
+			uint32_t idx = static_cast<uint32_t>(gpuBufferViews.size());
+			gpuBufferViews.push_back(view);
+			gpuBufferViewLut[view] = idx;
+			return idx;
+		}
+	};
+
 	for (const tinygltf::Mesh& mesh : model.meshes) {
 		Mesh gpuMesh;
 		for (const tinygltf::Primitive& prim : mesh.primitives) {
@@ -506,48 +529,55 @@ void GpuScene::initDrawCalls(const tinygltf::Model& model) {
 			// For each layout, there are multiple attributes
 			std::vector<std::vector<VertexAttribute>> vertexBufferLayoutToAttributes;
 			// For each layout, there is a single buffer view
-			std::vector<tinygltf::BufferView> vertexBufferLayoutToBufferView;
+			std::vector<GpuBufferView> vertexBufferLayoutToGpuBufferView;
 			// And we keep the map from bufferView to layout index
 			// NB: The index '-1' is used for attributes expected by the shader but not
 			// provided by the GLTF file.
-			std::unordered_map<int, size_t> bufferViewToVertexBufferLayout;
+			std::unordered_map<int, size_t> gpuBufferViewToVertexBufferLayout;
 
 			for (const auto& [attrSemantic, location, defaultFormat] : semanticToLocation) {
-				int bufferViewIdx;
-				BufferView bufferView = {};
-				VertexFormat format = VertexFormat::Undefined;
-				uint64_t byteOffset;
+				int gpuBufferViewIdx = -1;
+				VertexFormat format = defaultFormat;
+				uint64_t attrByteOffset = 0;
 
 				auto accessorIt = prim.attributes.find(attrSemantic);
 				if (accessorIt != prim.attributes.end()) {
 					Accessor accessor = model.accessors[accessorIt->second];
-					bufferViewIdx = accessor.bufferView;
-					bufferView = model.bufferViews[bufferViewIdx];
+					const BufferView& bufferView = model.bufferViews[accessor.bufferView];
 					format = vertexFormatFromAccessor(accessor);
-					byteOffset = static_cast<uint64_t>(accessor.byteOffset);
-					if (bufferView.byteStride == 0) {
-						bufferView.byteStride = vertexFormatByteSize(format);
-					}
-				}
-				else {
-					bufferViewIdx = -1;
-					bufferView.buffer = -1;
-					format = defaultFormat;
-					byteOffset = 0;
+					attrByteOffset = static_cast<uint64_t>(accessor.byteOffset);
+					uint64_t byteStride =
+						bufferView.byteStride != 0
+						? bufferView.byteStride
+						: vertexFormatByteSize(format);
+					uint64_t bufferByteOffset = bufferView.byteOffset;
+
+					// Prevent attribute offset from being larger than the stride
+					uint64_t x = (attrByteOffset / byteStride)* byteStride;
+					attrByteOffset -= x;
+					bufferByteOffset += x;
+
+					gpuBufferViewIdx = getOrCreateGpuBufferViewIndex(GpuBufferView{
+						static_cast<uint32_t>(bufferView.buffer),
+						bufferByteOffset,
+						bufferView.byteLength,
+						byteStride
+					});
 				}
 
 				// Group attributes by bufferView
 				size_t layoutIdx = 0;
-				auto vertexBufferLayoutIt = bufferViewToVertexBufferLayout.find(bufferViewIdx);
-				if (vertexBufferLayoutIt == bufferViewToVertexBufferLayout.end()) {
+				auto vertexBufferLayoutIt = gpuBufferViewToVertexBufferLayout.find(gpuBufferViewIdx);
+				if (vertexBufferLayoutIt == gpuBufferViewToVertexBufferLayout.end()) {
+					GpuBufferView view = gpuBufferViewIdx >= 0 ? gpuBufferViews[gpuBufferViewIdx] : GpuBufferView{};
 					layoutIdx = vertexBufferLayouts.size();
 					VertexBufferLayout layout;
-					layout.arrayStride = static_cast<uint64_t>(bufferView.byteStride);
+					layout.arrayStride = view.byteStride;
 					layout.stepMode = VertexStepMode::Vertex;
 					vertexBufferLayouts.push_back(layout);
 					vertexBufferLayoutToAttributes.push_back({});
-					vertexBufferLayoutToBufferView.push_back(bufferView);
-					bufferViewToVertexBufferLayout[bufferViewIdx] = layoutIdx;
+					vertexBufferLayoutToGpuBufferView.push_back(view);
+					gpuBufferViewToVertexBufferLayout[gpuBufferViewIdx] = layoutIdx;
 				}
 				else {
 					layoutIdx = vertexBufferLayoutIt->second;
@@ -556,7 +586,7 @@ void GpuScene::initDrawCalls(const tinygltf::Model& model) {
 				VertexAttribute attrib;
 				attrib.shaderLocation = location;
 				attrib.format = format;
-				attrib.offset = byteOffset;
+				attrib.offset = attrByteOffset;
 				vertexBufferLayoutToAttributes[layoutIdx].push_back(attrib);
 			}
 
@@ -574,8 +604,13 @@ void GpuScene::initDrawCalls(const tinygltf::Model& model) {
 			};
 
 			gpuMesh.primitives.push_back(MeshPrimitive{
-				vertexBufferLayoutToBufferView,
-				indexBufferView,
+				vertexBufferLayoutToGpuBufferView,
+				GpuBufferView{
+					static_cast<uint32_t>(indexBufferView.buffer),
+					indexBufferView.byteOffset,
+					indexBufferView.byteLength,
+					indexBufferView.byteStride
+				},
 				static_cast<uint32_t>(indexAccessor.byteOffset),
 				indexFormat,
 				static_cast<uint32_t>(indexAccessor.count),

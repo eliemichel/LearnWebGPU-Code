@@ -117,10 +117,16 @@ private:
 	std::vector<RenderPipelineSettings> m_renderPipelines;
 
 	// Draw Calls + Vertex Buffer Layouts
+	struct GpuBufferView {
+		uint32_t bufferIndex = WGPU_LIMIT_U32_UNDEFINED;
+		uint64_t byteOffset;
+		uint64_t byteLength;
+		uint64_t byteStride;
+	};
 	struct MeshPrimitive {
 		// Draw Call Data
-		std::vector<tinygltf::BufferView> attributeBufferViews;
-		tinygltf::BufferView indexBufferView;
+		std::vector<GpuBufferView> attributeBufferViews;
+		GpuBufferView indexBufferView;
 		uint32_t indexBufferByteOffset;
 		wgpu::IndexFormat indexFormat;
 		uint32_t indexCount;
