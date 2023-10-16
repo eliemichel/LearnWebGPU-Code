@@ -106,18 +106,17 @@ private:
 	/**
 	 * The same structure as in the shader, replicated in C++
 	 */
-	struct MyUniforms {
+	struct GlobalUniforms {
 		// We add transform matrices
 		mat4x4 projectionMatrix;
 		mat4x4 viewMatrix;
-		vec4 color;
 		vec3 cameraWorldPosition;
 		float time;
 		float gamma;
 		float _pad1[3];
 	};
 	// Have the compiler check byte alignment
-	static_assert(sizeof(MyUniforms) % 16 == 0);
+	static_assert(sizeof(GlobalUniforms) % 16 == 0);
 
 	struct LightingUniforms {
 		std::array<vec4, 2> directions;
@@ -184,7 +183,7 @@ private:
 
 	// Uniforms
 	wgpu::Buffer m_uniformBuffer = nullptr;
-	MyUniforms m_uniforms;
+	GlobalUniforms m_uniforms;
 	wgpu::Buffer m_lightingUniformBuffer = nullptr;
 	LightingUniforms m_lightingUniforms;
 	bool m_lightingUniformsChanged = true;

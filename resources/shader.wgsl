@@ -141,10 +141,9 @@ struct VertexOutput {
 /**
  * A structure holding the value of our uniforms
  */
-struct MyUniforms {
+struct GlobalUniforms {
 	projectionMatrix: mat4x4f,
 	viewMatrix: mat4x4f,
-	color: vec4f,
 	cameraWorldPosition: vec3f,
 	time: f32,
 	gamma: f32,
@@ -178,7 +177,7 @@ struct MaterialUniforms {
 }
 
 // General bind group
-@group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
+@group(0) @binding(0) var<uniform> uGlobal: GlobalUniforms;
 @group(0) @binding(1) var<uniform> uLighting: LightingUniforms;
 
 // Material bind group
@@ -199,11 +198,11 @@ struct MaterialUniforms {
 fn vs_main(in: VertexInput) -> VertexOutput {
 	var out: VertexOutput;
 	let worldPosition = uNode.modelMatrix * vec4f(in.position, 1.0);
-	out.position = uMyUniforms.projectionMatrix * uMyUniforms.viewMatrix * worldPosition;
+	out.position = uGlobal.projectionMatrix * uGlobal.viewMatrix * worldPosition;
 	out.normal = (uNode.modelMatrix * vec4f(in.normal, 0.0)).xyz;
 	out.color = in.color;
 	out.uv = in.uv;
-	out.viewDirection = uMyUniforms.cameraWorldPosition - worldPosition.xyz;
+	out.viewDirection = uGlobal.cameraWorldPosition - worldPosition.xyz;
 	return out;
 }
 
@@ -240,6 +239,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	//color = N * 0.5 + 0.5;
 	
 	// Gamma-correction
-	let corrected_color = pow(color, vec3f(uMyUniforms.gamma));
-	return vec4f(corrected_color, uMyUniforms.color.a);
+	let corrected_color = pow(color, vec3f(uGlobal.gamma));
+	return vec4f(corrected_color, 1.0);
 }

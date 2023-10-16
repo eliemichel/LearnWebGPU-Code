@@ -100,7 +100,7 @@ void Application::onFrame() {
 
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
-	m_queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
+	m_queue.writeBuffer(m_uniformBuffer, offsetof(GlobalUniforms, time), &m_uniforms.time, sizeof(GlobalUniforms::time));
 	
 	TextureView nextTexture = m_swapChain.getCurrentTextureView();
 	if (!nextTexture) {
@@ -525,7 +525,7 @@ void Application::terminateGeometry() {
 bool Application::initUniforms() {
 	// Create uniform buffer
 	BufferDescriptor bufferDesc;
-	bufferDesc.size = sizeof(MyUniforms);
+	bufferDesc.size = sizeof(GlobalUniforms);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	bufferDesc.mappedAtCreation = false;
 	m_uniformBuffer = m_device.createBuffer(bufferDesc);
@@ -534,9 +534,8 @@ bool Application::initUniforms() {
 	m_uniforms.viewMatrix = glm::lookAt(vec3(-2.0f, -3.0f, 2.0f), vec3(0.0f), vec3(0, 0, 1));
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, 640.0f / 480.0f, 0.01f, 100.0f);
 	m_uniforms.time = 1.0f;
-	m_uniforms.color = { 0.0f, 1.0f, 0.4f, 1.0f };
 	m_uniforms.gamma = textureFormatGamma(m_swapChainFormat);
-	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(MyUniforms));
+	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(GlobalUniforms));
 
 	updateProjectionMatrix();
 	updateViewMatrix();
@@ -591,7 +590,7 @@ bool Application::initBindGroupLayouts() {
 		bindingLayout.binding = 0;
 		bindingLayout.visibility = ShaderStage::Vertex | ShaderStage::Fragment;
 		bindingLayout.buffer.type = BufferBindingType::Uniform;
-		bindingLayout.buffer.minBindingSize = sizeof(MyUniforms);
+		bindingLayout.buffer.minBindingSize = sizeof(GlobalUniforms);
 
 		// The lighting uniform buffer binding
 		BindGroupLayoutEntry& lightingUniformLayout = bindGroupLayoutEntries[1];
@@ -692,7 +691,7 @@ bool Application::initBindGroup() {
 	bindings[0].binding = 0;
 	bindings[0].buffer = m_uniformBuffer;
 	bindings[0].offset = 0;
-	bindings[0].size = sizeof(MyUniforms);
+	bindings[0].size = sizeof(GlobalUniforms);
 
 	bindings[1].binding = 1;
 	bindings[1].buffer = m_lightingUniformBuffer;
@@ -720,9 +719,9 @@ void Application::updateProjectionMatrix() {
 	m_uniforms.projectionMatrix = glm::perspective(45 * PI / 180, ratio, 0.01f, 100.0f);
 	m_queue.writeBuffer(
 		m_uniformBuffer,
-		offsetof(MyUniforms, projectionMatrix),
+		offsetof(GlobalUniforms, projectionMatrix),
 		&m_uniforms.projectionMatrix,
-		sizeof(MyUniforms::projectionMatrix)
+		sizeof(GlobalUniforms::projectionMatrix)
 	);
 }
 
@@ -735,17 +734,17 @@ void Application::updateViewMatrix() {
 	m_uniforms.viewMatrix = glm::lookAt(position, vec3(0.0f), vec3(0, 0, 1));
 	m_queue.writeBuffer(
 		m_uniformBuffer,
-		offsetof(MyUniforms, viewMatrix),
+		offsetof(GlobalUniforms, viewMatrix),
 		&m_uniforms.viewMatrix,
-		sizeof(MyUniforms::viewMatrix)
+		sizeof(GlobalUniforms::viewMatrix)
 	);
 
 	m_uniforms.cameraWorldPosition = position;
 	m_queue.writeBuffer(
 		m_uniformBuffer,
-		offsetof(MyUniforms, cameraWorldPosition),
+		offsetof(GlobalUniforms, cameraWorldPosition),
 		&m_uniforms.cameraWorldPosition,
-		sizeof(MyUniforms::cameraWorldPosition)
+		sizeof(GlobalUniforms::cameraWorldPosition)
 	);
 }
 
