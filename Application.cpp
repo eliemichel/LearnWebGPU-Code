@@ -157,13 +157,17 @@ void Application::onFrame() {
 	updateGui(renderPass);
 
 	renderPass.end();
+	renderPass.release();
 	
 	nextTexture.release();
 
 	CommandBufferDescriptor cmdBufferDescriptor{};
 	cmdBufferDescriptor.label = "Command buffer";
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+	encoder.release();
+
 	m_queue.submit(command);
+	command.release();
 
 	m_swapChain.present();
 
