@@ -20,6 +20,8 @@ add_executable(App
 	main.cpp
 	Application.h
 	Application.cpp
+	GltfDebugRenderer.h
+	GltfDebugRenderer.cpp
 	GpuScene.h
 	GpuScene.cpp
 	ResourceManager.h
