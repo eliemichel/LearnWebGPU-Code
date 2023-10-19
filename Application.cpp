@@ -411,7 +411,6 @@ void Application::terminateDepthBuffer() {
 
 
 bool Application::initRenderPipelines() {
-	// TODO: Build pipelines in GpuScene
 	std::cout << "Creating shader module..." << std::endl;
 	m_shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
 	std::cout << "Shader module: " << m_shaderModule << std::endl;

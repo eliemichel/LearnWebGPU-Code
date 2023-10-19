@@ -86,9 +86,77 @@ void GltfDebugRenderer::terminateNodeData() {
 
 
 void GltfDebugRenderer::initPipeline() {
-	RenderPipelineDescriptor pipelineDesc = {};
-	// TODO
+#if 0 // TODO
+	std::vector<BindGroupLayout> bindGroupLayouts = {
+		m_bindGroupLayout,
+		m_materialBindGroupLayout,
+		m_nodeBindGroupLayout
+	};
+
+	// Create the pipeline layout
+	PipelineLayoutDescriptor layoutDesc;
+	layoutDesc.bindGroupLayoutCount = static_cast<uint32_t>(bindGroupLayouts.size());
+	layoutDesc.bindGroupLayouts = (WGPUBindGroupLayout*)bindGroupLayouts.data();
+	PipelineLayout layout = m_device.createPipelineLayout(layoutDesc);
+
+	m_shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
+
+	RenderPipelineDescriptor pipelineDesc;
+	pipelineDesc.layout = layout;
+
+	pipelineDesc.vertex.module = m_shaderModule;
+	pipelineDesc.vertex.entryPoint = "vs_main";
+	pipelineDesc.vertex.constantCount = 0;
+	pipelineDesc.vertex.constants = nullptr;
+
+	pipelineDesc.primitive.stripIndexFormat = IndexFormat::Undefined;
+	pipelineDesc.primitive.frontFace = FrontFace::CCW;
+	pipelineDesc.primitive.cullMode = CullMode::None;
+
+	FragmentState fragmentState;
+	pipelineDesc.fragment = &fragmentState;
+	fragmentState.module = m_shaderModule;
+	fragmentState.entryPoint = "fs_main";
+	fragmentState.constantCount = 0;
+	fragmentState.constants = nullptr;
+
+	BlendState blendState;
+	blendState.color.srcFactor = BlendFactor::SrcAlpha;
+	blendState.color.dstFactor = BlendFactor::OneMinusSrcAlpha;
+	blendState.color.operation = BlendOperation::Add;
+	blendState.alpha.srcFactor = BlendFactor::Zero;
+	blendState.alpha.dstFactor = BlendFactor::One;
+	blendState.alpha.operation = BlendOperation::Add;
+
+	ColorTargetState colorTarget;
+	colorTarget.format = m_swapChainFormat;
+	colorTarget.blend = &blendState;
+	colorTarget.writeMask = ColorWriteMask::All;
+
+	fragmentState.targetCount = 1;
+	fragmentState.targets = &colorTarget;
+
+	DepthStencilState depthStencilState = Default;
+	depthStencilState.depthCompare = CompareFunction::Less;
+	depthStencilState.depthWriteEnabled = true;
+	depthStencilState.format = m_depthTextureFormat;
+	depthStencilState.stencilReadMask = 0;
+	depthStencilState.stencilWriteMask = 0;
+
+	pipelineDesc.depthStencil = &depthStencilState;
+
+	pipelineDesc.multisample.count = 1;
+	pipelineDesc.multisample.mask = ~0u;
+	pipelineDesc.multisample.alphaToCoverageEnabled = false;
+
+	// Vertex fetch
+	std::vector<VertexBufferLayout> vertexBufferLayouts = m_gpuScene.vertexBufferLayouts(pipelineIdx);
+	pipelineDesc.vertex.bufferCount = static_cast<uint32_t>(vertexBufferLayouts.size());
+	pipelineDesc.vertex.buffers = vertexBufferLayouts.data();
+	pipelineDesc.primitive.topology = m_gpuScene.primitiveTopology(pipelineIdx);
+
 	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
+#endif
 }
 
 void GltfDebugRenderer::terminatePipeline() {
