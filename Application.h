@@ -112,8 +112,8 @@ private:
 		mat4x4 viewMatrix;
 		mat4x4 modelMatrix;
 		vec4 color;
+		vec3 cameraWorldPosition;
 		float time;
-		float _pad[3];
 	};
 	// Have the compiler check byte alignment
 	static_assert(sizeof(MyUniforms) % 16 == 0);
@@ -121,6 +121,13 @@ private:
 	struct LightingUniforms {
 		std::array<vec4, 2> directions;
 		std::array<vec4, 2> colors;
+
+		// Material properties
+		float hardness = 32.0f;
+		float kd = 1.0f;
+		float ks = 0.5f;
+
+		float _pad[1];
 	};
 	static_assert(sizeof(LightingUniforms) % 16 == 0);
 
