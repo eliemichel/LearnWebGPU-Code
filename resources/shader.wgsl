@@ -38,8 +38,9 @@ struct LightingUniforms {
 
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 @group(0) @binding(1) var baseColorTexture: texture_2d<f32>;
-@group(0) @binding(2) var textureSampler: sampler;
-@group(0) @binding(3) var<uniform> uLighting: LightingUniforms;
+@group(0) @binding(2) var normalTexture: texture_2d<f32>;
+@group(0) @binding(3) var textureSampler: sampler;
+@group(0) @binding(4) var<uniform> uLighting: LightingUniforms;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -56,7 +57,11 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 	// Compute shading
-	let N = normalize(in.normal);
+	//let N = normalize(in.normal);
+	// Sample normal
+	let normalMapStrength = 0.5; // could be a uniform
+	let encodedN = textureSample(normalTexture, textureSampler, in.uv).rgb;
+	let N = normalize(mix(in.normal, encodedN - 0.5, normalMapStrength));
 	let V = normalize(in.viewDirection);
 
 	// Sample texture
