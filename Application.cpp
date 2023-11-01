@@ -543,12 +543,14 @@ bool Application::initTextures() {
 
 	// Create textures
 	m_baseColorTexture = ResourceManager::loadTexture(RESOURCE_DIR "/cobblestone_floor_08_diff_2k.jpg", m_device, &m_baseColorTextureView);
+	//m_baseColorTexture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_albedo.jpg", m_device, &m_baseColorTextureView);
 	if (!m_baseColorTexture) {
 		std::cerr << "Could not load base color texture!" << std::endl;
 		return false;
 	}
 
 	m_normalTexture = ResourceManager::loadTexture(RESOURCE_DIR "/cobblestone_floor_08_nor_gl_2k.png", m_device, &m_normalTextureView);
+	//m_normalTexture = ResourceManager::loadTexture(RESOURCE_DIR "/fourareen2K_normals.png", m_device, &m_normalTextureView);
 	if (!m_normalTexture) {
 		std::cerr << "Could not load normal texture!" << std::endl;
 		return false;
@@ -572,6 +574,7 @@ bool Application::initGeometry() {
 	// Load mesh data from OBJ file
 	std::vector<VertexAttributes> vertexData;
 	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/cylinder.obj", vertexData);
+	//bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/fourareen.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return false;

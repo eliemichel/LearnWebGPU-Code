@@ -71,7 +71,7 @@ public:
 private:
 	// Compute the TBN local to a triangle face from its corners and return it as
 	// a matrix whose columns are the T, B and N vectors.
-	static mat3x3 computeTBN(const VertexAttributes corners[3]);
+	static mat3x3 computeTBN(const VertexAttributes corners[3], const vec3& expectedN);
 
 	// Compute Tangent and Bitangent attributes from the normal and UVs.
 	static void populateTextureFrameAttributes(std::vector<VertexAttributes>& vertexData);

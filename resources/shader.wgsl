@@ -99,7 +99,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 		color += baseColor * kd * diffuse + ks * specular;
 	}
 
-	color = N * 0.5 + 0.5;
+	//color = N * 0.5 + 0.5;
 	
 	// Gamma-correction
 	let corrected_color = pow(color, vec3f(2.2));
