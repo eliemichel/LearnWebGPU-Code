@@ -213,7 +213,7 @@ bool Application::initWindow() {
 	// Create window
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	m_window = glfwCreateWindow(1920, 1080, "Learn WebGPU", NULL, NULL);
 	if (!m_window) {
 		std::cerr << "Could not open window!" << std::endl;
 		return false;
@@ -240,6 +240,8 @@ void Application::initSwapChain() {
 #endif
 
 	int width, height;
+	width = 1920;
+	height = 1080;
 	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
@@ -291,8 +293,10 @@ void Application::terminateBuffers() {
 void Application::initTextures() {
 	// Load image data
 	int width, height, channels;
-	uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
-	if (nullptr == pixelData) throw std::runtime_error("Could not load input texture!");
+	width = 1920 * 2 ;
+	height = 1080 * 2;
+	// uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
+	// if (nullptr == pixelData) throw std::runtime_error("Could not load input texture!");
 	Extent3D textureSize = { (uint32_t)width, (uint32_t)height, 1 };
 
 	// Create texture
@@ -305,12 +309,12 @@ void Application::initTextures() {
 	textureDesc.viewFormats = nullptr;
 	textureDesc.mipLevelCount = 1;
 
-	textureDesc.label = "Input";
-	textureDesc.usage = (
-		TextureUsage::TextureBinding | // to bind the texture in a shader
-		TextureUsage::CopyDst // to upload the input data
-	);
-	m_inputTexture = m_device.createTexture(textureDesc);
+	// textureDesc.label = "Input";
+	// textureDesc.usage = (
+	// 	TextureUsage::TextureBinding | // to bind the texture in a shader
+	// 	TextureUsage::CopyDst // to upload the input data
+	// );
+	// m_inputTexture = m_device.createTexture(textureDesc);
 
 	textureDesc.label = "Output";
 	textureDesc.usage = (
@@ -321,24 +325,24 @@ void Application::initTextures() {
 	m_outputTexture = m_device.createTexture(textureDesc);
 
 	// Upload texture data for MIP level 0 to the GPU
-	ImageCopyTexture destination;
-	destination.texture = m_inputTexture;
-	destination.origin = { 0, 0, 0 };
-	destination.aspect = TextureAspect::All;
-	destination.mipLevel = 0;
-	TextureDataLayout source;
-	source.offset = 0;
-	source.bytesPerRow = 4 * textureSize.width;
-	source.rowsPerImage = textureSize.height;
-	m_queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, textureSize);
+	// ImageCopyTexture destination;
+	// // destination.texture = m_inputTexture;
+	// destination.origin = { 0, 0, 0 };
+	// destination.aspect = TextureAspect::All;
+	// destination.mipLevel = 0;
+	// TextureDataLayout source;
+	// source.offset = 0;
+	// source.bytesPerRow = 4 * textureSize.width;
+	// source.rowsPerImage = textureSize.height;
+	// m_queue.writeTexture(destination, pixelData, (size_t)(4 * width * height), source, textureSize);
 
 	// Free CPU-side data
-	stbi_image_free(pixelData);
+	// stbi_image_free(pixelData);
 }
 
 void Application::terminateTextures() {
-	m_inputTexture.destroy();
-	wgpuTextureRelease(m_inputTexture);
+	// m_inputTexture.destroy();
+	// wgpuTextureRelease(m_inputTexture);
 
 	m_outputTexture.destroy();
 	wgpuTextureRelease(m_outputTexture);
@@ -354,35 +358,35 @@ void Application::initTextureViews() {
 	textureViewDesc.mipLevelCount = 1;
 	textureViewDesc.baseMipLevel = 0;
 
-	textureViewDesc.label = "Input";
-	m_inputTextureView = m_inputTexture.createView(textureViewDesc);
+	// textureViewDesc.label = "Input";
+	// m_inputTextureView = m_inputTexture.createView(textureViewDesc);
 
 	textureViewDesc.label = "Output";
 	m_outputTextureView = m_outputTexture.createView(textureViewDesc);
 }
 
 void Application::terminateTextureViews() {
-	wgpuTextureViewRelease(m_inputTextureView);
+	// wgpuTextureViewRelease(m_inputTextureView);
 	wgpuTextureViewRelease(m_outputTextureView);
 }
 
 void Application::initBindGroup() {
 	// Create compute bind group
-	std::vector<BindGroupEntry> entries(3, Default);
+	std::vector<BindGroupEntry> entries(2, Default);
 
 	// Input buffer
-	entries[0].binding = 0;
-	entries[0].textureView = m_inputTextureView;
+	// entries[0].binding = 0;
+	// // entries[0].textureView = m_inputTextureView;
 
 	// Output buffer
-	entries[1].binding = 1;
-	entries[1].textureView = m_outputTextureView;
+	entries[0].binding = 0;
+	entries[0].textureView = m_outputTextureView;
 
-	// Uniforms
-	entries[2].binding = 2;
-	entries[2].buffer = m_uniformBuffer;
-	entries[2].offset = 0;
-	entries[2].size = sizeof(Uniforms);
+	// Unifo1ms
+	entries[1].binding = 1;
+	entries[1].buffer = m_uniformBuffer;
+	entries[1].offset = 0;
+	entries[1].size = sizeof(Uniforms);
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
@@ -397,26 +401,26 @@ void Application::terminateBindGroup() {
 
 void Application::initBindGroupLayout() {
 	// Create bind group layout
-	std::vector<BindGroupLayoutEntry> bindings(3, Default);
+	std::vector<BindGroupLayoutEntry> bindings(2, Default);
 
-	// Input image: MIP level 0 of the texture
-	bindings[0].binding = 0;
-	bindings[0].texture.sampleType = TextureSampleType::Float;
-	bindings[0].texture.viewDimension = TextureViewDimension::_2D;
-	bindings[0].visibility = ShaderStage::Compute;
+	// // Input image: MIP level 0 of the texture
+	// bindings[0].binding = 0;
+	// bindings[0].texture.sampleType = TextureSampleType::Float;
+	// bindings[0].texture.viewDimension = TextureViewDimension::_2D;
+	// bindings[0].visibility = ShaderStage::Compute;
 
 	// Output image: MIP level 1 of the texture
-	bindings[1].binding = 1;
-	bindings[1].storageTexture.access = StorageTextureAccess::WriteOnly;
-	bindings[1].storageTexture.format = TextureFormat::RGBA8Unorm;
-	bindings[1].storageTexture.viewDimension = TextureViewDimension::_2D;
-	bindings[1].visibility = ShaderStage::Compute;
+	bindings[0].binding = 0;
+	bindings[0].storageTexture.access = StorageTextureAccess::WriteOnly;
+	bindings[0].storageTexture.format = TextureFormat::RGBA8Unorm;
+	bindings[0].storageTexture.viewDimension = TextureViewDimension::_2D;
+	bindings[0].visibility = ShaderStage::Compute;
 
 	// Uniforms
-	bindings[2].binding = 2;
-	bindings[2].buffer.type = BufferBindingType::Uniform;
-	bindings[2].buffer.minBindingSize = sizeof(Uniforms);
-	bindings[2].visibility = ShaderStage::Compute;
+	bindings[1].binding = 1;
+	bindings[1].buffer.type = BufferBindingType::Uniform;
+	bindings[1].buffer.minBindingSize = sizeof(Uniforms);
+	bindings[1].visibility = ShaderStage::Compute;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();
@@ -555,8 +559,8 @@ void Application::onCompute() {
 	for (uint32_t i = 0; i < 1; ++i) {
 		computePass.setBindGroup(0, m_bindGroup, 0, nullptr);
 
-		uint32_t invocationCountX = m_inputTexture.getWidth();
-		uint32_t invocationCountY = m_inputTexture.getHeight();
+		uint32_t invocationCountX = m_outputTexture.getWidth();
+		uint32_t invocationCountY = m_outputTexture.getHeight();
 		uint32_t workgroupSizePerDim = 8;
 		// This ceils invocationCountX / workgroupSizePerDim
 		uint32_t workgroupCountX = (invocationCountX + workgroupSizePerDim - 1) / workgroupSizePerDim;

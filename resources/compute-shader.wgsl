@@ -4,9 +4,9 @@ struct Uniforms {
     frame: u32,
 }
 
-@group(0) @binding(0) var inputTexture: texture_2d<f32>;
-@group(0) @binding(1) var outputTexture: texture_storage_2d<rgba8unorm,write>;
-@group(0) @binding(2) var<uniform> uniforms: Uniforms;
+// @group(0) @binding(0) var inputTexture: texture_2d<f32>;
+@group(0) @binding(0) var outputTexture: texture_storage_2d<rgba8unorm,write>;
+@group(0) @binding(1) var<uniform> uniforms: Uniforms;
 
 
 // Easy to use template for your first SDF scene
@@ -41,8 +41,8 @@ fn opLimArray(p: vec3f, c: f32, lim: vec3f) -> vec3f {
 }
 
 fn map(p0: vec3f) -> f32 {
-    let p = p0; //opLimArray(p0, 2.5, vec3f(6.));
-    return opSubtract(sdBox(p, vec3f(1)), sdSphere(p, 1.3));
+    let p = opLimArray(p0, 2.5, vec3f(6.));
+    return opSubtract( sdSphere(p, 1.3), sdBox(p, vec3f(1)));
 }
 
 fn march(ro: vec3f, rd: vec3f) -> vec3f {
@@ -75,14 +75,14 @@ fn computeFilter(@builtin(global_invocation_id) id: vec3u) {
     let res = textureDimensions(outputTexture);
     if (id.x >= res.x || id.y >= res.y) { return; }
     let uv = (2.*(vec2f(id.xy) + .5) - vec2f(res)) / f32(res.y);
-    
+
     var ro = vec3f(0, 0, 4); // Coordinate system: X→, Y↑, Z⊙
-    var rd = normalize(vec3f(uv, -2));  
+    var rd = normalize(vec3f(uv, -2));
 
     // var i = atomicAdd(&frame, 1u);
     // var mouse = mouse_struct(vec2<f32>(sin(f32(i)),sin(f32(i))));
 
-    var f = f32(uniforms.frame) * 100.;
+    var f = f32(uniforms.frame) / 1000.;
     // var f = 10000.;
     // var mouse = mouse_struct(vec2<f32>(f, );
 
@@ -97,7 +97,7 @@ fn computeFilter(@builtin(global_invocation_id) id: vec3u) {
     var col = vec3f(n*.5+.5);
     col = mix(col, bg, map(p));
 
-    col.x = f / 100.;
+    // col.x = sin(f) + .5;
 
 
     textureStore(outputTexture, vec2u(id.x, res.y-1-id.y), vec4f(col, 1.));
