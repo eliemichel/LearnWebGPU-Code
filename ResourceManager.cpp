@@ -51,7 +51,7 @@ ShaderModule ResourceManager::loadShaderModule(const path& path, Device device) 
 	shaderDesc.hintCount = 0;
 	shaderDesc.hints = nullptr;
 #else // WEBGPU_BACKEND_WGPU
-	shaderCodeDesc.source = shaderSource.c_str();
+	shaderCodeDesc.code = shaderSource.c_str();
 #endif // WEBGPU_BACKEND_WGPU
 	return device.createShaderModule(shaderDesc);
 }

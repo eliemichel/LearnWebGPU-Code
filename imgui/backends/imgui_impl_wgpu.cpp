@@ -247,7 +247,7 @@ static WGPUProgrammableStageDescriptor ImGui_ImplWGPU_CreateShaderModule(const c
 #if defined(WEBGPU_BACKEND_WGPU)
     wgsl_desc.code = wgsl_source;
 #else
-    wgsl_desc.source = wgsl_source;
+    wgsl_desc.code = wgsl_source;
 #endif
 
     WGPUShaderModuleDescriptor desc = {};
@@ -532,7 +532,8 @@ static void ImGui_ImplWGPU_CreateFontsTexture()
 #if defined(WEBGPU_BACKEND_WGPU)
         sampler_desc.mipmapFilter = WGPUMipmapFilterMode_Linear;
 #else
-        sampler_desc.mipmapFilter = WGPUFilterMode_Linear;
+        // sampler_desc.mipmapFilter = WGPUFilterMode_Linear;
+        sampler_desc.mipmapFilter = WGPUMipmapFilterMode_Linear;
 #endif
         sampler_desc.addressModeU = WGPUAddressMode_Repeat;
         sampler_desc.addressModeV = WGPUAddressMode_Repeat;

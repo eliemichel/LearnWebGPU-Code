@@ -235,14 +235,16 @@ void Application::initSwapChain() {
 #ifdef WEBGPU_BACKEND_DAWN
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #else
-	m_swapChainFormat = m_surface.getPreferredFormat(m_adapter);
+	m_swapChainFormat = TextureFormat::BGRA8Unorm;
+	// m_swapChainFormat = m_surface.getPreferredFormat(m_adapter);
 #endif
 
 	int width, height;
 	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
-	m_swapChainDesc = {};
+	// m_swapChainDesc = {};
+    SwapChainDescriptor m_swapChainDesc;
 	m_swapChainDesc.width = (uint32_t)width;
 	m_swapChainDesc.height = (uint32_t)height;
 	m_swapChainDesc.usage = TextureUsage::RenderAttachment;
