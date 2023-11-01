@@ -507,12 +507,12 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		float width = 0.0f;
 
 		// Input image
-		width = m_inputTexture.getWidth() * m_settings.scale;
-		drawList->AddImage((ImTextureID)m_inputTextureView, { offset, 0 }, {
-			offset + width,
-			m_inputTexture.getHeight() * m_settings.scale
-		});
-		offset += width;
+		// width = m_inputTexture.getWidth() * m_settings.scale;
+		// drawList->AddImage((ImTextureID)m_inputTextureView, { offset, 0 }, {
+		// 	offset + width,
+		// 	m_inputTexture.getHeight() * m_settings.scale
+		// });
+		// offset += width;
 
 		// Output image
 		width = m_outputTexture.getWidth() * m_settings.scale;
@@ -523,16 +523,16 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		offset += width;
 	}
 
-	bool changed = false;
-	ImGui::Begin("Parameters");
-	float minimum = m_parameters.normalize  ? 0.0f : -2.0f;
-	float maximum = m_parameters.normalize ? 4.0f : 2.0f;
-	changed = ImGui::Combo("Filter Type", (int*)&m_parameters.filterType, "Sum\0Maximum\0Minimum\0") || changed;
-	changed = ImGui::SliderFloat3("Kernel X", glm::value_ptr(m_parameters.kernel[0]), minimum, maximum) || changed;
-	changed = ImGui::SliderFloat3("Kernel Y", glm::value_ptr(m_parameters.kernel[1]), minimum, maximum) || changed;
-	changed = ImGui::SliderFloat3("Kernel Z", glm::value_ptr(m_parameters.kernel[2]), minimum, maximum) || changed;
-	changed = ImGui::Checkbox("Normalize", &m_parameters.normalize) || changed;
-	ImGui::End();
+	bool changed = true;
+	// ImGui::Begin("Parameters");
+	// float minimum = m_parameters.normalize  ? 0.0f : -2.0f;
+	// float maximum = m_parameters.normalize ? 4.0f : 2.0f;
+	// changed = ImGui::Combo("Filter Type", (int*)&m_parameters.filterType, "Sum\0Maximum\0Minimum\0") || changed;
+	// changed = ImGui::SliderFloat3("Kernel X", glm::value_ptr(m_parameters.kernel[0]), minimum, maximum) || changed;
+	// changed = ImGui::SliderFloat3("Kernel Y", glm::value_ptr(m_parameters.kernel[1]), minimum, maximum) || changed;
+	// changed = ImGui::SliderFloat3("Kernel Z", glm::value_ptr(m_parameters.kernel[2]), minimum, maximum) || changed;
+	// changed = ImGui::Checkbox("Normalize", &m_parameters.normalize) || changed;
+	// ImGui::End();
 
 	if (changed) {
 		float sum = dot(vec4(1.0, 1.0, 1.0, 0.0), m_parameters.kernel * vec3(1.0));
@@ -543,13 +543,13 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	}
 	m_shouldCompute = changed;
 
-	ImGui::Begin("Settings");
-	ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
-	if (ImGui::Button("Save Output")) {
-		std::filesystem::path path = RESOURCE_DIR "/output.png";
-		saveTexture(path, m_device, m_outputTexture, 0);
-	}
-	ImGui::End();
+	// ImGui::Begin("Settings");
+	// ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
+	// if (ImGui::Button("Save Output")) {
+	// 	std::filesystem::path path = RESOURCE_DIR "/output.png";
+	// 	saveTexture(path, m_device, m_outputTexture, 0);
+	// }
+	// ImGui::End();
 
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
