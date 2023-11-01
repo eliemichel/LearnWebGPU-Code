@@ -143,7 +143,7 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBindGroups = 2;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
-	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
+	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float) + 2 * sizeof(uint32_t);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.maxBufferSize = 80;
 	requiredLimits.limits.maxTextureDimension1D = 4096;
@@ -456,6 +456,8 @@ void Application::terminateComputePipeline() {
 void Application::onFrame() {
 	glfwPollEvents();
 
+	// TODO increment frame number
+
 	TextureView nextTexture = m_swapChain.getCurrentTextureView();
 	if (!nextTexture) {
 		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
@@ -506,14 +508,6 @@ void Application::onGui(RenderPassEncoder renderPass) {
 		float offset = 0.0f;
 		float width = 0.0f;
 
-		// Input image
-		// width = m_inputTexture.getWidth() * m_settings.scale;
-		// drawList->AddImage((ImTextureID)m_inputTextureView, { offset, 0 }, {
-		// 	offset + width,
-		// 	m_inputTexture.getHeight() * m_settings.scale
-		// });
-		// offset += width;
-
 		// Output image
 		width = m_outputTexture.getWidth() * m_settings.scale;
 		drawList->AddImage((ImTextureID)m_outputTextureView, { offset, 0 }, {
@@ -524,18 +518,11 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	}
 
 	bool changed = true;
-	// ImGui::Begin("Parameters");
-	// float minimum = m_parameters.normalize  ? 0.0f : -2.0f;
-	// float maximum = m_parameters.normalize ? 4.0f : 2.0f;
-	// changed = ImGui::Combo("Filter Type", (int*)&m_parameters.filterType, "Sum\0Maximum\0Minimum\0") || changed;
-	// changed = ImGui::SliderFloat3("Kernel X", glm::value_ptr(m_parameters.kernel[0]), minimum, maximum) || changed;
-	// changed = ImGui::SliderFloat3("Kernel Y", glm::value_ptr(m_parameters.kernel[1]), minimum, maximum) || changed;
-	// changed = ImGui::SliderFloat3("Kernel Z", glm::value_ptr(m_parameters.kernel[2]), minimum, maximum) || changed;
-	// changed = ImGui::Checkbox("Normalize", &m_parameters.normalize) || changed;
-	// ImGui::End();
 
 	if (changed) {
 		float sum = dot(vec4(1.0, 1.0, 1.0, 0.0), m_parameters.kernel * vec3(1.0));
+		m_uniforms.frame += 1;
+
 		m_uniforms.kernel = m_parameters.normalize && std::abs(sum) > 1e-6
 			? m_parameters.kernel / sum
 			: m_parameters.kernel;
@@ -543,20 +530,12 @@ void Application::onGui(RenderPassEncoder renderPass) {
 	}
 	m_shouldCompute = changed;
 
-	// ImGui::Begin("Settings");
-	// ImGui::SliderFloat("Scale", &m_settings.scale, 0.0f, 2.0f);
-	// if (ImGui::Button("Save Output")) {
-	// 	std::filesystem::path path = RESOURCE_DIR "/output.png";
-	// 	saveTexture(path, m_device, m_outputTexture, 0);
-	// }
-	// ImGui::End();
-
 	ImGui::Render();
 	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 }
 
 void Application::onCompute() {
-	std::cout << "Computing..." << std::endl;
+	std::cout << "frame " << m_uniforms.frame << std::endl;
 
 	// Update uniforms
 	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(Uniforms));

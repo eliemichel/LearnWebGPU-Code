@@ -132,9 +132,11 @@ private:
 	// Computed from the Parameters
 	struct Uniforms {
 		glm::mat3x4 kernel = glm::mat3x4(0.0);
-		float test = 0.5f;
+		// float test = 0.5f;
 		uint32_t filterType = 0;
+		uint32_t frame = 0;
 		float _pad[2];
+
 	};
 	static_assert(sizeof(Uniforms) % 16 == 0);
 	Uniforms m_uniforms;
