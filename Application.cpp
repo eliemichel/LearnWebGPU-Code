@@ -271,13 +271,15 @@ bool Application::initWindowAndDevice() {
 
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
-	requiredLimits.limits.maxVertexAttributes = 4;
+	requiredLimits.limits.maxVertexAttributes = 6;
+	//                                          ^ This was a 4
 	requiredLimits.limits.maxVertexBuffers = 1;
 	requiredLimits.limits.maxBufferSize = 150000 * sizeof(VertexAttributes);
 	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
-	requiredLimits.limits.maxInterStageShaderComponents = 11;
+	requiredLimits.limits.maxInterStageShaderComponents = 17;
+	//                                                    ^^ This was a 11
 	requiredLimits.limits.maxBindGroups = 2;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
@@ -418,7 +420,7 @@ bool Application::initRenderPipeline() {
 	RenderPipelineDescriptor pipelineDesc;
 
 	// Vertex fetch
-	std::vector<VertexAttribute> vertexAttribs(4);
+	std::vector<VertexAttribute> vertexAttribs(6);
 
 	// Position attribute
 	vertexAttribs[0].shaderLocation = 0;
@@ -439,6 +441,16 @@ bool Application::initRenderPipeline() {
 	vertexAttribs[3].shaderLocation = 3;
 	vertexAttribs[3].format = VertexFormat::Float32x2;
 	vertexAttribs[3].offset = offsetof(VertexAttributes, uv);
+
+	// Tangent attribute
+	vertexAttribs[4].shaderLocation = 4;
+	vertexAttribs[4].format = VertexFormat::Float32x3;
+	vertexAttribs[4].offset = offsetof(VertexAttributes, tangent);
+
+	// Bitangent attribute
+	vertexAttribs[5].shaderLocation = 5;
+	vertexAttribs[5].format = VertexFormat::Float32x3;
+	vertexAttribs[5].offset = offsetof(VertexAttributes, bitangent);
 
 	VertexBufferLayout vertexBufferLayout;
 	vertexBufferLayout.attributeCount = (uint32_t)vertexAttribs.size();
@@ -559,7 +571,7 @@ void Application::terminateTextures() {
 bool Application::initGeometry() {
 	// Load mesh data from OBJ file
 	std::vector<VertexAttributes> vertexData;
-	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/plane.obj", vertexData);
+	bool success = ResourceManager::loadGeometryFromObj(RESOURCE_DIR "/cylinder.obj", vertexData);
 	if (!success) {
 		std::cerr << "Could not load geometry!" << std::endl;
 		return false;

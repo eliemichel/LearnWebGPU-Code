@@ -38,6 +38,7 @@ public:
 	using path = std::filesystem::path;
 	using vec3 = glm::vec3;
 	using vec2 = glm::vec2;
+	using mat3x3 = glm::mat3x3;
 
 	/**
 	 * A structure that describes the data layout in the vertex buffer,
@@ -46,7 +47,13 @@ public:
 	 */
 	struct VertexAttributes {
 		vec3 position;
-		vec3 normal;
+		
+		// Texture mapping attributes represent the local frame in which
+		// normals sampled from the normal map are expressed.
+		vec3 tangent; // T = local X axis
+		vec3 bitangent; // B = local Y axis
+		vec3 normal; // N = local Z axis
+
 		vec3 color;
 		vec2 uv;
 	};
@@ -60,4 +67,12 @@ public:
 	// Load an image from a standard image file into a new texture object
 	// NB: The texture must be destroyed after use
 	static wgpu::Texture loadTexture(const path& path, wgpu::Device device, wgpu::TextureView* pTextureView = nullptr);
+
+private:
+	// Compute the TBN local to a triangle face from its corners and return it as
+	// a matrix whose columns are the T, B and N vectors.
+	static mat3x3 computeTBN(const VertexAttributes corners[3]);
+
+	// Compute Tangent and Bitangent attributes from the normal and UVs.
+	static void populateTextureFrameAttributes(std::vector<VertexAttributes>& vertexData);
 };
