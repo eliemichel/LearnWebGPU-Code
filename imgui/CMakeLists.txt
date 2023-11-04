@@ -26,3 +26,9 @@ add_library(imgui STATIC
 
 target_include_directories(imgui PUBLIC .)
 target_link_libraries(imgui PUBLIC webgpu glfw)
+
+# C++11 is required by ImGui
+set_target_properties(imgui PROPERTIES
+	CXX_STANDARD 11
+	CXX_STANDARD_REQUIRED ON
+)
