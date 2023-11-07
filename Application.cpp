@@ -166,7 +166,7 @@ bool Application::initDevice() {
 	// Create device
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
-	deviceDesc.requiredFeaturesCount = 0;
+	// deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = m_adapter.requestDevice(deviceDesc);
@@ -550,7 +550,7 @@ void Application::onCompute() {
 
 	// Create compute pass
 	ComputePassDescriptor computePassDesc;
-	computePassDesc.timestampWriteCount = 0;
+	// computePassDesc.timestampWriteCount = 0;
 	computePassDesc.timestampWrites = nullptr;
 	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
