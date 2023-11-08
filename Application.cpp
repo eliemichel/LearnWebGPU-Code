@@ -286,10 +286,10 @@ void Application::initBuffers() {
 
 	// create storage buffer
 	BufferDescriptor storagedesc;
-	desc.label = "Storage";
-	desc.mappedAtCreation = false;
-	desc.size = sizeof(Storages);
-	desc.usage = BufferUsage::CopyDst | BufferUsage::CopySrc;
+	storagedesc.label = "Storage";
+	storagedesc.mappedAtCreation = false;
+	storagedesc.size = sizeof(Storages);
+	storagedesc.usage = BufferUsage::CopyDst | BufferUsage::CopySrc | BufferUsage::Storage;
 	m_storageBuffer = m_device.createBuffer(storagedesc);
 
 }
@@ -383,7 +383,7 @@ void Application::terminateTextureViews() {
 
 void Application::initBindGroup() {
 	// Create compute bind group
-	std::vector<BindGroupEntry> entries(2, Default);
+	std::vector<BindGroupEntry> entries(3, Default);
 
 	// Input buffer
 	// entries[0].binding = 0;
@@ -419,7 +419,7 @@ void Application::terminateBindGroup() {
 
 void Application::initBindGroupLayout() {
 	// Create bind group layout
-	std::vector<BindGroupLayoutEntry> bindings(2, Default);
+	std::vector<BindGroupLayoutEntry> bindings(3, Default);
 
 	// // Input image: MIP level 0 of the texture
 	// bindings[0].binding = 0;
@@ -439,6 +439,12 @@ void Application::initBindGroupLayout() {
 	bindings[1].buffer.type = BufferBindingType::Uniform;
 	bindings[1].buffer.minBindingSize = sizeof(Uniforms);
 	bindings[1].visibility = ShaderStage::Compute;
+
+	// Storages
+	bindings[2].binding = 2;
+	bindings[2].buffer.type = BufferBindingType::Storage;
+	bindings[2].buffer.minBindingSize = sizeof(Storages);
+	bindings[2].visibility = ShaderStage::Compute;
 
 	BindGroupLayoutDescriptor bindGroupLayoutDesc;
 	bindGroupLayoutDesc.entryCount = (uint32_t)bindings.size();

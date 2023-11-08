@@ -9,7 +9,7 @@ Building
 --------
 
 ```
-cmake . -B build
+cmake . -B build -DWEBGPU_BACKEND=DAWN
 cmake --build build
 ```
 

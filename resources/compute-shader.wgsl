@@ -4,9 +4,14 @@ struct Uniforms {
     frame: u32,
 }
 
+struct Storages {
+    states: array<f32, 128>
+}
+
 // @group(0) @binding(0) var inputTexture: texture_2d<f32>;
 @group(0) @binding(0) var outputTexture: texture_storage_2d<rgba8unorm,write>;
 @group(0) @binding(1) var<uniform> uniforms: Uniforms;
+@group(0) @binding(2) var<storage, read_write> storages:Storages;
 
 
 // Easy to use template for your first SDF scene
