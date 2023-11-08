@@ -139,29 +139,29 @@ bool Application::initDevice() {
 	SupportedLimits supportedLimits;
 	m_adapter.getLimits(&supportedLimits);
 	RequiredLimits requiredLimits = Default;
-	requiredLimits.limits.maxVertexAttributes = 6;
-	requiredLimits.limits.maxVertexBuffers = 1;
-	requiredLimits.limits.maxBindGroups = 2;
-	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
-	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float) + 2 * sizeof(uint32_t);
-	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
-	requiredLimits.limits.maxBufferSize = 80;
-	requiredLimits.limits.maxTextureDimension1D = 2048;
-	requiredLimits.limits.maxTextureDimension2D = 2048;
-	requiredLimits.limits.maxTextureDimension3D = 2048;
-	requiredLimits.limits.maxTextureArrayLayers = 1;
-	requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
-	requiredLimits.limits.maxSamplersPerShaderStage = 1;
-	requiredLimits.limits.maxVertexBufferArrayStride = 68;
-	requiredLimits.limits.maxInterStageShaderComponents = 17;
-	requiredLimits.limits.maxStorageBuffersPerShaderStage = 2;
-	requiredLimits.limits.maxComputeWorkgroupSizeX = 8;
-	requiredLimits.limits.maxComputeWorkgroupSizeY = 8;
-	requiredLimits.limits.maxComputeWorkgroupSizeZ = 1;
-	requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 64;
-	requiredLimits.limits.maxComputeWorkgroupsPerDimension = 2;
-	requiredLimits.limits.maxStorageBufferBindingSize = 0;
-	requiredLimits.limits.maxStorageTexturesPerShaderStage = 1;
+	// requiredLimits.limits.maxVertexAttributes = 6;
+	// requiredLimits.limits.maxVertexBuffers = 1;
+	// requiredLimits.limits.maxBindGroups = 3;
+	// requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
+	// requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float) + 2 * sizeof(uint32_t);
+	// requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+	// requiredLimits.limits.maxBufferSize = 9000;
+	// requiredLimits.limits.maxTextureDimension1D = 2048;
+	// requiredLimits.limits.maxTextureDimension2D = 2048;
+	// requiredLimits.limits.maxTextureDimension3D = 2048;
+	// requiredLimits.limits.maxTextureArrayLayers = 1;
+	// requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
+	// requiredLimits.limits.maxSamplersPerShaderStage = 1;
+	// requiredLimits.limits.maxVertexBufferArrayStride = 68;
+	// requiredLimits.limits.maxInterStageShaderComponents = 17;
+	// requiredLimits.limits.maxStorageBuffersPerShaderStage = 2;
+	// requiredLimits.limits.maxComputeWorkgroupSizeX = 8;
+	// requiredLimits.limits.maxComputeWorkgroupSizeY = 8;
+	// requiredLimits.limits.maxComputeWorkgroupSizeZ = 1;
+	// requiredLimits.limits.maxComputeInvocationsPerWorkgroup = 64;
+	// requiredLimits.limits.maxComputeWorkgroupsPerDimension = 2;
+	// requiredLimits.limits.maxStorageBufferBindingSize = 0;
+	// requiredLimits.limits.maxStorageTexturesPerShaderStage = 1;
 
 	// Create device
 	DeviceDescriptor deviceDesc{};
@@ -304,8 +304,8 @@ void Application::terminateBuffers() {
 void Application::initTextures() {
 	// Load image data
 	int width, height, channels;
-	width = 1920 * 2 ;
-	height = 1080 * 2;
+	width = 1920 ;
+	height = 1080 ;
 	// uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
 	// if (nullptr == pixelData) throw std::runtime_error("Could not load input texture!");
 	Extent3D textureSize = { (uint32_t)width, (uint32_t)height, 1 };

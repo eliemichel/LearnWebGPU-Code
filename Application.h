@@ -141,14 +141,14 @@ private:
 	};
 
 	struct Storages {
-		float states[128];
+		float states[33554432];  // magic number;
 	};
 	static_assert(sizeof(Uniforms) % 16 == 0);
 	Uniforms m_uniforms;
 
 	// Similar to parameters, but do not trigger recomputation of the effect
 	struct Settings {
-		float scale = 0.5f;
+		float scale = 1.f;
 	};
 	Settings m_settings;
 };

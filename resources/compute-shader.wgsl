@@ -8,8 +8,8 @@ struct Storages {
     states: array<array<f32, 12>>,
 }
 
-const SCREEN_WIDTH: i32 = 1280;
-const SCREEN_HEIGHT: i32 = 800;
+const SCREEN_WIDTH: i32 = 1280 / 2;
+const SCREEN_HEIGHT: i32 = 720 / 2;
 
 // @group(0) @binding(0) var inputTexture: texture_2d<f32>;
 @group(0) @binding(0) var outputTexture: texture_storage_2d<rgba8unorm, write>;
@@ -140,6 +140,9 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
         // let i = id.x + id.y * SCREEN_WIDTH;
         let i = get_index(id.x, id.y, screen_size);
         storages.states[i][s] += dx[s];
+        storages.states[i][s] = clamp(storages.states[i][s], -1., 1.);
+    
+        
     }
 
     // display rgba channels
