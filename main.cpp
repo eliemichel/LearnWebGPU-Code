@@ -36,6 +36,7 @@ int main(int, char**) {
 		if (app.shouldCompute()) {
 			app.onCompute();
 		}
+		// break;
 	}
 
 	app.onFinish();

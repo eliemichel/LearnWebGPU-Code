@@ -146,9 +146,9 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float) + 2 * sizeof(uint32_t);
 	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 	requiredLimits.limits.maxBufferSize = 80;
-	requiredLimits.limits.maxTextureDimension1D = 4096;
-	requiredLimits.limits.maxTextureDimension2D = 4096;
-	requiredLimits.limits.maxTextureDimension3D = 4096;
+	requiredLimits.limits.maxTextureDimension1D = 2048;
+	requiredLimits.limits.maxTextureDimension2D = 2048;
+	requiredLimits.limits.maxTextureDimension3D = 2048;
 	requiredLimits.limits.maxTextureArrayLayers = 1;
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
 	requiredLimits.limits.maxSamplersPerShaderStage = 1;
@@ -470,7 +470,7 @@ void Application::initComputePipeline() {
 	ComputePipelineDescriptor computePipelineDesc;
 	computePipelineDesc.compute.constantCount = 0;
 	computePipelineDesc.compute.constants = nullptr;
-	computePipelineDesc.compute.entryPoint = "computeFilter";
+	computePipelineDesc.compute.entryPoint = "main_image";
 	computePipelineDesc.compute.module = computeShaderModule;
 	computePipelineDesc.layout = m_pipelineLayout;
 	m_pipeline = m_device.createComputePipeline(computePipelineDesc);
