@@ -8,8 +8,8 @@ struct Storages {
     states: array<array<f32, 12>>,
 }
 
-const SCREEN_WIDTH: i32 = 1280 / 2;
-const SCREEN_HEIGHT: i32 = 720 / 2;
+const SCREEN_WIDTH: i32 = 1920;
+const SCREEN_HEIGHT: i32 = 1080;
 
 // @group(0) @binding(0) var inputTexture: texture_2d<f32>;
 @group(0) @binding(0) var outputTexture: texture_storage_2d<rgba8unorm, write>;
@@ -95,7 +95,7 @@ fn main_image(@builtin(global_invocation_id) id: vec3u) {
     current_index = vec2i(i32(id.x), i32(id.y));
 
     // initial state
-    if (uniforms.frame == 0u) {
+    if (uniforms.frame == 1) {
         for (var s=0u; s<N; s++) {
             // let i = id.x + id.y * SCREEN_WIDTH;
             let i = get_index(id.x, id.y, screen_size);

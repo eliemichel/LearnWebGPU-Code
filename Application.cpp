@@ -61,6 +61,9 @@ using glm::vec4;
 using glm::vec3;
 using glm::vec2;
 
+int WIDTH = 1920;
+int HEIGHT = 1080;
+
 // == Utils == //
 
 // Equivalent of std::bit_width that is available from C++20 onward
@@ -213,7 +216,7 @@ bool Application::initWindow() {
 	// Create window
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-	m_window = glfwCreateWindow(1920, 1080, "Learn WebGPU", NULL, NULL);
+	m_window = glfwCreateWindow(WIDTH, HEIGHT, "cccompute", glfwGetPrimaryMonitor(), NULL);
 	if (!m_window) {
 		std::cerr << "Could not open window!" << std::endl;
 		return false;
@@ -240,8 +243,8 @@ void Application::initSwapChain() {
 #endif
 
 	int width, height;
-	width = 1920;
-	height = 1080;
+	width = WIDTH;
+	height = HEIGHT;
 	glfwGetFramebufferSize(m_window, &width, &height);
 
 	std::cout << "Creating swapchain..." << std::endl;
@@ -304,8 +307,8 @@ void Application::terminateBuffers() {
 void Application::initTextures() {
 	// Load image data
 	int width, height, channels;
-	width = 1920 ;
-	height = 1080 ;
+	width = WIDTH ;
+	height = HEIGHT ;
 	// uint8_t* pixelData = stbi_load(RESOURCE_DIR "/input.jpg", &width, &height, &channels, 4 /* force 4 channels */);
 	// if (nullptr == pixelData) throw std::runtime_error("Could not load input texture!");
 	Extent3D textureSize = { (uint32_t)width, (uint32_t)height, 1 };
