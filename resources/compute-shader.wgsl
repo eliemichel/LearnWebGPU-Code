@@ -42,13 +42,13 @@ fn opLimArray(p: vec3f, c: f32, lim: vec3f) -> vec3f {
 
 fn map(p0: vec3f) -> f32 {
     let p = opLimArray(p0, 2.5, vec3f(6.));
-    return opSubtract( sdSphere(p, 1.3), sdBox(p, vec3f(1)));
+    return opSubtract(sdBox(p, vec3f(.8)), sdSphere(p, 1.3));
 }
 
 fn march(ro: vec3f, rd: vec3f) -> vec3f {
     var p: vec3f;
     var s: f32;
-    for (var i = 0; i < 99; i++) {
+    for (var i = 0; i < 22; i++) {
         p = ro + s * rd;
         let ds = map(p);
         s += ds;
@@ -82,7 +82,7 @@ fn computeFilter(@builtin(global_invocation_id) id: vec3u) {
     // var i = atomicAdd(&frame, 1u);
     // var mouse = mouse_struct(vec2<f32>(sin(f32(i)),sin(f32(i))));
 
-    var f = f32(uniforms.frame) / 1000.;
+    var f = f32(uniforms.frame) / 600.;
     // var f = 10000.;
     // var mouse = mouse_struct(vec2<f32>(f, );
 

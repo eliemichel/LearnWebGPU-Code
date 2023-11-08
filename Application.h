@@ -111,6 +111,7 @@ private:
 
 	bool m_shouldCompute = true;
 	wgpu::Buffer m_uniformBuffer = nullptr;
+	wgpu::Buffer m_storageBuffer = nullptr;
 	wgpu::Texture m_inputTexture = nullptr;
 	wgpu::Texture m_outputTexture = nullptr;
 	wgpu::TextureView m_inputTextureView = nullptr;
@@ -137,6 +138,10 @@ private:
 		uint32_t frame = 0;
 		float _pad[2];
 
+	};
+
+	struct Storages {
+		float states[128];
 	};
 	static_assert(sizeof(Uniforms) % 16 == 0);
 	Uniforms m_uniforms;

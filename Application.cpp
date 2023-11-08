@@ -283,11 +283,22 @@ void Application::initBuffers() {
 	desc.size = sizeof(Uniforms);
 	desc.usage = BufferUsage::CopyDst | BufferUsage::Uniform;
 	m_uniformBuffer = m_device.createBuffer(desc);
+
+	// create storage buffer
+	BufferDescriptor storagedesc;
+	desc.label = "Storage";
+	desc.mappedAtCreation = false;
+	desc.size = sizeof(Storages);
+	desc.usage = BufferUsage::CopyDst | BufferUsage::CopySrc;
+	m_storageBuffer = m_device.createBuffer(storagedesc);
+
 }
 
 void Application::terminateBuffers() {
 	m_uniformBuffer.destroy();
+	m_storageBuffer.destroy();
 	wgpuBufferRelease(m_uniformBuffer);
+	wgpuBufferRelease(m_storageBuffer);
 }
 
 void Application::initTextures() {
@@ -387,6 +398,13 @@ void Application::initBindGroup() {
 	entries[1].buffer = m_uniformBuffer;
 	entries[1].offset = 0;
 	entries[1].size = sizeof(Uniforms);
+
+	// Storages
+
+	entries[2].binding = 2;
+	entries[2].buffer = m_storageBuffer;
+	entries[2].offset = 0;
+	entries[2].size = sizeof(Storages);
 
 	BindGroupDescriptor bindGroupDesc;
 	bindGroupDesc.layout = m_bindGroupLayout;
@@ -543,6 +561,8 @@ void Application::onCompute() {
 
 	// Update uniforms
 	m_queue.writeBuffer(m_uniformBuffer, 0, &m_uniforms, sizeof(Uniforms));
+
+	// We don't need to update storages, since they are filled on GPU
 
 	// Initialize a command encoder
 	CommandEncoderDescriptor encoderDesc = Default;
