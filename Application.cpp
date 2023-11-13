@@ -89,7 +89,9 @@ void Application::onFrame() {
 	m_uniforms.time = static_cast<float>(glfwGetTime());
 	m_queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
 	
-	TextureView nextTexture = m_swapChain.getCurrentTextureView();
+	SurfaceTexture surfaceTexture;
+	m_surface.getCurrentTexture(&surfaceTexture);
+	TextureView nextTexture = Texture(surfaceTexture.texture).createView();
 	if (!nextTexture) {
 		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 		return;
@@ -128,7 +130,6 @@ void Application::onFrame() {
 
 	renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
 
-	renderPassDesc.timestampWriteCount = 0;
 	renderPassDesc.timestampWrites = nullptr;
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
 
@@ -153,7 +154,7 @@ void Application::onFrame() {
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 	m_queue.submit(command);
 
-	m_swapChain.present();
+	m_surface.present();
 
 #ifdef WEBGPU_BACKEND_DAWN
 	// Check for pending error callbacks
@@ -290,10 +291,12 @@ bool Application::initWindowAndDevice() {
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 2;
 	//                                                       ^ This was 1
 	requiredLimits.limits.maxSamplersPerShaderStage = 1;
+	requiredLimits.limits.maxBindGroupsPlusVertexBuffers = 2;
+	requiredLimits.limits.maxBindingsPerBindGroup = 5;
 
 	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
-	deviceDesc.requiredFeaturesCount = 0;
+	deviceDesc.requiredFeatureCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = adapter.requestDevice(deviceDesc);
@@ -335,7 +338,7 @@ bool Application::initWindowAndDevice() {
 		if (that != nullptr) that->onScroll(xoffset, yoffset);
 	});
 
-	return m_device != nullptr;
+	return nullptr != m_device;
 }
 
 void Application::terminateWindowAndDevice() {
@@ -354,20 +357,21 @@ bool Application::initSwapChain() {
 	int width, height;
 	glfwGetFramebufferSize(m_window, &width, &height);
 
-	std::cout << "Creating swapchain..." << std::endl;
-	SwapChainDescriptor swapChainDesc;
-	swapChainDesc.width = static_cast<uint32_t>(width);
-	swapChainDesc.height = static_cast<uint32_t>(height);
-	swapChainDesc.usage = TextureUsage::RenderAttachment;
-	swapChainDesc.format = m_swapChainFormat;
-	swapChainDesc.presentMode = PresentMode::Fifo;
-	m_swapChain = m_device.createSwapChain(m_surface, swapChainDesc);
-	std::cout << "Swapchain: " << m_swapChain << std::endl;
-	return m_swapChain != nullptr;
+	SurfaceConfiguration config;
+	config.width = static_cast<uint32_t>(width);
+	config.height = static_cast<uint32_t>(height);
+	config.usage = TextureUsage::RenderAttachment;
+	config.format = m_swapChainFormat;
+	config.presentMode = PresentMode::Fifo;
+	config.alphaMode = CompositeAlphaMode::Auto;
+	config.device = m_device;
+	m_surface.configure(config);
+
+	return true;
 }
 
 void Application::terminateSwapChain() {
-	m_swapChain.release();
+	m_surface.unconfigure();
 }
 
 
