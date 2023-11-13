@@ -34,24 +34,7 @@
 
 #include <webgpu/webgpu.h>
 
-#define WGPU_TARGET_MACOS 1
-#define WGPU_TARGET_MACOS_COCOA 2
-#define WGPU_TARGET_LINUX 3
-#define WGPU_TARGET_WINDOWS 4
-
-#if defined(_WIN32)
-#  define WGPU_TARGET WGPU_TARGET_WINDOWS
-#elif defined(__APPLE__)
-#  if defined(SDL_VIDEO_DRIVER_COCOA)
-#    define WGPU_TARGET WGPU_TARGET_MACOS_COCOA
-#  else
-#    define WGPU_TARGET WGPU_TARGET_MACOS
-#  endif
-#else
-#  define WGPU_TARGET WGPU_TARGET_LINUX
-#endif
-
-#if WGPU_TARGET == WGPU_TARGET_MACOS
+#if defined(SDL_VIDEO_DRIVER_COCOA)
 #include <Foundation/Foundation.h>
 #include <QuartzCore/CAMetalLayer.h>
 #endif
@@ -64,7 +47,7 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window) {
     SDL_VERSION(&windowWMInfo.version);
     SDL_GetWindowWMInfo(window, &windowWMInfo);
 
-#if WGPU_TARGET == WGPU_TARGET_MACOS
+#if defined(SDL_VIDEO_DRIVER_COCOA)
     {
         id metal_layer = NULL;
         NSWindow* ns_window = windowWMInfo.info.cocoa.window;
@@ -87,8 +70,7 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window) {
             },
         });
     }
-#elif WGPU_TARGET == WGPU_TARGET_LINUX
-    if (windowWMInfo.subsystem == SDL_SYSWM_X11)
+#elif defined(SDL_VIDEO_DRIVER_X11)
     {
         Display* x11_display = windowWMInfo.info.x11.display;
         Window x11_window = windowWMInfo.info.x11.window;
@@ -109,7 +91,7 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window) {
             },
         });
     }
-    else if (windowWMInfo.subsystem == SDL_SYSWM_WAYLAND)
+#elif defined(SDL_VIDEO_DRIVER_WAYLAND)
     {
         struct wl_display* wayland_display = windowWMInfo.info.wl.display;
         struct wl_surface* wayland_surface = windowWMInfo.info.wl.display;
@@ -131,10 +113,7 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window) {
                 },
         });
   }
-    else {
-        return NULL; // unsupported subsystem
-    }
-#elif WGPU_TARGET == WGPU_TARGET_WINDOWS
+#elif defined(SDL_VIDEO_DRIVER_WINDOWS)
     {
         HWND hwnd = windowWMInfo.info.win.window;
         HINSTANCE hinstance = GetModuleHandle(NULL);
@@ -156,6 +135,7 @@ WGPUSurface SDL_GetWGPUSurface(WGPUInstance instance, SDL_Window* window) {
     });
   }
 #else
+    // TODO: See SDL_syswm.h for other possible enum values!
 #error "Unsupported WGPU_TARGET"
 #endif
 }
