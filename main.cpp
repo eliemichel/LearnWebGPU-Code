@@ -24,8 +24,9 @@
  * SOFTWARE.
  */
 
-#include <glfw3webgpu.h>
-#include <GLFW/glfw3.h>
+#define SDL_MAIN_HANDLED
+#include <sdl2webgpu.h>
+#include <SDL2/SDL.h>
 
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
@@ -35,28 +36,29 @@
 
 using namespace wgpu;
 
-int main (int, char**) {
+int main(int, char**) {
+
 	Instance instance = createInstance(InstanceDescriptor{});
 	if (!instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return 1;
 	}
 
-	if (!glfwInit()) {
-		std::cerr << "Could not initialize GLFW!" << std::endl;
+	SDL_SetMainReady();
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+		std::cerr << "Could not initialize SDL! Error: " << SDL_GetError() << std::endl;
 		return 1;
 	}
 
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	int windowFlags = 0;
+	SDL_Window* window = SDL_CreateWindow("Learn WebGPU", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, windowFlags);
 	if (!window) {
 		std::cerr << "Could not open window!" << std::endl;
 		return 1;
 	}
 
 	std::cout << "Requesting adapter..." << std::endl;
-	Surface surface = glfwGetWGPUSurface(instance, window);
+	Surface surface = SDL_GetWGPUSurface(instance, window);
 	RequestAdapterOptions adapterOpts;
 	adapterOpts.compatibleSurface = surface;
 	Adapter adapter = instance.requestAdapter(adapterOpts);
@@ -211,8 +213,23 @@ fn fs_main() -> @location(0) vec4f {
 	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
+	bool shouldClose = false;
+	while (!shouldClose) {
+
+		// Poll events
+		SDL_Event event;
+		while (SDL_PollEvent(&event))
+		{
+			switch (event.type)
+			{
+			case SDL_QUIT:
+				shouldClose = true;
+				break;
+
+			default:
+				break;
+			}
+		}
 
 		TextureView nextTexture = swapChain.getCurrentTextureView();
 		if (!nextTexture) {
@@ -262,8 +279,8 @@ fn fs_main() -> @location(0) vec4f {
 	device.release();
 	adapter.release();
 	instance.release();
-	glfwDestroyWindow(window);
-	glfwTerminate();
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 
 	return 0;
 }

@@ -7,15 +7,15 @@ project(
 
 include(utils.cmake)
 
-add_subdirectory(glfw)
+add_subdirectory(SDL2)
 add_subdirectory(webgpu)
-add_subdirectory(glfw3webgpu)
+add_subdirectory(sdl2webgpu)
 
 add_executable(App
 	main.cpp
 )
 
-target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
+target_link_libraries(App PRIVATE SDL2::SDL2 webgpu sdl2webgpu)
 
 set_target_properties(App PROPERTIES
 	CXX_STANDARD 17
