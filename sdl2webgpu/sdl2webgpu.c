@@ -35,6 +35,7 @@
 #include <webgpu/webgpu.h>
 
 #if defined(SDL_VIDEO_DRIVER_COCOA)
+#include <Cocoa/Cocoa.h>
 #include <Foundation/Foundation.h>
 #include <QuartzCore/CAMetalLayer.h>
 #endif
