@@ -43,7 +43,7 @@ static ULONG _getEnvULong(const char *name, ULONG ulMax, ULONG ulDefault)
     char*   end;
     char*   envval = SDL_getenv(name);
 
-    if (!envval)
+    if (envval == NULL)
         return ulDefault;
 
     ulValue = SDL_strtoul(envval, &end, 10);
@@ -351,7 +351,7 @@ static void OS2_CloseDevice(_THIS)
 
     debug_os2("Enter");
 
-    if (!pAData)
+    if (pAData == NULL)
         return;
 
     pAData->ulState = 2;
@@ -429,7 +429,7 @@ static int OS2_OpenDevice(_THIS, const char *devname)
     }
 
     pAData = (SDL_PrivateAudioData *) SDL_calloc(1, sizeof(struct SDL_PrivateAudioData));
-    if (!pAData)
+    if (pAData == NULL)
         return SDL_OutOfMemory();
     _this->hidden = pAData;
 

@@ -57,13 +57,13 @@ initializeTexture(SDL_Renderer *renderer)
 {
     SDL_Surface *bmp_surface;
     bmp_surface = SDL_LoadBMP("stroke.bmp");
-    if (!bmp_surface) {
+    if (bmp_surface == NULL) {
         fatalError("could not load stroke.bmp");
     }
     brush =
         SDL_CreateTextureFromSurface(renderer, bmp_surface);
     SDL_FreeSurface(bmp_surface);
-    if (!brush) {
+    if (brush == NULL) {
         fatalError("could not create brush texture");
     }
     /* additive blending -- laying strokes on top of eachother makes them brighter */

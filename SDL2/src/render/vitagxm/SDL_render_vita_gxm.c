@@ -169,7 +169,7 @@ void StartDrawing(SDL_Renderer *renderer)
     //    data->colorFragmentProgram = in->color;
     //    data->textureFragmentProgram = in->texture;
 
-    if (!renderer->target) {
+    if (renderer->target == NULL) {
         sceGxmBeginScene(
             data->gxm_context,
             0,
@@ -217,13 +217,13 @@ SDL_Renderer *VITA_GXM_CreateRenderer(SDL_Window *window, Uint32 flags)
     VITA_GXM_RenderData *data;
 
     renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
-    if (!renderer) {
+    if (renderer == NULL) {
         SDL_OutOfMemory();
         return NULL;
     }
 
     data = (VITA_GXM_RenderData *)SDL_calloc(1, sizeof(VITA_GXM_RenderData));
-    if (!data) {
+    if (data == NULL) {
         SDL_free(renderer);
         SDL_OutOfMemory();
         return NULL;
@@ -295,7 +295,7 @@ static int VITA_GXM_CreateTexture(SDL_Renderer *renderer, SDL_Texture *texture)
     VITA_GXM_RenderData *data = (VITA_GXM_RenderData *)renderer->driverdata;
     VITA_GXM_TextureData *vita_texture = (VITA_GXM_TextureData *)SDL_calloc(1, sizeof(VITA_GXM_TextureData));
 
-    if (!vita_texture) {
+    if (vita_texture == NULL) {
         return SDL_OutOfMemory();
     }
 
@@ -583,7 +583,7 @@ static int VITA_GXM_LockTexture(SDL_Renderer *renderer, SDL_Texture *texture,
     *pitch = vita_texture->pitch;
 
     // make sure that rendering is finished on render target textures
-    if (vita_texture->tex->gxm_rendertarget) {
+    if (vita_texture->tex->gxm_rendertarget != NULL) {
         sceGxmFinish(data->gxm_context);
     }
 
@@ -733,7 +733,7 @@ static int VITA_GXM_QueueGeometry(SDL_Renderer *renderer, SDL_RenderCommand *cmd
             data,
             count * sizeof(texture_vertex));
 
-        if (!vertices) {
+        if (vertices == NULL) {
             return -1;
         }
 
@@ -772,7 +772,7 @@ static int VITA_GXM_QueueGeometry(SDL_Renderer *renderer, SDL_RenderCommand *cmd
             data,
             count * sizeof(color_vertex));
 
-        if (!vertices) {
+        if (vertices == NULL) {
             return -1;
         }
 
@@ -1006,7 +1006,7 @@ static int VITA_GXM_RunCommandQueue(SDL_Renderer *renderer, SDL_RenderCommand *c
             SDL_RenderCommand *nextcmd = cmd->next;
             size_t count = cmd->data.draw.count;
             int ret;
-            while (nextcmd) {
+            while (nextcmd != NULL) {
                 const SDL_RenderCommandType nextcmdtype = nextcmd->command;
                 if (nextcmdtype != thiscmdtype) {
                     break; /* can't go any further on this draw call, different render command up next. */
@@ -1103,7 +1103,7 @@ static int VITA_GXM_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rec
     }
 
     temp_pixels = SDL_malloc(buflen);
-    if (!temp_pixels) {
+    if (temp_pixels == NULL) {
         return SDL_OutOfMemory();
     }
 
@@ -1186,15 +1186,15 @@ static void VITA_GXM_DestroyTexture(SDL_Renderer *renderer, SDL_Texture *texture
     VITA_GXM_RenderData *data = (VITA_GXM_RenderData *)renderer->driverdata;
     VITA_GXM_TextureData *vita_texture = (VITA_GXM_TextureData *)texture->driverdata;
 
-    if (!data) {
+    if (data == NULL) {
         return;
     }
 
-    if (!vita_texture) {
+    if (vita_texture == NULL) {
         return;
     }
 
-    if (!vita_texture->tex) {
+    if (vita_texture->tex == NULL) {
         return;
     }
 

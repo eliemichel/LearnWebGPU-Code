@@ -238,7 +238,7 @@ SDL_Surface *SDL_LoadBMP_RW(SDL_RWops *src, int freesrc)
     /* Make sure we are passed a valid data source */
     surface = NULL;
     was_error = SDL_FALSE;
-    if (!src) {
+    if (src == NULL) {
         SDL_InvalidParamError("src");
         was_error = SDL_TRUE;
         goto done;
@@ -424,7 +424,7 @@ SDL_Surface *SDL_LoadBMP_RW(SDL_RWops *src, int freesrc)
     surface =
         SDL_CreateRGBSurface(0, biWidth, biHeight, biBitCount, Rmask, Gmask,
                              Bmask, Amask);
-    if (!surface) {
+    if (surface == NULL) {
         was_error = SDL_TRUE;
         goto done;
     }
@@ -667,7 +667,7 @@ int SDL_SaveBMP_RW(SDL_Surface *surface, SDL_RWops *dst, int freedst)
         }
 #endif /* SAVE_32BIT_BMP */
 
-        if (surface->format->palette && !save32bit) {
+        if (surface->format->palette != NULL && !save32bit) {
             if (surface->format->BitsPerPixel == 8) {
                 intermediate_surface = surface;
             } else {
@@ -697,7 +697,7 @@ int SDL_SaveBMP_RW(SDL_Surface *surface, SDL_RWops *dst, int freedst)
                 SDL_InitFormat(&format, SDL_PIXELFORMAT_BGR24);
             }
             intermediate_surface = SDL_ConvertSurface(surface, &format, 0);
-            if (!intermediate_surface) {
+            if (intermediate_surface == NULL) {
                 SDL_SetError("Couldn't convert image to %d bpp",
                              format.BitsPerPixel);
             }

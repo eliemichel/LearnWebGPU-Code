@@ -86,7 +86,7 @@ void VITA_PollTouch(void)
     int port;
 
     // We skip polling touch if no window is created
-    if (!Vita_Window) {
+    if (Vita_Window == NULL) {
         return;
     }
 

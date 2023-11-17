@@ -334,7 +334,7 @@ initializeTexture()
                                            to format passed into OpenGL */
 
     bmp_surface = SDL_LoadBMP("stroke.bmp");
-    if (!bmp_surface) {
+    if (bmp_surface == NULL) {
         fatalError("could not load stroke.bmp");
     }
 

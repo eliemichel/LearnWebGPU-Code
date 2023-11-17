@@ -265,7 +265,7 @@ static SDL_bool SDL_SetJoystickIDForPlayerIndex(int player_index, SDL_JoystickID
 
     if (player_index >= SDL_joystick_player_count) {
         SDL_JoystickID *new_players = (SDL_JoystickID *)SDL_realloc(SDL_joystick_players, (player_index + 1) * sizeof(*SDL_joystick_players));
-        if (!new_players) {
+        if (new_players == NULL) {
             SDL_OutOfMemory();
             return SDL_FALSE;
         }
@@ -406,7 +406,7 @@ const char *SDL_JoystickPathForIndex(int device_index)
     SDL_UnlockJoysticks();
 
     /* FIXME: Really we should reference count this path so it doesn't go away after unlock */
-    if (!path) {
+    if (path == NULL) {
         SDL_Unsupported();
     }
     return path;
@@ -509,7 +509,7 @@ SDL_Joystick *SDL_JoystickOpen(int device_index)
 
     /* Create and initialize the joystick */
     joystick = (SDL_Joystick *)SDL_calloc(sizeof(*joystick), 1);
-    if (!joystick) {
+    if (joystick == NULL) {
         SDL_OutOfMemory();
         SDL_UnlockJoysticks();
         return NULL;
@@ -1474,7 +1474,7 @@ static void UpdateEventsForDeviceRemoval(int device_index, Uint32 type)
     }
 
     events = SDL_small_alloc(SDL_Event, num_events, &isstack);
-    if (!events) {
+    if (events == NULL) {
         return;
     }
 
@@ -1962,13 +1962,11 @@ char *SDL_CreateJoystickName(Uint16 vendor, Uint16 product, const char *vendor_n
     } replacements[] = {
         { "ASTRO Gaming", "ASTRO" },
         { "Bensussen Deutsch & Associates,Inc.(BDA)", "BDA" },
-        { "Guangzhou Chicken Run Network Technology Co., Ltd.", "GameSir" },
-        { "HORI CO.,LTD", "HORI" },
-        { "HORI CO.,LTD.", "HORI" },
-        { "Mad Catz Inc.", "Mad Catz" },
-        { "Nintendo Co., Ltd.", "Nintendo" },
         { "NVIDIA Corporation ", "" },
         { "Performance Designed Products", "PDP" },
+        { "HORI CO.,LTD.", "HORI" },
+        { "HORI CO.,LTD", "HORI" },
+        { "Mad Catz Inc.", "Mad Catz" },
         { "QANBA USA, LLC", "Qanba" },
         { "QANBA USA,LLC", "Qanba" },
         { "Unknown ", "" },
@@ -1982,10 +1980,10 @@ char *SDL_CreateJoystickName(Uint16 vendor, Uint16 product, const char *vendor_n
         return SDL_strdup(custom_name);
     }
 
-    if (!vendor_name) {
+    if (vendor_name == NULL) {
         vendor_name = "";
     }
-    if (!product_name) {
+    if (product_name == NULL) {
         product_name = "";
     }
 
@@ -2028,7 +2026,7 @@ char *SDL_CreateJoystickName(Uint16 vendor, Uint16 product, const char *vendor_n
         default:
             len = (6 + 1 + 6 + 1);
             name = (char *)SDL_malloc(len);
-            if (name) {
+            if (name != NULL) {
                 (void)SDL_snprintf(name, len, "0x%.4x/0x%.4x", vendor, product);
             }
             break;
@@ -2037,7 +2035,7 @@ char *SDL_CreateJoystickName(Uint16 vendor, Uint16 product, const char *vendor_n
         name = SDL_strdup("Controller");
     }
 
-    if (!name) {
+    if (name == NULL) {
         return NULL;
     }
 
@@ -2079,7 +2077,7 @@ char *SDL_CreateJoystickName(Uint16 vendor, Uint16 product, const char *vendor_n
     for (i = 1; i < (len - 1); ++i) {
         int matchlen = PrefixMatch(name, &name[i]);
         while (matchlen > 0) {
-            if (name[matchlen] == ' ' || name[matchlen] == '-') {
+            if (name[matchlen] == ' ') {
                 SDL_memmove(name, name + matchlen + 1, len - matchlen);
                 break;
             }
@@ -2101,7 +2099,7 @@ SDL_JoystickGUID SDL_CreateJoystickGUID(Uint16 bus, Uint16 vendor, Uint16 produc
 
     SDL_zero(guid);
 
-    if (!name) {
+    if (name == NULL) {
         name = "";
     }
 
@@ -2348,13 +2346,7 @@ SDL_bool SDL_IsJoystickXboxSeriesX(Uint16 vendor_id, Uint16 product_id)
         }
     }
     if (vendor_id == USB_VENDOR_8BITDO) {
-        if (product_id == USB_PRODUCT_8BITDO_XBOX_CONTROLLER1 ||
-            product_id == USB_PRODUCT_8BITDO_XBOX_CONTROLLER2) {
-            return SDL_TRUE;
-        }
-    }
-    if (vendor_id == USB_VENDOR_GAMESIR) {
-        if (product_id == USB_PRODUCT_GAMESIR_G7) {
+        if (product_id == USB_PRODUCT_8BITDO_XBOX_CONTROLLER) {
             return SDL_TRUE;
         }
     }

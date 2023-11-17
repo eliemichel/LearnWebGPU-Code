@@ -81,16 +81,16 @@ static void SDL_EnumUnixAudioDevices_Internal(const int iscapture, const int cla
     const char *audiodev;
     char audiopath[1024];
 
-    if (!test) {
+    if (test == NULL) {
         test = test_stub;
     }
 
     /* Figure out what our audio device is */
     audiodev = SDL_getenv("SDL_PATH_DSP");
-    if (!audiodev) {
+    if (audiodev == NULL) {
         audiodev = SDL_getenv("AUDIODEV");
     }
-    if (!audiodev) {
+    if (audiodev == NULL) {
         if (classic) {
             audiodev = _PATH_DEV_AUDIO;
         } else {

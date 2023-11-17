@@ -70,7 +70,7 @@ int SDLTest_CompareSurfaces(SDL_Surface *surface, SDL_Surface *referenceSurface,
     char referenceFilename[FILENAME_SIZE];
 
     /* Validate input surfaces */
-    if (!surface || !referenceSurface) {
+    if (surface == NULL || referenceSurface == NULL) {
         return -1;
     }
 

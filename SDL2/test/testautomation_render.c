@@ -65,13 +65,13 @@ void InitCreateRenderer(void *arg)
  */
 void CleanupDestroyRenderer(void *arg)
 {
-    if (renderer) {
+    if (renderer != NULL) {
         SDL_DestroyRenderer(renderer);
         renderer = NULL;
         SDLTest_AssertPass("SDL_DestroyRenderer()");
     }
 
-    if (window) {
+    if (window != NULL) {
         SDL_DestroyWindow(window);
         window = NULL;
         SDLTest_AssertPass("SDL_DestroyWindow");
@@ -938,12 +938,12 @@ _loadTestFace(void)
     SDL_Texture *tface;
 
     face = SDLTest_ImageFace();
-    if (!face) {
+    if (face == NULL) {
         return NULL;
     }
 
     tface = SDL_CreateTextureFromSurface(renderer, face);
-    if (!tface) {
+    if (tface == NULL) {
         SDLTest_LogError("SDL_CreateTextureFromSurface() failed with error: %s", SDL_GetError());
     }
 
@@ -970,7 +970,7 @@ _hasTexColor(void)
 
     /* Get test face. */
     tface = _loadTestFace();
-    if (!tface) {
+    if (tface == NULL) {
         return 0;
     }
 
@@ -1014,7 +1014,7 @@ _hasTexAlpha(void)
 
     /* Get test face. */
     tface = _loadTestFace();
-    if (!tface) {
+    if (tface == NULL) {
         return 0;
     }
 
@@ -1043,7 +1043,7 @@ _hasTexAlpha(void)
 /**
  * @brief Compares screen pixels with image pixels. Helper function.
  *
- * @param referenceSurface Image to compare against.
+ * @param s Image to compare against.
  *
  * \sa
  * http://wiki.libsdl.org/SDL_RenderReadPixels

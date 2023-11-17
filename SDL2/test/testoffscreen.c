@@ -115,14 +115,14 @@ int main(int argc, char *argv[])
                               SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
                               width, height, 0);
 
-    if (!window) {
+    if (window == NULL) {
         SDL_Log("Couldn't create window: %s\n", SDL_GetError());
         return SDL_FALSE;
     }
 
     renderer = SDL_CreateRenderer(window, -1, 0);
 
-    if (!renderer) {
+    if (renderer == NULL) {
         SDL_Log("Couldn't create renderer: %s\n",
                 SDL_GetError());
         return SDL_FALSE;

@@ -88,7 +88,7 @@ static Cursor X11_CreateXCursorCursor(SDL_Surface *surface, int hot_x, int hot_y
     XcursorImage *image;
 
     image = X11_XcursorImageCreate(surface->w, surface->h);
-    if (!image) {
+    if (image == NULL) {
         SDL_OutOfMemory();
         return None;
     }
@@ -121,13 +121,13 @@ static Cursor X11_CreatePixmapCursor(SDL_Surface *surface, int hot_x, int hot_y)
     size_t width_bytes = ((surface->w + 7) & ~((size_t)7)) / 8;
 
     data_bits = SDL_calloc(1, surface->h * width_bytes);
-    if (!data_bits) {
+    if (data_bits == NULL) {
         SDL_OutOfMemory();
         return None;
     }
 
     mask_bits = SDL_calloc(1, surface->h * width_bytes);
-    if (!mask_bits) {
+    if (mask_bits == NULL) {
         SDL_free(data_bits);
         SDL_OutOfMemory();
         return None;
@@ -419,7 +419,7 @@ static Uint32 X11_GetGlobalMouseState(int *x, int *y)
     if (videodata->global_mouse_changed) {
         for (i = 0; i < num_screens; i++) {
             SDL_DisplayData *data = (SDL_DisplayData *)SDL_GetDisplayDriverData(i);
-            if (data) {
+            if (data != NULL) {
                 Window root, child;
                 int rootx, rooty, winx, winy;
                 unsigned int mask;
@@ -476,7 +476,7 @@ void X11_QuitMouse(_THIS)
     SDL_XInput2DeviceInfo *i;
     SDL_XInput2DeviceInfo *next;
 
-    for (i = data->mouse_device_info; i; i = next) {
+    for (i = data->mouse_device_info; i != NULL; i = next) {
         next = i->next;
         SDL_free(i);
     }

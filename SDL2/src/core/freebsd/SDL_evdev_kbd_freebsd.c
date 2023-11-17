@@ -88,7 +88,7 @@ static void kbd_cleanup(void)
 {
     struct mouse_info mData;
     SDL_EVDEV_keyboard_state *kbd = kbd_cleanup_state;
-    if (!kbd) {
+    if (kbd == NULL) {
         return;
     }
     kbd_cleanup_state = NULL;
@@ -179,7 +179,7 @@ static void kbd_register_emerg_cleanup(SDL_EVDEV_keyboard_state *kbd)
 {
     int tabidx, signum;
 
-    if (kbd_cleanup_state) {
+    if (kbd_cleanup_state != NULL) {
         return;
     }
     kbd_cleanup_state = kbd;
@@ -231,7 +231,7 @@ SDL_EVDEV_keyboard_state *SDL_EVDEV_kbd_init(void)
     SDL_zero(mData);
     mData.operation = MOUSE_HIDE;
     kbd = (SDL_EVDEV_keyboard_state *)SDL_calloc(1, sizeof(SDL_EVDEV_keyboard_state));
-    if (!kbd) {
+    if (kbd == NULL) {
         return NULL;
     }
 
@@ -297,7 +297,7 @@ void SDL_EVDEV_kbd_quit(SDL_EVDEV_keyboard_state *kbd)
 {
     struct mouse_info mData;
 
-    if (!kbd) {
+    if (kbd == NULL) {
         return;
     }
     SDL_zero(mData);
@@ -319,18 +319,6 @@ void SDL_EVDEV_kbd_quit(SDL_EVDEV_keyboard_state *kbd)
     }
 
     SDL_free(kbd);
-}
-
-void SDL_EVDEV_kbd_set_muted(SDL_EVDEV_keyboard_state *state, SDL_bool muted)
-{
-}
-
-void SDL_EVDEV_kbd_set_vt_switch_callbacks(SDL_EVDEV_keyboard_state *state, void (*release_callback)(void*), void *release_callback_data, void (*acquire_callback)(void*), void *acquire_callback_data)
-{
-}
-
-void SDL_EVDEV_kbd_update(SDL_EVDEV_keyboard_state *state)
-{
 }
 
 /*
@@ -487,7 +475,7 @@ void SDL_EVDEV_kbd_keycode(SDL_EVDEV_keyboard_state *kbd, unsigned int keycode, 
     unsigned int final_key_state;
     unsigned int map_from_key_sym;
 
-    if (!kbd) {
+    if (kbd == NULL) {
         return;
     }
 

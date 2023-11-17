@@ -688,8 +688,8 @@ extern DECLSPEC size_t SDLCALL SDL_iconv(SDL_iconv_t cd, const char **inbuf,
                                          size_t * outbytesleft);
 
 /**
- * This function converts a buffer or string between encodings in one pass,
- * returning a string that must be freed with SDL_free() or NULL on error.
+ * This function converts a buffer or string between encodings in one pass, returning a
+ * string that must be freed with SDL_free() or NULL on error.
  *
  * \since This function is available since SDL 2.0.0.
  */
@@ -698,8 +698,8 @@ extern DECLSPEC char *SDLCALL SDL_iconv_string(const char *tocode,
                                                const char *inbuf,
                                                size_t inbytesleft);
 #define SDL_iconv_utf8_locale(S)    SDL_iconv_string("", "UTF-8", S, SDL_strlen(S)+1)
-#define SDL_iconv_utf8_ucs2(S)      (Uint16 *)SDL_iconv_string("UCS-2", "UTF-8", S, SDL_strlen(S)+1)
-#define SDL_iconv_utf8_ucs4(S)      (Uint32 *)SDL_iconv_string("UCS-4", "UTF-8", S, SDL_strlen(S)+1)
+#define SDL_iconv_utf8_ucs2(S)      (Uint16 *)SDL_iconv_string("UCS-2-INTERNAL", "UTF-8", S, SDL_strlen(S)+1)
+#define SDL_iconv_utf8_ucs4(S)      (Uint32 *)SDL_iconv_string("UCS-4-INTERNAL", "UTF-8", S, SDL_strlen(S)+1)
 #define SDL_iconv_wchar_utf8(S)     SDL_iconv_string("UTF-8", "WCHAR_T", (char *)S, (SDL_wcslen(S)+1)*sizeof(wchar_t))
 
 /* force builds using Clang's static analysis tools to use literal C runtime

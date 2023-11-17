@@ -90,7 +90,7 @@ void *SDL_LoadFunction(void *handle, const char *name)
 
 void SDL_UnloadObject(void *handle)
 {
-    if (handle) {
+    if (handle != NULL) {
         DosFreeModule((HMODULE)handle);
     }
 }

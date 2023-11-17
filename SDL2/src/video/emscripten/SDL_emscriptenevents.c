@@ -964,7 +964,7 @@ void Emscripten_RegisterEventHandlers(SDL_WindowData *data)
 
     /* Keyboard events are awkward */
     keyElement = SDL_GetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT);
-    if (!keyElement) {
+    if (keyElement == NULL) {
         keyElement = EMSCRIPTEN_EVENT_TARGET_WINDOW;
     }
 
@@ -1007,7 +1007,7 @@ void Emscripten_UnregisterEventHandlers(SDL_WindowData *data)
     emscripten_set_pointerlockchange_callback(EMSCRIPTEN_EVENT_TARGET_DOCUMENT, NULL, 0, NULL);
 
     target = SDL_GetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT);
-    if (!target) {
+    if (target == NULL) {
         target = EMSCRIPTEN_EVENT_TARGET_WINDOW;
     }
 

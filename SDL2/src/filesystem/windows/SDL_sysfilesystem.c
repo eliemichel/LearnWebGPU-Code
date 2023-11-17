@@ -42,7 +42,7 @@ char *SDL_GetBasePath(void)
 
     while (SDL_TRUE) {
         void *ptr = SDL_realloc(path, buflen * sizeof(WCHAR));
-        if (!ptr) {
+        if (ptr == NULL) {
             SDL_free(path);
             SDL_OutOfMemory();
             return NULL;
@@ -99,11 +99,11 @@ char *SDL_GetPrefPath(const char *org, const char *app)
     size_t new_wpath_len = 0;
     BOOL api_result = FALSE;
 
-    if (!app) {
+    if (app == NULL) {
         SDL_InvalidParamError("app");
         return NULL;
     }
-    if (!org) {
+    if (org == NULL) {
         org = "";
     }
 
@@ -113,13 +113,13 @@ char *SDL_GetPrefPath(const char *org, const char *app)
     }
 
     worg = WIN_UTF8ToStringW(org);
-    if (!worg) {
+    if (worg == NULL) {
         SDL_OutOfMemory();
         return NULL;
     }
 
     wapp = WIN_UTF8ToStringW(app);
-    if (!wapp) {
+    if (wapp == NULL) {
         SDL_free(worg);
         SDL_OutOfMemory();
         return NULL;
@@ -169,5 +169,21 @@ char *SDL_GetPrefPath(const char *org, const char *app)
 }
 
 #endif /* SDL_FILESYSTEM_WINDOWS */
+
+#ifdef SDL_FILESYSTEM_XBOX
+#include "SDL_filesystem.h"
+#include "SDL_error.h"
+char *SDL_GetBasePath(void)
+{
+    SDL_Unsupported();
+    return NULL;
+}
+
+char *SDL_GetPrefPath(const char *org, const char *app)
+{
+    SDL_Unsupported();
+    return NULL;
+}
+#endif /* SDL_FILESYSTEM_XBOX */
 
 /* vi: set ts=4 sw=4 expandtab: */

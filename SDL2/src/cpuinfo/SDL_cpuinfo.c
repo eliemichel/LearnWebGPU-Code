@@ -1079,19 +1079,16 @@ int SDL_GetSystemRAM(void)
 #endif
 #ifdef HAVE_SYSCTLBYNAME
         if (SDL_SystemRAM <= 0) {
-#ifdef HW_PHYSMEM64
-            /* (64-bit): NetBSD since 2003, OpenBSD */
-            int mib[2] = { CTL_HW, HW_PHYSMEM64 };
-#elif defined(HW_REALMEM)
-            /* (64-bit): FreeBSD since 2005, DragonFly */
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__NetBSD__) || defined(__DragonFly__)
+#ifdef HW_REALMEM
             int mib[2] = { CTL_HW, HW_REALMEM };
-#elif defined(HW_MEMSIZE)
-            /* (64-bit): Darwin */
-            int mib[2] = { CTL_HW, HW_MEMSIZE };
 #else
-            /* (32-bit): very old BSD, might only report up to 2 GiB */
+            /* might only report up to 2 GiB */
             int mib[2] = { CTL_HW, HW_PHYSMEM };
-#endif /* HW_PHYSMEM64 */
+#endif /* HW_REALMEM */
+#else
+            int mib[2] = { CTL_HW, HW_MEMSIZE };
+#endif /* __FreeBSD__ || __FreeBSD_kernel__ */
             Uint64 memsize = 0;
             size_t len = sizeof(memsize);
 
@@ -1201,7 +1198,7 @@ void *SDL_SIMDRealloc(void *mem, const size_t len)
 
     ptr = (Uint8 *)SDL_realloc(mem, to_allocate);
 
-    if (!ptr) {
+    if (ptr == NULL) {
         return NULL; /* Out of memory, bail! */
     }
 

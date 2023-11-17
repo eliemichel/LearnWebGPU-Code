@@ -129,7 +129,7 @@ char *WIN_GetClipboardText(_THIS)
             SDL_Delay(10);
         }
     }
-    if (!text) {
+    if (text == NULL) {
         text = SDL_strdup("");
     }
     return text;

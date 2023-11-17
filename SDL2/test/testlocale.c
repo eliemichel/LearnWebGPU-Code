@@ -17,7 +17,7 @@
 static void log_locales(void)
 {
     SDL_Locale *locales = SDL_GetPreferredLocales();
-    if (!locales) {
+    if (locales == NULL) {
         SDL_Log("Couldn't determine locales: %s", SDL_GetError());
     } else {
         SDL_Locale *l;

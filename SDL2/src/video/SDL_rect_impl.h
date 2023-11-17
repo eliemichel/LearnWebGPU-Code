@@ -25,10 +25,10 @@ SDL_bool SDL_HASINTERSECTION(const RECTTYPE *A, const RECTTYPE *B)
 {
     SCALARTYPE Amin, Amax, Bmin, Bmax;
 
-    if (!A) {
+    if (A == NULL) {
         SDL_InvalidParamError("A");
         return SDL_FALSE;
-    } else if (!B) {
+    } else if (B == NULL) {
         SDL_InvalidParamError("B");
         return SDL_FALSE;
     } else if (SDL_RECTEMPTY(A) || SDL_RECTEMPTY(B)) {
@@ -70,13 +70,13 @@ SDL_bool SDL_INTERSECTRECT(const RECTTYPE *A, const RECTTYPE *B, RECTTYPE *resul
 {
     SCALARTYPE Amin, Amax, Bmin, Bmax;
 
-    if (!A) {
+    if (A == NULL) {
         SDL_InvalidParamError("A");
         return SDL_FALSE;
-    } else if (!B) {
+    } else if (B == NULL) {
         SDL_InvalidParamError("B");
         return SDL_FALSE;
-    } else if (!result) {
+    } else if (result == NULL) {
         SDL_InvalidParamError("result");
         return SDL_FALSE;
     } else if (SDL_RECTEMPTY(A) || SDL_RECTEMPTY(B)) { /* Special cases for empty rects */
@@ -120,13 +120,13 @@ void SDL_UNIONRECT(const RECTTYPE *A, const RECTTYPE *B, RECTTYPE *result)
 {
     SCALARTYPE Amin, Amax, Bmin, Bmax;
 
-    if (!A) {
+    if (A == NULL) {
         SDL_InvalidParamError("A");
         return;
-    } else if (!B) {
+    } else if (B == NULL) {
         SDL_InvalidParamError("B");
         return;
-    } else if (!result) {
+    } else if (result == NULL) {
         SDL_InvalidParamError("result");
         return;
     } else if (SDL_RECTEMPTY(A)) { /* Special cases for empty Rects */
@@ -180,7 +180,7 @@ SDL_bool SDL_ENCLOSEPOINTS(const POINTTYPE *points, int count, const RECTTYPE *c
     SCALARTYPE x, y;
     int i;
 
-    if (!points) {
+    if (points == NULL) {
         SDL_InvalidParamError("points");
         return SDL_FALSE;
     } else if (count < 1) {
@@ -210,7 +210,7 @@ SDL_bool SDL_ENCLOSEPOINTS(const POINTTYPE *points, int count, const RECTTYPE *c
             }
             if (!added) {
                 /* Special case: if no result was requested, we are done */
-                if (!result) {
+                if (result == NULL) {
                     return SDL_TRUE;
                 }
 
@@ -236,7 +236,7 @@ SDL_bool SDL_ENCLOSEPOINTS(const POINTTYPE *points, int count, const RECTTYPE *c
         }
     } else {
         /* Special case: if no result was requested, we are done */
-        if (!result) {
+        if (result == NULL) {
             return SDL_TRUE;
         }
 
@@ -299,19 +299,19 @@ SDL_bool SDL_INTERSECTRECTANDLINE(const RECTTYPE *rect, SCALARTYPE *X1, SCALARTY
     SCALARTYPE recty2;
     int outcode1, outcode2;
 
-    if (!rect) {
+    if (rect == NULL) {
         SDL_InvalidParamError("rect");
         return SDL_FALSE;
-    } else if (!X1) {
+    } else if (X1 == NULL) {
         SDL_InvalidParamError("X1");
         return SDL_FALSE;
-    } else if (!Y1) {
+    } else if (Y1 == NULL) {
         SDL_InvalidParamError("Y1");
         return SDL_FALSE;
-    } else if (!X2) {
+    } else if (X2 == NULL) {
         SDL_InvalidParamError("X2");
         return SDL_FALSE;
-    } else if (!Y2) {
+    } else if (Y2 == NULL) {
         SDL_InvalidParamError("Y2");
         return SDL_FALSE;
     } else if (SDL_RECTEMPTY(rect)) {

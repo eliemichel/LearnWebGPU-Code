@@ -94,14 +94,14 @@ static int aaudio_OpenDevice(_THIS, const char *devname)
     }
 
     this->hidden = (struct SDL_PrivateAudioData *)SDL_calloc(1, sizeof(*this->hidden));
-    if (!this->hidden) {
+    if (this->hidden == NULL) {
         return SDL_OutOfMemory();
     }
     private = this->hidden;
 
     ctx.AAudioStreamBuilder_setSampleRate(ctx.builder, this->spec.freq);
     ctx.AAudioStreamBuilder_setChannelCount(ctx.builder, this->spec.channels);
-    if(devname) {
+    if(devname != NULL) {
         int aaudio_device_id = SDL_atoi(devname);
         LOGI("Opening device id %d", aaudio_device_id);
         ctx.AAudioStreamBuilder_setDeviceId(ctx.builder, aaudio_device_id);
@@ -153,7 +153,7 @@ static int aaudio_OpenDevice(_THIS, const char *devname)
     if (!iscapture) {
         private->mixlen = this->spec.size;
         private->mixbuf = (Uint8 *)SDL_malloc(private->mixlen);
-        if (!private->mixbuf) {
+        if (private->mixbuf == NULL) {
             return SDL_OutOfMemory();
         }
         SDL_memset(private->mixbuf, this->spec.silence, this->spec.size);
@@ -285,7 +285,7 @@ static SDL_bool aaudio_Init(SDL_AudioDriverImpl *impl)
     SDL_zero(ctx);
 
     ctx.handle = SDL_LoadObject(LIB_AAUDIO_SO);
-    if (!ctx.handle) {
+    if (ctx.handle == NULL) {
         LOGI("SDL couldn't find " LIB_AAUDIO_SO);
         goto failure;
     }
@@ -300,7 +300,7 @@ static SDL_bool aaudio_Init(SDL_AudioDriverImpl *impl)
         goto failure;
     }
 
-    if (!ctx.builder) {
+    if (ctx.builder == NULL) {
         LOGI("SDL Failed AAudio_createStreamBuilder - builder NULL");
         goto failure;
     }
@@ -344,7 +344,7 @@ void aaudio_PauseDevices(void)
 {
     /* TODO: Handle multiple devices? */
     struct SDL_PrivateAudioData *private;
-    if (audioDevice && audioDevice->hidden) {
+    if (audioDevice != NULL && audioDevice->hidden != NULL) {
         private = (struct SDL_PrivateAudioData *)audioDevice->hidden;
 
         if (private->stream) {
@@ -365,7 +365,7 @@ void aaudio_PauseDevices(void)
         }
     }
 
-    if (captureDevice && captureDevice->hidden) {
+    if (captureDevice != NULL && captureDevice->hidden != NULL) {
         private = (struct SDL_PrivateAudioData *)captureDevice->hidden;
 
         if (private->stream) {
@@ -393,7 +393,7 @@ void aaudio_ResumeDevices(void)
 {
     /* TODO: Handle multiple devices? */
     struct SDL_PrivateAudioData *private;
-    if (audioDevice && audioDevice->hidden) {
+    if (audioDevice != NULL && audioDevice->hidden != NULL) {
         private = (struct SDL_PrivateAudioData *)audioDevice->hidden;
 
         if (private->resume) {
@@ -411,7 +411,7 @@ void aaudio_ResumeDevices(void)
         }
     }
 
-    if (captureDevice && captureDevice->hidden) {
+    if (captureDevice != NULL && captureDevice->hidden != NULL) {
         private = (struct SDL_PrivateAudioData *)captureDevice->hidden;
 
         if (private->resume) {
@@ -441,7 +441,7 @@ SDL_bool aaudio_DetectBrokenPlayState(void)
     int64_t framePosition, timeNanoseconds;
     aaudio_result_t res;
 
-    if (!audioDevice || !audioDevice->hidden) {
+    if (audioDevice == NULL || !audioDevice->hidden) {
         return SDL_FALSE;
     }
 

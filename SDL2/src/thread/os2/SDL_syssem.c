@@ -44,7 +44,7 @@ SDL_sem *SDL_CreateSemaphore(Uint32 initial_value)
     ULONG ulRC;
     SDL_sem *pSDLSem = SDL_malloc(sizeof(SDL_sem));
 
-    if (!pSDLSem) {
+    if (pSDLSem == NULL) {
         SDL_OutOfMemory();
         return NULL;
     }
@@ -85,7 +85,7 @@ int SDL_SemWaitTimeout(SDL_sem * sem, Uint32 timeout)
     ULONG ulTimeout;
     ULONG cPost;
 
-    if (!sem)
+    if (sem == NULL)
         return SDL_InvalidParamError("sem");
 
     if (timeout != SEM_INDEFINITE_WAIT)
@@ -140,7 +140,7 @@ Uint32 SDL_SemValue(SDL_sem * sem)
 {
     ULONG ulRC;
 
-    if (!sem) {
+    if (sem == NULL) {
         SDL_InvalidParamError("sem");
         return 0;
     }
@@ -159,7 +159,7 @@ int SDL_SemPost(SDL_sem * sem)
 {
     ULONG ulRC;
 
-    if (!sem)
+    if (sem == NULL)
         return SDL_InvalidParamError("sem");
 
     ulRC = DosRequestMutexSem(sem->hMtx, SEM_INDEFINITE_WAIT);

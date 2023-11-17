@@ -243,7 +243,7 @@ static SDL_bool HIDAPI_DriverPS4_InitDevice(SDL_HIDAPI_Device *device)
     SDL_JoystickType joystick_type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
 
     ctx = (SDL_DriverPS4_Context *)SDL_calloc(1, sizeof(*ctx));
-    if (!ctx) {
+    if (ctx == NULL) {
         SDL_OutOfMemory();
         return SDL_FALSE;
     }
@@ -402,8 +402,7 @@ static SDL_bool HIDAPI_DriverPS4_InitDevice(SDL_HIDAPI_Device *device)
     ctx->effects_supported = (ctx->lightbar_supported || ctx->vibration_supported);
 
     if (device->vendor_id == USB_VENDOR_PDP &&
-        (device->product_id == USB_PRODUCT_VICTRIX_FS_PRO ||
-         device->product_id == USB_PRODUCT_VICTRIX_FS_PRO_V2)) {
+        device->product_id == USB_PRODUCT_VICTRIX_FS_PRO_V2) {
         /* The Victrix FS Pro V2 reports that it has lightbar support,
          * but it doesn't respond to the effects packet, and will hang
          * on reboot if we send it.
@@ -1145,7 +1144,7 @@ static SDL_bool HIDAPI_DriverPS4_UpdateDevice(SDL_HIDAPI_Device *device)
         ++packet_count;
         ctx->last_packet = now;
 
-        if (!joystick) {
+        if (joystick == NULL) {
             continue;
         }
 

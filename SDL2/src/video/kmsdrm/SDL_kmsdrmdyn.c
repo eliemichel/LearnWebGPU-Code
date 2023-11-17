@@ -52,22 +52,22 @@ static void *KMSDRM_GetSym(const char *fnname, int *pHasModule)
     int i;
     void *fn = NULL;
     for (i = 0; i < SDL_TABLESIZE(kmsdrmlibs); i++) {
-        if (kmsdrmlibs[i].lib) {
+        if (kmsdrmlibs[i].lib != NULL) {
             fn = SDL_LoadFunction(kmsdrmlibs[i].lib, fnname);
-            if (fn) {
+            if (fn != NULL) {
                 break;
             }
         }
     }
 
 #if DEBUG_DYNAMIC_KMSDRM
-    if (fn)
+    if (fn != NULL)
         SDL_Log("KMSDRM: Found '%s' in %s (%p)\n", fnname, kmsdrmlibs[i].libname, fn);
     else
         SDL_Log("KMSDRM: Symbol '%s' NOT FOUND!\n", fnname);
 #endif
 
-    if (!fn) {
+    if (fn == NULL) {
         *pHasModule = 0; /* kill this module. */
     }
 
@@ -101,7 +101,7 @@ void SDL_KMSDRM_UnloadSymbols(void)
 
 #ifdef SDL_VIDEO_DRIVER_KMSDRM_DYNAMIC
             for (i = 0; i < SDL_TABLESIZE(kmsdrmlibs); i++) {
-                if (kmsdrmlibs[i].lib) {
+                if (kmsdrmlibs[i].lib != NULL) {
                     SDL_UnloadObject(kmsdrmlibs[i].lib);
                     kmsdrmlibs[i].lib = NULL;
                 }
@@ -122,7 +122,7 @@ int SDL_KMSDRM_LoadSymbols(void)
         int i;
         int *thismod = NULL;
         for (i = 0; i < SDL_TABLESIZE(kmsdrmlibs); i++) {
-            if (kmsdrmlibs[i].libname) {
+            if (kmsdrmlibs[i].libname != NULL) {
                 kmsdrmlibs[i].lib = SDL_LoadObject(kmsdrmlibs[i].libname);
             }
         }

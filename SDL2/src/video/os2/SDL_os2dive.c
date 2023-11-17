@@ -101,7 +101,7 @@ PVODATA voOpen(void)
 {
     PVODATA pVOData = SDL_calloc(1, sizeof(VODATA));
 
-    if (!pVOData) {
+    if (pVOData == NULL) {
         SDL_OutOfMemory();
         return NULL;
     }
@@ -277,7 +277,7 @@ static VOID voVideoBufFree(PVODATA pVOData)
         pVOData->ulDIVEBufNum = 0;
     }
 
-    if (pVOData->pBuffer) {
+    if (pVOData->pBuffer != NULL) {
         ulRC = DosFreeMem(pVOData->pBuffer);
         if (ulRC != NO_ERROR) {
             debug_os2("DosFreeMem(), rc = %u", ulRC);
@@ -296,11 +296,11 @@ static BOOL voUpdate(PVODATA pVOData, HWND hwnd, SDL_Rect *pSDLRects,
         return FALSE;
     }
 
-    if (pSDLRects) {
+    if (pSDLRects != NULL) {
         PBYTE   pbLineMask;
 
         pbLineMask = SDL_stack_alloc(BYTE, pVOData->ulHeight);
-        if (!pbLineMask) {
+        if (pbLineMask == NULL) {
             debug_os2("Not enough stack size");
             return FALSE;
         }

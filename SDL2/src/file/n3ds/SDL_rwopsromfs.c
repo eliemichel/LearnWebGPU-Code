@@ -66,7 +66,7 @@ static FILE *TryOpenFile(const char *file, const char *mode)
     FILE *fp = NULL;
 
     fp = TryOpenInRomfs(file, mode);
-    if (!fp) {
+    if (fp == NULL) {
         fp = fopen(file, mode);
     }
 

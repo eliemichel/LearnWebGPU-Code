@@ -166,28 +166,28 @@ static const char *getlocale(char *buffer, size_t bufsize)
     char *ptr;
 
     lang = SDL_getenv("LC_ALL");
-    if (!lang) {
+    if (lang == NULL) {
         lang = SDL_getenv("LC_CTYPE");
     }
-    if (!lang) {
+    if (lang == NULL) {
         lang = SDL_getenv("LC_MESSAGES");
     }
-    if (!lang) {
+    if (lang == NULL) {
         lang = SDL_getenv("LANG");
     }
-    if (!lang || !*lang || SDL_strcmp(lang, "C") == 0) {
+    if (lang == NULL || !*lang || SDL_strcmp(lang, "C") == 0) {
         lang = "ASCII";
     }
 
     /* We need to trim down strings like "en_US.UTF-8@blah" to "UTF-8" */
     ptr = SDL_strchr(lang, '.');
-    if (ptr) {
+    if (ptr != NULL) {
         lang = ptr + 1;
     }
 
     SDL_strlcpy(buffer, lang, bufsize);
     ptr = SDL_strchr(buffer, '@');
-    if (ptr) {
+    if (ptr != NULL) {
         *ptr = '\0'; /* chop end of string. */
     }
 
@@ -202,10 +202,10 @@ SDL_iconv_t SDL_iconv_open(const char *tocode, const char *fromcode)
     char fromcode_buffer[64];
     char tocode_buffer[64];
 
-    if (!fromcode || !*fromcode) {
+    if (fromcode == NULL || !*fromcode) {
         fromcode = getlocale(fromcode_buffer, sizeof(fromcode_buffer));
     }
-    if (!tocode || !*tocode) {
+    if (tocode == NULL || !*tocode) {
         tocode = getlocale(tocode_buffer, sizeof(tocode_buffer));
     }
     for (i = 0; i < SDL_arraysize(encodings); ++i) {
@@ -245,11 +245,11 @@ SDL_iconv(SDL_iconv_t cd,
     Uint32 ch = 0;
     size_t total;
 
-    if (!inbuf || !*inbuf) {
+    if (inbuf == NULL || !*inbuf) {
         /* Reset the context */
         return 0;
     }
-    if (!outbuf || !*outbuf || !outbytesleft || !*outbytesleft) {
+    if (outbuf == NULL || !*outbuf || outbytesleft == NULL || !*outbytesleft) {
         return SDL_ICONV_E2BIG;
     }
     src = *inbuf;
@@ -795,10 +795,10 @@ char *SDL_iconv_string(const char *tocode, const char *fromcode, const char *inb
     size_t outbytesleft;
     size_t retCode = 0;
 
-    if (!tocode || !*tocode) {
+    if (tocode == NULL || !*tocode) {
         tocode = "UTF-8";
     }
-    if (!fromcode || !*fromcode) {
+    if (fromcode == NULL || !*fromcode) {
         fromcode = "UTF-8";
     }
     cd = SDL_iconv_open(tocode, fromcode);
@@ -806,15 +806,15 @@ char *SDL_iconv_string(const char *tocode, const char *fromcode, const char *inb
         return NULL;
     }
 
-    stringsize = inbytesleft;
-    string = (char *)SDL_malloc(stringsize + sizeof(Uint32));
-    if (!string) {
+    stringsize = inbytesleft > 4 ? inbytesleft : 4;
+    string = (char *)SDL_malloc(stringsize + 1);
+    if (string == NULL) {
         SDL_iconv_close(cd);
         return NULL;
     }
     outbuf = string;
     outbytesleft = stringsize;
-    SDL_memset(outbuf, 0, sizeof(Uint32));
+    SDL_memset(outbuf, 0, 4);
 
     while (inbytesleft > 0) {
         const size_t oldinbytesleft = inbytesleft;
@@ -824,15 +824,15 @@ char *SDL_iconv_string(const char *tocode, const char *fromcode, const char *inb
         {
             char *oldstring = string;
             stringsize *= 2;
-            string = (char *)SDL_realloc(string, stringsize + sizeof(Uint32));
-            if (!string) {
+            string = (char *)SDL_realloc(string, stringsize + 1);
+            if (string == NULL) {
                 SDL_free(oldstring);
                 SDL_iconv_close(cd);
                 return NULL;
             }
             outbuf = string + (outbuf - oldstring);
             outbytesleft = stringsize - (outbuf - string);
-            SDL_memset(outbuf, 0, sizeof(Uint32));
+            SDL_memset(outbuf, 0, 4);
             continue;
         }
         case SDL_ICONV_EILSEQ:
@@ -851,7 +851,7 @@ char *SDL_iconv_string(const char *tocode, const char *fromcode, const char *inb
             break;
         }
     }
-    SDL_memset(outbuf, 0, sizeof(Uint32));
+    *outbuf = '\0';
     SDL_iconv_close(cd);
 
     return string;

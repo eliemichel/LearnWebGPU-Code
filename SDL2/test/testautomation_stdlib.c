@@ -175,18 +175,6 @@ int stdlib_snprintf(void *arg)
     SDLTest_AssertCheck(SDL_strcmp(text, expected) == 0, "Check text, expected: '%s', got: '%s'", expected, text);
     SDLTest_AssertCheck(result == 7, "Check result value, expected: 7, got: %d", result);
 
-    result = SDL_snprintf(text, sizeof(text), "%p", (void *)0x1234abcd);
-    expected = "0x1234abcd";
-    SDLTest_AssertPass("Call to SDL_snprintf(text, sizeof(text), \"%%p\", 0x1234abcd)");
-    SDLTest_AssertCheck(SDL_strcmp(text, expected) == 0, "Check text, expected: '%s', got: '%s'", expected, text);
-    SDLTest_AssertCheck(result == SDL_strlen(expected), "Check result value, expected: %d, got: %d", (int)SDL_strlen(expected), result);
-
-    result = SDL_snprintf(text, sizeof(text), "A %p B", (void *)0x1234abcd);
-    expected = "A 0x1234abcd B";
-    SDLTest_AssertPass("Call to SDL_snprintf(text, sizeof(text), \"A %%p B\", 0x1234abcd)");
-    SDLTest_AssertCheck(SDL_strcmp(text, expected) == 0, "Check text, expected: '%s', got: '%s'", expected, text);
-    SDLTest_AssertCheck(result == SDL_strlen(expected), "Check result value, expected: %d, got: %d", (int)SDL_strlen(expected), result);
-
     return TEST_COMPLETED;
 }
 
@@ -219,10 +207,10 @@ int stdlib_getsetenv(void *arg)
 
         text = SDL_getenv(name);
         SDLTest_AssertPass("Call to SDL_getenv('%s')", name);
-        if (text) {
+        if (text != NULL) {
             SDLTest_Log("Expected: NULL, Got: '%s' (%i)", text, (int)SDL_strlen(text));
         }
-    } while (text);
+    } while (text != NULL);
 
     /* Create random values to set */
     value1 = SDLTest_RandomAsciiStringOfSize(10);

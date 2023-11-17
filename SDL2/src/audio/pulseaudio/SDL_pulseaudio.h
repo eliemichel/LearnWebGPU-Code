@@ -23,7 +23,7 @@
 #ifndef SDL_pulseaudio_h_
 #define SDL_pulseaudio_h_
 
-#include <pulse/pulseaudio.h>
+#include <pulse/simple.h>
 
 #include "../SDL_sysaudio.h"
 
@@ -35,6 +35,8 @@ struct SDL_PrivateAudioData
     char *device_name;
 
     /* pulseaudio structures */
+    pa_mainloop *mainloop;
+    pa_context *context;
     pa_stream *stream;
 
     /* Raw mixing buffer */

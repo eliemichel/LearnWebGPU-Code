@@ -28,7 +28,7 @@ int SDL_ListAdd(SDL_ListNode **head, void *ent)
 {
     SDL_ListNode *node = SDL_malloc(sizeof(*node));
 
-    if (!node) {
+    if (node == NULL) {
         return SDL_OutOfMemory();
     }
 
@@ -44,7 +44,7 @@ void SDL_ListPop(SDL_ListNode **head, void **ent)
     SDL_ListNode **ptr = head;
 
     /* Invalid or empty */
-    if (!head || !*head) {
+    if (head == NULL || *head == NULL) {
         return;
     }
 

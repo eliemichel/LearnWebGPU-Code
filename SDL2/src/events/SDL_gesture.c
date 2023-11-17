@@ -61,7 +61,7 @@ typedef struct
 typedef struct
 {
     SDL_FloatPoint path[DOLLARNPOINTS];
-    Sint64 hash;
+    unsigned long hash;
 } SDL_DollarTemplate;
 
 typedef struct
@@ -129,7 +129,7 @@ static unsigned long SDL_HashDollar(SDL_FloatPoint *points)
 
 static int SaveTemplate(SDL_DollarTemplate *templ, SDL_RWops *dst)
 {
-    if (!dst) {
+    if (dst == NULL) {
         return 0;
     }
 
@@ -200,7 +200,7 @@ static int SDL_AddDollarGesture_one(SDL_GestureTouch *inTouch, SDL_FloatPoint *p
         (SDL_DollarTemplate *)SDL_realloc(inTouch->dollarTemplate,
                                           (index + 1) *
                                               sizeof(SDL_DollarTemplate));
-    if (!dollarTemplate) {
+    if (dollarTemplate == NULL) {
         return SDL_OutOfMemory();
     }
     inTouch->dollarTemplate = dollarTemplate;
@@ -217,7 +217,7 @@ static int SDL_AddDollarGesture(SDL_GestureTouch *inTouch, SDL_FloatPoint *path)
 {
     int index = -1;
     int i = 0;
-    if (!inTouch) {
+    if (inTouch == NULL) {
         if (SDL_numGestureTouches == 0) {
             return SDL_SetError("no gesture touch devices registered");
         }
@@ -238,7 +238,7 @@ int SDL_LoadDollarTemplates(SDL_TouchID touchId, SDL_RWops *src)
 {
     int i, loaded = 0;
     SDL_GestureTouch *touch = NULL;
-    if (!src) {
+    if (src == NULL) {
         return 0;
     }
     if (touchId >= 0) {
@@ -247,7 +247,7 @@ int SDL_LoadDollarTemplates(SDL_TouchID touchId, SDL_RWops *src)
                 touch = &SDL_gestureTouch[i];
             }
         }
-        if (!touch) {
+        if (touch == NULL) {
             return SDL_SetError("given touch id not found");
         }
     }
@@ -475,7 +475,7 @@ int SDL_GestureAddTouch(SDL_TouchID touchId)
                                                                      (SDL_numGestureTouches + 1) *
                                                                          sizeof(SDL_GestureTouch));
 
-    if (!gestureTouch) {
+    if (gestureTouch == NULL) {
         return SDL_OutOfMemory();
     }
 
@@ -589,7 +589,7 @@ void SDL_GestureProcessEvent(SDL_Event *event)
         SDL_GestureTouch *inTouch = SDL_GetGestureTouch(event->tfinger.touchId);
 
         /* Shouldn't be possible */
-        if (!inTouch) {
+        if (inTouch == NULL) {
             return;
         }
 
@@ -630,7 +630,7 @@ void SDL_GestureProcessEvent(SDL_Event *event)
                                         &bestTempl, inTouch);
                 if (bestTempl >= 0) {
                     /* Send Event */
-                    Sint64 gestureId = inTouch->dollarTemplate[bestTempl].hash;
+                    unsigned long gestureId = inTouch->dollarTemplate[bestTempl].hash;
                     SDL_SendGestureDollar(inTouch, gestureId, error);
                     /* printf ("%s\n",);("Dollar error: %f\n",error); */
                 }

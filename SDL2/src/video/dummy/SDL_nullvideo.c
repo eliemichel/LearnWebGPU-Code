@@ -53,6 +53,7 @@
 
 /* Initialization/Query functions */
 static int DUMMY_VideoInit(_THIS);
+static int DUMMY_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMode *mode);
 static void DUMMY_VideoQuit(_THIS);
 
 #if SDL_INPUT_LINUXEV
@@ -94,7 +95,7 @@ static SDL_VideoDevice *DUMMY_CreateDevice(void)
 
     /* Initialize all variables that we clean on shutdown */
     device = (SDL_VideoDevice *)SDL_calloc(1, sizeof(SDL_VideoDevice));
-    if (!device) {
+    if (device == NULL) {
         SDL_OutOfMemory();
         return 0;
     }
@@ -103,6 +104,7 @@ static SDL_VideoDevice *DUMMY_CreateDevice(void)
     /* Set the function pointers */
     device->VideoInit = DUMMY_VideoInit;
     device->VideoQuit = DUMMY_VideoQuit;
+    device->SetDisplayMode = DUMMY_SetDisplayMode;
     device->PumpEvents = DUMMY_PumpEvents;
 #if SDL_INPUT_LINUXEV
     if (evdev) {
@@ -147,7 +149,7 @@ int DUMMY_VideoInit(_THIS)
     mode.format = SDL_PIXELFORMAT_RGB888;
     mode.w = 1024;
     mode.h = 768;
-    mode.refresh_rate = 60;
+    mode.refresh_rate = 0;
     mode.driverdata = NULL;
     if (SDL_AddBasicVideoDisplay(&mode) < 0) {
         return -1;
@@ -160,6 +162,11 @@ int DUMMY_VideoInit(_THIS)
 #endif
 
     /* We're done! */
+    return 0;
+}
+
+static int DUMMY_SetDisplayMode(_THIS, SDL_VideoDisplay *display, SDL_DisplayMode *mode)
+{
     return 0;
 }
 

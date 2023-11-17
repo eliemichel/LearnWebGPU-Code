@@ -162,7 +162,6 @@ SDL_X11_SYM(PointerBarrier, XFixesCreatePointerBarrier, (Display* a, Window b, i
 SDL_X11_SYM(void, XFixesDestroyPointerBarrier, (Display* a, PointerBarrier b), (a,b),)
 SDL_X11_SYM(int, XIBarrierReleasePointer,(Display* a,  int b, PointerBarrier c, BarrierEventID d), (a,b,c,d), return) /* this is actually Xinput2 */
 SDL_X11_SYM(Status, XFixesQueryVersion,(Display* a, int* b, int* c), (a,b,c), return)
-SDL_X11_SYM(Status, XFixesSelectSelectionInput, (Display* a, Window b, Atom c, unsigned long d), (a,b,c,d), return)
 #endif
 
 #if SDL_VIDEO_DRIVER_X11_SUPPORTS_GENERIC_EVENTS
@@ -185,18 +184,10 @@ SDL_X11_SYM(void,XkbFreeKeyboard,(XkbDescPtr a,unsigned int b, Bool c),(a,b,c),)
 SDL_X11_SYM(Bool,XkbSetDetectableAutoRepeat,(Display* a, Bool b, Bool* c),(a,b,c),return)
 #endif
 
-/* XKeycodeToKeysym is a deprecated function */
-#if (defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
 #if NeedWidePrototypes
 SDL_X11_SYM(KeySym,XKeycodeToKeysym,(Display* a,unsigned int b,int c),(a,b,c),return)
 #else
 SDL_X11_SYM(KeySym,XKeycodeToKeysym,(Display* a,KeyCode b,int c),(a,b,c),return)
-#endif
-#if (defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || defined(__clang__)
-#pragma GCC diagnostic pop
 #endif
 
 #ifdef X_HAVE_UTF8_STRING

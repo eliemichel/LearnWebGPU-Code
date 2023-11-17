@@ -44,13 +44,13 @@ char *SDL_GetBasePath(void)
 char *SDL_GetPrefPath(const char *org, const char *app)
 {
     char *pref_path = NULL;
-    if (!app) {
+    if (app == NULL) {
         SDL_InvalidParamError("app");
         return NULL;
     }
 
     pref_path = MakePrefPath(app);
-    if (!pref_path) {
+    if (pref_path == NULL) {
         return NULL;
     }
 

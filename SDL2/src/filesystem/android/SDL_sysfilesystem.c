@@ -45,7 +45,7 @@ char *SDL_GetPrefPath(const char *org, const char *app)
     if (path) {
         size_t pathlen = SDL_strlen(path) + 2;
         char *fullpath = (char *)SDL_malloc(pathlen);
-        if (!fullpath) {
+        if (fullpath == NULL) {
             SDL_OutOfMemory();
             return NULL;
         }

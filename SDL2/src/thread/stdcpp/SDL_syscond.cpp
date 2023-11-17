@@ -57,7 +57,7 @@ SDL_CreateCond(void)
 extern "C" void
 SDL_DestroyCond(SDL_cond *cond)
 {
-    if (cond) {
+    if (cond != NULL) {
         delete cond;
     }
 }
@@ -66,7 +66,7 @@ SDL_DestroyCond(SDL_cond *cond)
 extern "C" int
 SDL_CondSignal(SDL_cond *cond)
 {
-    if (!cond) {
+    if (cond == NULL) {
         return SDL_InvalidParamError("cond");
     }
 
@@ -78,7 +78,7 @@ SDL_CondSignal(SDL_cond *cond)
 extern "C" int
 SDL_CondBroadcast(SDL_cond *cond)
 {
-    if (!cond) {
+    if (cond == NULL) {
         return SDL_InvalidParamError("cond");
     }
 

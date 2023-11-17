@@ -67,7 +67,7 @@ static int _InitWindow(_THIS, SDL_Window *window) {
     }
 
     SDL_BWin *bwin = new(std::nothrow) SDL_BWin(bounds, look, flags);
-    if (!bwin) {
+    if (bwin == NULL) {
         return -1;
     }
 

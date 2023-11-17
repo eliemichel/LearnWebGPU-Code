@@ -34,7 +34,7 @@ void *SDL_LoadObject(const char *sofile)
     void *handle;
     LPTSTR tstr;
 
-    if (!sofile) {
+    if (sofile == NULL) {
         SDL_InvalidParamError("sofile");
         return NULL;
     }
@@ -51,7 +51,7 @@ void *SDL_LoadObject(const char *sofile)
     SDL_free(tstr);
 
     /* Generate an error message if all loads failed */
-    if (!handle) {
+    if (handle == NULL) {
         char errbuf[512];
         SDL_strlcpy(errbuf, "Failed loading ", SDL_arraysize(errbuf));
         SDL_strlcat(errbuf, sofile, SDL_arraysize(errbuf));
@@ -63,7 +63,7 @@ void *SDL_LoadObject(const char *sofile)
 void *SDL_LoadFunction(void *handle, const char *name)
 {
     void *symbol = (void *)GetProcAddress((HMODULE)handle, name);
-    if (!symbol) {
+    if (symbol == NULL) {
         char errbuf[512];
         SDL_strlcpy(errbuf, "Failed loading ", SDL_arraysize(errbuf));
         SDL_strlcat(errbuf, name, SDL_arraysize(errbuf));
@@ -74,7 +74,7 @@ void *SDL_LoadFunction(void *handle, const char *name)
 
 void SDL_UnloadObject(void *handle)
 {
-    if (handle) {
+    if (handle != NULL) {
         FreeLibrary((HMODULE)handle);
     }
 }

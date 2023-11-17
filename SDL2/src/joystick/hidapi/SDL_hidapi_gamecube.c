@@ -78,9 +78,7 @@ static SDL_bool HIDAPI_DriverGameCube_IsSupportedDevice(SDL_HIDAPI_Device *devic
         /* Nintendo Co., Ltd.  Wii U GameCube Controller Adapter */
         return SDL_TRUE;
     }
-    if (vendor_id == USB_VENDOR_DRAGONRISE &&
-        (product_id == USB_PRODUCT_EVORETRO_GAMECUBE_ADAPTER1 ||
-         product_id == USB_PRODUCT_EVORETRO_GAMECUBE_ADAPTER2)) {
+    if (vendor_id == USB_VENDOR_DRAGONRISE && product_id == USB_PRODUCT_EVORETRO_GAMECUBE_ADAPTER) {
         /* EVORETRO GameCube Controller Adapter */
         return SDL_TRUE;
     }
@@ -142,7 +140,7 @@ static SDL_bool HIDAPI_DriverGameCube_InitDevice(SDL_HIDAPI_Device *device)
 #endif
 
     ctx = (SDL_DriverGameCube_Context *)SDL_calloc(1, sizeof(*ctx));
-    if (!ctx) {
+    if (ctx == NULL) {
         SDL_OutOfMemory();
         return SDL_FALSE;
     }
@@ -251,7 +249,7 @@ static void HIDAPI_DriverGameCube_HandleJoystickPacket(SDL_HIDAPI_Device *device
     }
 
     joystick = SDL_JoystickFromInstanceID(ctx->joysticks[i]);
-    if (!joystick) {
+    if (joystick == NULL) {
         /* Hasn't been opened yet, skip */
         return;
     }
@@ -325,7 +323,7 @@ static void HIDAPI_DriverGameCube_HandleNintendoPacket(SDL_HIDAPI_Device *device
             joystick = SDL_JoystickFromInstanceID(ctx->joysticks[i]);
 
             /* Hasn't been opened yet, skip */
-            if (!joystick) {
+            if (joystick == NULL) {
                 continue;
             }
         } else {

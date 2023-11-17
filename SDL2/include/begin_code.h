@@ -36,8 +36,6 @@
 #ifndef SDL_DEPRECATED
 #  if defined(__GNUC__) && (__GNUC__ >= 4)  /* technically, this arrived in gcc 3.1, but oh well. */
 #    define SDL_DEPRECATED __attribute__((deprecated))
-#  elif defined(_MSC_VER)
-#    define SDL_DEPRECATED __declspec(deprecated)
 #  else
 #    define SDL_DEPRECATED
 #  endif

@@ -768,7 +768,7 @@ void SDL_SetKeyboardFocus(SDL_Window *window)
 {
     SDL_Keyboard *keyboard = &SDL_keyboard;
 
-    if (keyboard->focus && !window) {
+    if (keyboard->focus && window == NULL) {
         /* We won't get anymore keyboard messages, so reset keyboard state */
         SDL_ResetKeyboard();
     }
@@ -1183,7 +1183,7 @@ const char *SDL_GetScancodeName(SDL_Scancode scancode)
     }
 
     name = SDL_scancode_names[scancode];
-    if (name) {
+    if (name != NULL) {
         return name;
     }
 
@@ -1194,7 +1194,7 @@ SDL_Scancode SDL_GetScancodeFromName(const char *name)
 {
     int i;
 
-    if (!name || !*name) {
+    if (name == NULL || !*name) {
         SDL_InvalidParamError("name");
         return SDL_SCANCODE_UNKNOWN;
     }
@@ -1254,7 +1254,7 @@ SDL_Keycode SDL_GetKeyFromName(const char *name)
     SDL_Keycode key;
 
     /* Check input */
-    if (!name) {
+    if (name == NULL) {
         return SDLK_UNKNOWN;
     }
 

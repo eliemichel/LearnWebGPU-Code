@@ -95,10 +95,10 @@ SDL_PowerState SDL_GetPowerInfo(int *seconds, int *percent)
 
     int _seconds, _percent;
     /* Make these never NULL for platform-specific implementations. */
-    if (!seconds) {
+    if (seconds == NULL) {
         seconds = &_seconds;
     }
-    if (!percent) {
+    if (percent == NULL) {
         percent = &_percent;
     }
 

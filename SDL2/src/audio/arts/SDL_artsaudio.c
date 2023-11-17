@@ -88,7 +88,7 @@ static struct
 
 static void UnloadARTSLibrary()
 {
-    if (arts_handle) {
+    if (arts_handle != NULL) {
         SDL_UnloadObject(arts_handle);
         arts_handle = NULL;
     }
@@ -98,9 +98,9 @@ static int LoadARTSLibrary(void)
 {
     int i, retval = -1;
 
-    if (!arts_handle) {
+    if (arts_handle == NULL) {
         arts_handle = SDL_LoadObject(arts_library);
-        if (arts_handle) {
+        if (arts_handle != NULL) {
             retval = 0;
             for (i = 0; i < SDL_arraysize(arts_functions); ++i) {
                 *arts_functions[i].func =
@@ -214,7 +214,7 @@ static int ARTS_OpenDevice(_THIS, const char *devname)
 
     /* Initialize all variables that we clean on shutdown */
     this->hidden = (struct SDL_PrivateAudioData *)SDL_malloc(sizeof(*this->hidden));
-    if (!this->hidden) {
+    if (this->hidden == NULL) {
         return SDL_OutOfMemory();
     }
     SDL_zerop(this->hidden);
@@ -281,7 +281,7 @@ static int ARTS_OpenDevice(_THIS, const char *devname)
     /* Allocate mixing buffer */
     this->hidden->mixlen = this->spec.size;
     this->hidden->mixbuf = (Uint8 *) SDL_malloc(this->hidden->mixlen);
-    if (!this->hidden->mixbuf) {
+    if (this->hidden->mixbuf == NULL) {
         return SDL_OutOfMemory();
     }
     SDL_memset(this->hidden->mixbuf, this->spec.silence, this->spec.size);

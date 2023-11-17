@@ -89,7 +89,7 @@ static SDL_Cursor *Android_CreateCursor(SDL_Surface *surface, int hot_x, int hot
     SDL_Surface *converted;
 
     converted = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ARGB8888, 0);
-    if (!converted) {
+    if (converted == NULL) {
         return NULL;
     }
     custom_cursor = Android_JNI_CreateCustomCursor(converted, hot_x, hot_y);
@@ -118,7 +118,7 @@ static void Android_FreeCursor(SDL_Cursor *cursor)
 
 static SDL_Cursor *Android_CreateEmptyCursor()
 {
-    if (!empty_cursor) {
+    if (empty_cursor == NULL) {
         SDL_Surface *empty_surface = SDL_CreateRGBSurfaceWithFormat(0, 1, 1, 32, SDL_PIXELFORMAT_ARGB8888);
         if (empty_surface) {
             SDL_memset(empty_surface->pixels, 0, (size_t)empty_surface->h * empty_surface->pitch);
@@ -139,7 +139,7 @@ static void Android_DestroyEmptyCursor()
 
 static int Android_ShowCursor(SDL_Cursor *cursor)
 {
-    if (!cursor) {
+    if (cursor == NULL) {
         cursor = Android_CreateEmptyCursor();
     }
     if (cursor) {
@@ -216,7 +216,7 @@ void Android_OnMouse(SDL_Window *window, int state, int action, float x, float y
     int changes;
     Uint8 button;
 
-    if (!window) {
+    if (window == NULL) {
         return;
     }
 

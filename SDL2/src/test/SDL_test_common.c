@@ -72,7 +72,7 @@ SDLTest_CommonState *SDLTest_CommonCreateState(char **argv, Uint32 flags)
     }
 
     state = (SDLTest_CommonState *)SDL_calloc(1, sizeof(*state));
-    if (!state) {
+    if (state == NULL) {
         SDL_OutOfMemory();
         return NULL;
     }
@@ -134,7 +134,6 @@ int SDLTest_CommonArg(SDLTest_CommonState *state, int index)
             return -1;
         }
         state->videodriver = argv[index];
-        SDL_SetHint(SDL_HINT_VIDEODRIVER, state->videodriver);
         return 2;
     }
     if (SDL_strcasecmp(argv[index], "--renderer") == 0) {
@@ -592,7 +591,7 @@ void SDLTest_CommonLogUsage(SDLTest_CommonState *state, const char *argv0, const
 static const char *BuildCommonUsageString(char **pstr, const char **strlist, const int numitems, const char **strlist2, const int numitems2)
 {
     char *str = *pstr;
-    if (!str) {
+    if (str == NULL) {
         size_t len = SDL_strlen("[--trackmem]") + 2;
         int i;
         for (i = 0; i < numitems; i++) {
@@ -604,7 +603,7 @@ static const char *BuildCommonUsageString(char **pstr, const char **strlist, con
             }
         }
         str = (char *)SDL_calloc(1, len);
-        if (!str) {
+        if (str == NULL) {
             return ""; /* oh well. */
         }
         SDL_strlcat(str, "[--trackmem] ", len);
@@ -992,7 +991,7 @@ static SDL_Surface *SDLTest_LoadIcon(const char *file)
 
     /* Load the icon surface */
     icon = SDL_LoadBMP(file);
-    if (!icon) {
+    if (icon == NULL) {
         SDL_Log("Couldn't load %s: %s\n", file, SDL_GetError());
         return NULL;
     }
@@ -1757,7 +1756,7 @@ static void SDLTest_ScreenShot(SDL_Renderer *renderer)
     SDL_Rect viewport;
     SDL_Surface *surface;
 
-    if (!renderer) {
+    if (renderer == NULL) {
         return;
     }
 
@@ -1769,7 +1768,7 @@ static void SDLTest_ScreenShot(SDL_Renderer *renderer)
                                    0x000000FF, 0x0000FF00, 0x00FF0000,
 #endif
                                    0x00000000);
-    if (!surface) {
+    if (surface == NULL) {
         SDL_Log("Couldn't create surface: %s\n", SDL_GetError());
         return;
     }
@@ -1793,7 +1792,7 @@ static void FullscreenTo(int index, int windowId)
     Uint32 flags;
     struct SDL_Rect rect = { 0, 0, 0, 0 };
     SDL_Window *window = SDL_GetWindowFromID(windowId);
-    if (!window) {
+    if (window == NULL) {
         return;
     }
 

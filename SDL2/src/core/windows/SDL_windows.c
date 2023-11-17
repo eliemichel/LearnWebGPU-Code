@@ -285,7 +285,7 @@ char *WIN_LookupAudioDeviceName(const WCHAR *name, const GUID *guid)
     }
 
     strw = (WCHAR *)SDL_malloc(len + sizeof(WCHAR));
-    if (!strw) {
+    if (strw == NULL) {
         RegCloseKey(hkey);
         return WIN_StringToUTF8(name); /* oh well. */
     }

@@ -633,7 +633,7 @@ static D3D12_PipelineState *D3D12_CreatePipelineState(SDL_Renderer *renderer,
     }
 
     pipelineStates = (D3D12_PipelineState *)SDL_realloc(data->pipelineStates, (data->pipelineStateCount + 1) * sizeof(*pipelineStates));
-    if (!pipelineStates) {
+    if (pipelineStates == NULL) {
         SAFE_RELEASE(pipelineState);
         SDL_OutOfMemory();
         return NULL;
@@ -748,7 +748,7 @@ static HRESULT D3D12_CreateDeviceResources(SDL_Renderer *renderer)
         }
     }
 #endif
-    if (!CreateEventExFunc) {
+    if (CreateEventExFunc == NULL) {
         result = E_FAIL;
         goto done;
     }
@@ -761,7 +761,7 @@ static HRESULT D3D12_CreateDeviceResources(SDL_Renderer *renderer)
     }
 
     CreateDXGIFactoryFunc = (PFN_CREATE_DXGI_FACTORY)SDL_LoadFunction(data->hDXGIMod, "CreateDXGIFactory2");
-    if (!CreateDXGIFactoryFunc) {
+    if (CreateDXGIFactoryFunc == NULL) {
         result = E_FAIL;
         goto done;
     }
@@ -805,7 +805,7 @@ static HRESULT D3D12_CreateDeviceResources(SDL_Renderer *renderer)
 
         /* If the debug hint is set, also create the DXGI factory in debug mode */
         DXGIGetDebugInterfaceFunc = (PFN_CREATE_DXGI_FACTORY)SDL_LoadFunction(data->hDXGIMod, "DXGIGetDebugInterface1");
-        if (!DXGIGetDebugInterfaceFunc) {
+        if (DXGIGetDebugInterfaceFunc == NULL) {
             result = E_FAIL;
             goto done;
         }
@@ -1141,7 +1141,7 @@ static int D3D12_GetViewportAlignedD3DRect(SDL_Renderer *renderer, const SDL_Rec
 static HRESULT D3D12_CreateSwapChain(SDL_Renderer *renderer, int w, int h)
 {
     D3D12_RenderData *data = (D3D12_RenderData *)renderer->driverdata;
-    IDXGISwapChain1* swapChain = NULL;
+    IDXGISwapChain1* swapChain;
     HRESULT result = S_OK;
     SDL_SysWMinfo windowinfo;
 
@@ -1166,13 +1166,7 @@ static HRESULT D3D12_CreateSwapChain(SDL_Renderer *renderer, int w, int h)
                           DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;                  /* To support presenting with allow tearing on */
 
     SDL_VERSION(&windowinfo.version);
-    if (!SDL_GetWindowWMInfo(renderer->window, &windowinfo) ||
-        windowinfo.subsystem != SDL_SYSWM_WINDOWS)
-    {
-        SDL_SetError("Couldn't get window handle");
-        result = E_FAIL;
-        goto done;
-    }
+    SDL_GetWindowWMInfo(renderer->window, &windowinfo);
 
     result = D3D_CALL(data->dxgiFactory, CreateSwapChainForHwnd,
                       (IUnknown *)data->commandQueue,
@@ -1438,7 +1432,7 @@ static int D3D12_CreateTexture(SDL_Renderer *renderer, SDL_Texture *texture)
     }
 
     textureData = (D3D12_TextureData *)SDL_calloc(1, sizeof(*textureData));
-    if (!textureData) {
+    if (textureData == NULL) {
         SDL_OutOfMemory();
         return -1;
     }
@@ -1616,7 +1610,7 @@ static void D3D12_DestroyTexture(SDL_Renderer *renderer,
     D3D12_RenderData *rendererData = (D3D12_RenderData *)renderer->driverdata;
     D3D12_TextureData *textureData = (D3D12_TextureData *)texture->driverdata;
 
-    if (!textureData) {
+    if (textureData == NULL) {
         return;
     }
 
@@ -1794,7 +1788,7 @@ static int D3D12_UpdateTexture(SDL_Renderer *renderer, SDL_Texture *texture,
     D3D12_RenderData *rendererData = (D3D12_RenderData *)renderer->driverdata;
     D3D12_TextureData *textureData = (D3D12_TextureData *)texture->driverdata;
 
-    if (!textureData) {
+    if (textureData == NULL) {
         return SDL_SetError("Texture is not currently available");
     }
 
@@ -1839,7 +1833,7 @@ static int D3D12_UpdateTextureYUV(SDL_Renderer *renderer, SDL_Texture *texture,
     D3D12_RenderData *rendererData = (D3D12_RenderData *)renderer->driverdata;
     D3D12_TextureData *textureData = (D3D12_TextureData *)texture->driverdata;
 
-    if (!textureData) {
+    if (textureData == NULL) {
         return SDL_SetError("Texture is not currently available");
     }
 
@@ -1863,7 +1857,7 @@ static int D3D12_UpdateTextureNV(SDL_Renderer *renderer, SDL_Texture *texture,
     D3D12_RenderData *rendererData = (D3D12_RenderData *)renderer->driverdata;
     D3D12_TextureData *textureData = (D3D12_TextureData *)texture->driverdata;
 
-    if (!textureData) {
+    if (textureData == NULL) {
         return SDL_SetError("Texture is not currently available");
     }
 
@@ -1892,7 +1886,7 @@ static int D3D12_LockTexture(SDL_Renderer *renderer, SDL_Texture *texture,
     BYTE *textureMemory;
     int bpp;
 
-    if (!textureData) {
+    if (textureData == NULL) {
         return SDL_SetError("Texture is not currently available");
     }
 #if SDL_HAVE_YUV
@@ -2011,7 +2005,7 @@ static void D3D12_UnlockTexture(SDL_Renderer *renderer, SDL_Texture *texture)
     D3D12_TEXTURE_COPY_LOCATION dstLocation;
     int bpp;
 
-    if (!textureData) {
+    if (textureData == NULL) {
         return;
     }
 #if SDL_HAVE_YUV
@@ -2082,7 +2076,7 @@ static void D3D12_SetTextureScaleMode(SDL_Renderer *renderer, SDL_Texture *textu
 {
     D3D12_TextureData *textureData = (D3D12_TextureData *)texture->driverdata;
 
-    if (!textureData) {
+    if (textureData == NULL) {
         return;
     }
 
@@ -2094,7 +2088,7 @@ static int D3D12_SetRenderTarget(SDL_Renderer *renderer, SDL_Texture *texture)
     D3D12_RenderData *rendererData = (D3D12_RenderData *)renderer->driverdata;
     D3D12_TextureData *textureData = NULL;
 
-    if (!texture) {
+    if (texture == NULL) {
         if (rendererData->textureRenderTarget) {
             D3D12_TransitionResource(rendererData,
                                      rendererData->textureRenderTarget->mainTexture,
@@ -2137,7 +2131,7 @@ static int D3D12_QueueDrawPoints(SDL_Renderer *renderer, SDL_RenderCommand *cmd,
     color.b = cmd->data.draw.b;
     color.a = cmd->data.draw.a;
 
-    if (!verts) {
+    if (verts == NULL) {
         return -1;
     }
 
@@ -2164,7 +2158,7 @@ static int D3D12_QueueGeometry(SDL_Renderer *renderer, SDL_RenderCommand *cmd, S
     int count = indices ? num_indices : num_vertices;
     VertexPositionColor *verts = (VertexPositionColor *)SDL_AllocateRenderVertices(renderer, count * sizeof(VertexPositionColor), 0, &cmd->data.draw.first);
 
-    if (!verts) {
+    if (verts == NULL) {
         return -1;
     }
 
@@ -2843,8 +2837,8 @@ static int D3D12_RenderReadPixels(SDL_Renderer *renderer, const SDL_Rect *rect,
                       NULL,
                       (void **)&textureMemory);
     if (FAILED(result)) {
-        WIN_SetErrorFromHRESULT(SDL_COMPOSE_ERROR("ID3D12Resource::Map [map staging texture]"), result);
-        goto done;
+        SAFE_RELEASE(readbackBuffer);
+        return WIN_SetErrorFromHRESULT(SDL_COMPOSE_ERROR("ID3D12Resource::Map [map staging texture]"), result);
     }
 
     /* Copy the data into the desired buffer, converting pixels to the
@@ -2965,13 +2959,13 @@ SDL_Renderer *D3D12_CreateRenderer(SDL_Window *window, Uint32 flags)
     D3D12_RenderData *data;
 
     renderer = (SDL_Renderer *)SDL_calloc(1, sizeof(*renderer));
-    if (!renderer) {
+    if (renderer == NULL) {
         SDL_OutOfMemory();
         return NULL;
     }
 
     data = (D3D12_RenderData *)SDL_calloc(1, sizeof(*data));
-    if (!data) {
+    if (data == NULL) {
         SDL_free(renderer);
         SDL_OutOfMemory();
         return NULL;

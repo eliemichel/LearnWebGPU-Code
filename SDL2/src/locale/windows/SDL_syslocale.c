@@ -65,7 +65,7 @@ static void SDL_SYS_GetPreferredLocales_vista(char *buf, size_t buflen)
     pGetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &numlangs, NULL, &wbuflen);
 
     wbuf = SDL_small_alloc(WCHAR, wbuflen, &isstack);
-    if (!wbuf) {
+    if (wbuf == NULL) {
         SDL_OutOfMemory();
         return;
     }
@@ -102,7 +102,7 @@ void SDL_SYS_GetPreferredLocales(char *buf, size_t buflen)
         }
     }
 
-    if (!pGetUserPreferredUILanguages) {
+    if (pGetUserPreferredUILanguages == NULL) {
         SDL_SYS_GetPreferredLocales_winxp(buf, buflen); /* this is always available */
     } else {
         SDL_SYS_GetPreferredLocales_vista(buf, buflen); /* available on Vista and later. */

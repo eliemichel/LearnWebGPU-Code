@@ -29,7 +29,6 @@
 
 #define TEXT_MIME "text/plain;charset=utf-8"
 #define FILE_MIME "text/uri-list"
-#define FILE_PORTAL_MIME "application/vnd.portal.filetransfer"
 
 typedef struct
 {
