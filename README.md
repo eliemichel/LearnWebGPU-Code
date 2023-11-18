@@ -7,6 +7,7 @@ Branch `step030-sdl2-c`: This corresponds to the code at the end of the page [He
 
 This branch contains a minimal pure C implementation of the hello-triangle example using SDL2
 
+
 Building
 --------
 

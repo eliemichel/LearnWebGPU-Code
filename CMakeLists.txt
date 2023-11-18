@@ -23,5 +23,6 @@ set_target_properties(App PROPERTIES
 	CXX_STANDARD 17
 	VS_DEBUGGER_ENVIRONMENT "DAWN_DEBUG_BREAK_ON_ERROR=1"
 )
+
 # target_treat_all_warnings_as_errors(App)
 target_copy_webgpu_binaries(App)
