@@ -1,5 +1,5 @@
 /**
- * This is an extension of GLFW for WebGPU, abstracting away the details of
+ * This is an extension of SDL2 for WebGPU, abstracting away the details of
  * OS-specific operations.
  * 
  * This file is part of the "Learn WebGPU for C++" book.

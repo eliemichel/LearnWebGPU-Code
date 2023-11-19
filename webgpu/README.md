@@ -5,11 +5,16 @@
     <img alt="Learn WebGPU Logo" src="images/webgpu-dark.svg" width="200">
   </picture>
 
-  <a href="https://github.com/eliemichel/LearnWebGPU">LearnWebGPU</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-Cpp">WebGPU-C++</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/glfw3webgpu">glfw3webgpu</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-distribution">WebGPU-distribution</a>
+  <a href="https://github.com/eliemichel/LearnWebGPU">LearnWebGPU</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-Cpp">WebGPU-C++</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-distribution">WebGPU-distribution</a><br/>
+  <a href="https://github.com/eliemichel/glfw3webgpu">glfw3webgpu</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/sdl2webgpu">sdl2webgpu</a>
+  
+  <a href="https://discord.gg/2Tar4Kt564"><img src="https://img.shields.io/static/v1?label=Discord&message=Join%20us!&color=blue&logo=discord&logoColor=white" alt="Discord | Join us!"/></a>
 </div>
 
 WebGPU distribution
 ===================
+
+**Important Note** If you were using [`webgpu.cmake`](https://github.com/eliemichel/WebGPU-distribution/blob/main/webgpu.cmake) prior to November 5, 2023 **please update** it to prevent breaking changes. Each revision of this file now points to a specific version of the distribution submodules to make sure your project still builds even when the distributions gets updated.
 
 Overview
 --------
@@ -32,7 +37,7 @@ Usage
 Different options for using this repository are detailed bellow. The only difference is the `<branch_name>` to use when getting a distribution, either by downloading the source from:
 
 ```
-https://github.com/eliemichel/LearnWebGPU-distribution/archive/refs/heads/<branch_name>.zip
+https://github.com/eliemichel/WebGPU-distribution/archive/refs/heads/<branch_name>.zip
 ```
 
 and including it with `add_subdirectory(webgpu)`, or by using fetch content:
@@ -119,6 +124,6 @@ In theory we could use WebGPU backends as packaged by their developers. However 
 
 While I intend to maintain this possibility, since the *Flexibility* option already uses a FetchContent mechanism it could be used to download only the binaries needed for the current platform.
 
-**Static linking.** wgpu-native now also auto-builds static libraries, they could be included as an alternative (not sure it works for MSVC).
+**Static linking.** wgpu-native now also auto-builds static libraries, they are included as an alternative in the `wgpu-static` branch but this is highly untested (and I'm pretty sure it does not work for MSVC).
 
 **Precompiled Dawn binaries.** Is it worth it? Initial compilation takes time, but then it is okey. Could use [Zig](https://github.com/hexops/mach-gpu-dawn) for this.
