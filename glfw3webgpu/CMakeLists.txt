@@ -1,6 +1,6 @@
 # This is only meant to be included as a subdirectory in another project.
 # It assumes that targets 'glfw' and 'webgpu' exist.
-# Loot at examples/CMakeLists.txt to see how to use it in a project.
+# Look at examples/CMakeLists.txt to see how to use it in a project.
 
 # The glfw3webgpu target
 add_library(glfw3webgpu STATIC glfw3webgpu.c)
