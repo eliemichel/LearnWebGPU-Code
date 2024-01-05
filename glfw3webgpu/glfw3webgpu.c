@@ -38,11 +38,16 @@
 #define WGPU_TARGET_LINUX_X11 2
 #define WGPU_TARGET_WINDOWS 3
 #define WGPU_TARGET_LINUX_WAYLAND 4
+#define WGPU_TARGET_EMSCRIPTEN 5
 
-#if defined(_WIN32)
+#if defined(__EMSCRIPTEN__)
+#define WGPU_TARGET WGPU_TARGET_EMSCRIPTEN
+#elif defined(_WIN32)
 #define WGPU_TARGET WGPU_TARGET_WINDOWS
 #elif defined(__APPLE__)
 #define WGPU_TARGET WGPU_TARGET_MACOS
+#elif defined(_GLFW_WAYLAND)
+#define WGPU_TARGET WGPU_TARGET_LINUX_WAYLAND
 #else
 #define WGPU_TARGET WGPU_TARGET_LINUX_X11
 #endif
@@ -62,7 +67,10 @@
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
 #define GLFW_EXPOSE_NATIVE_WIN32
 #endif
+
+#if !defined(__EMSCRIPTEN__)
 #include <GLFW/glfw3native.h>
+#endif
 
 WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window) {
 #if WGPU_TARGET == WGPU_TARGET_MACOS
@@ -152,6 +160,24 @@ WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window) {
         },
     });
   }
+#elif WGPU_TARGET == WGPU_TARGET_EMSCRIPTEN
+    {
+        return wgpuInstanceCreateSurface(
+            instance,
+            &(WGPUSurfaceDescriptor){
+                .label = NULL,
+                .nextInChain =
+                (const WGPUChainedStruct*)&(
+                    WGPUSurfaceDescriptorFromCanvasHTMLSelector) {
+                    .chain = (WGPUChainedStruct){
+                        .next = NULL,
+                        .sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector,
+                    },
+                    .selector = "canvas",
+                },
+            }
+        );
+    }
 #else
 #error "Unsupported WGPU_TARGET"
 #endif
