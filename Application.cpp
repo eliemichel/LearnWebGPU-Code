@@ -1,20 +1,20 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
  *   https://github.com/eliemichel/LearnWebGPU
- * 
+ *
  * MIT License
  * Copyright (c) 2022-2023 Elie Michel
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -88,7 +88,7 @@ void Application::onFrame() {
 	// Update uniform buffer
 	m_uniforms.time = static_cast<float>(glfwGetTime());
 	m_queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
-	
+
 	TextureView nextTexture = m_swapChain.getCurrentTextureView();
 	if (!nextTexture) {
 		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
@@ -98,7 +98,7 @@ void Application::onFrame() {
 	CommandEncoderDescriptor commandEncoderDesc;
 	commandEncoderDesc.label = "Command Encoder";
 	CommandEncoder encoder = m_device.createCommandEncoder(commandEncoderDesc);
-	
+
 	RenderPassDescriptor renderPassDesc{};
 
 	RenderPassColorAttachment renderPassColorAttachment{};
@@ -145,8 +145,6 @@ void Application::onFrame() {
 	updateGui(renderPass);
 
 	renderPass.end();
-	
-	nextTexture.release();
 
 	CommandBufferDescriptor cmdBufferDescriptor{};
 	cmdBufferDescriptor.label = "Command buffer";
@@ -159,6 +157,11 @@ void Application::onFrame() {
 	// Check for pending error callbacks
 	m_device.tick();
 #endif
+
+	command.release();
+	renderPass.release();
+	encoder.release();
+	nextTexture.release();
 }
 
 void Application::onFinish() {
@@ -282,12 +285,14 @@ bool Application::initWindowAndDevice() {
 	requiredLimits.limits.maxBindGroups = 2;
 	requiredLimits.limits.maxUniformBuffersPerShaderStage = 2;
 	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
-	// Allow textures up to 2K
-	requiredLimits.limits.maxTextureDimension1D = 2048;
-	requiredLimits.limits.maxTextureDimension2D = 2048;
 	requiredLimits.limits.maxTextureArrayLayers = 1;
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
 	requiredLimits.limits.maxSamplersPerShaderStage = 1;
+
+	// Always use adapter's texture resulution limits.
+	requiredLimits.limits.maxTextureDimension1D = supportedLimits.limits.maxTextureDimension1D;
+	requiredLimits.limits.maxTextureDimension2D = supportedLimits.limits.maxTextureDimension2D;
+	requiredLimits.limits.maxTextureDimension3D = supportedLimits.limits.maxTextureDimension3D;
 
 	DeviceDescriptor deviceDesc;
 	deviceDesc.label = "My Device";
@@ -295,7 +300,6 @@ bool Application::initWindowAndDevice() {
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = adapter.requestDevice(deviceDesc);
-	adapter.release();
 	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
@@ -312,6 +316,7 @@ bool Application::initWindowAndDevice() {
 #else
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #endif
+	adapter.release();
 
 	// Add window callbacks
 	// Set the user pointer to be "this"
@@ -505,6 +510,7 @@ bool Application::initRenderPipeline() {
 	m_pipeline = m_device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << m_pipeline << std::endl;
 
+	layout.release();
 	return m_pipeline != nullptr;
 }
 
