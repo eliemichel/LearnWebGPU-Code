@@ -112,11 +112,12 @@ int main (int, char**) {
 	cmdBufferDescriptor.nextInChain = nullptr;
 	cmdBufferDescriptor.label = "Command buffer";
 	WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+	wgpuCommandEncoderRelease(encoder); // release encoder after it's finished
 
 	// Finally submit the command queue
 	std::cout << "Submitting command..." << std::endl;
 	wgpuQueueSubmit(queue, 1, &command);
-	wgpuCommandBufferRelease(command);
+	wgpuCommandBufferRelease(command); // release command buffer once submitted
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
