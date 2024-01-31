@@ -255,16 +255,24 @@ fn fs_main() -> @location(0) vec4f {
 		CommandBufferDescriptor cmdBufferDescriptor;
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+		encoder.release();
 		queue.submit(command);
+		command.release();
 
 		// Instead of swapChain.present()
 		saveTexture("output.png", device, targetTexture);
 		//saveTextureView("output.png", device, nextTexture, targetTexture.getWidth(), targetTexture.getHeight());
 	}
 
+	pipeline.release();
+	shaderModule.release();
+	swapChain.release();
 	device.release();
 	adapter.release();
 	instance.release();
+	surface.release();
+	glfwDestroyWindow(window);
+	glfwTerminate();
 
 	return 0;
 }
