@@ -264,6 +264,7 @@ fn fs_main() -> @location(0) vec4f {
 		renderPass.draw(3, 1, 0, 0);
 
 		renderPass.end();
+		renderPass.release();
 		
 		nextTexture.release();
 
