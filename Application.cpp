@@ -296,7 +296,6 @@ bool Application::initWindowAndDevice() {
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = adapter.requestDevice(deviceDesc);
-	adapter.release();
 	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
@@ -334,6 +333,7 @@ bool Application::initWindowAndDevice() {
 		if (that != nullptr) that->onScroll(xoffset, yoffset);
 	});
 
+	adapter.release();
 	return m_device != nullptr;
 }
 
