@@ -71,8 +71,6 @@ void onWindowScroll(GLFWwindow* m_window, double xoffset, double yoffset) {
 }
 
 bool Application::onInit() {
-<<<<<<< HEAD
-=======
 	if (!initWindowAndDevice()) return false;
 	if (!initSwapChain()) return false;
 	if (!initDepthBuffer()) return false;
@@ -194,7 +192,6 @@ void Application::onResize() {
 // Private methods
 
 bool Application::initWindowAndDevice() {
->>>>>>> 008c331 (Add missing releases)
 	m_instance = createInstance(InstanceDescriptor{});
 	if (!m_instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
@@ -364,7 +361,6 @@ void Application::terminateDepthBuffer() {
 
 
 bool Application::initRenderPipeline() {
->>>>>>> 008c331 (Add missing releases)
 	std::cout << "Creating shader module..." << std::endl;
 	m_shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
 	std::cout << "Shader module: " << m_shaderModule << std::endl;
