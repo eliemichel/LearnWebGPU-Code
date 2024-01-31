@@ -217,9 +217,7 @@ void Application::onResize() {
 // Private methods
 
 bool Application::initWindowAndDevice() {
->>>>>>> 008c331 (Add missing releases)
 	m_instance = createInstance(InstanceDescriptor{});
->>>>>>> c06b4f7 (Add missing releases)
 	if (!m_instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return false;
@@ -256,7 +254,6 @@ bool Application::initWindowAndDevice() {
 #else
 	adapter.getLimits(&supportedLimits);
 #endif
->>>>>>> c06b4f7 (Add missing releases)
 
 	std::cout << "Requesting device..." << std::endl;
 	RequiredLimits requiredLimits = Default;
@@ -399,7 +396,6 @@ void Application::terminateDepthBuffer() {
 
 
 bool Application::initRenderPipeline() {
->>>>>>> 008c331 (Add missing releases)
 	std::cout << "Creating shader module..." << std::endl;
 	m_shaderModule = ResourceManager::loadShaderModule(RESOURCE_DIR "/shader.wgsl", m_device);
 	std::cout << "Shader module: " << m_shaderModule << std::endl;
