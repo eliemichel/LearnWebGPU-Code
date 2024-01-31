@@ -270,15 +270,20 @@ fn fs_main() -> @location(0) vec4f {
 		CommandBufferDescriptor cmdBufferDescriptor;
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+		encoder.release();
 		queue.submit(command);
+		command.release();
 
 		swapChain.present();
 	}
 
+	pipeline.release();
+	shaderModule.release();
 	swapChain.release();
 	device.release();
 	adapter.release();
 	instance.release();
+	surface.release();
 	SDL_DestroyWindow(window);
 	SDL_Quit();
 
