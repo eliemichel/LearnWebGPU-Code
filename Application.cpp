@@ -507,17 +507,14 @@ void Application::onFrame() {
 	updateGui(renderPass);
 	
 	renderPass.end();
+	renderPass.release();
 
 	CommandBuffer command = encoder.finish(CommandBufferDescriptor{});
+	encoder.release();
 	queue.submit(command);
+	command.release();
 
-	wgpuTextureViewRelease(nextTexture);
-#if !defined(WEBGPU_BACKEND_WGPU)
-	wgpuCommandBufferRelease(command);
-	wgpuCommandEncoderRelease(encoder);
-	wgpuRenderPassEncoderRelease(renderPass);
-	wgpuQueueRelease(queue);
-#endif
+	nextTexture.release();
 	
 	m_swapChain.present();
 }
@@ -613,6 +610,86 @@ void Application::updateDragInertia() {
 		m_drag.velocity *= m_drag.intertia;
 		updateViewMatrix();
 	}
+<<<<<<< HEAD
+=======
+
+	if (!glfwInit()) {
+		std::cerr << "Could not initialize GLFW!" << std::endl;
+		return false;
+	}
+
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+	//                             ^^^^^^^^^ This was GLFW_FALSE
+	m_window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	if (!m_window) {
+		std::cerr << "Could not open window!" << std::endl;
+		return false;
+	}
+
+	std::cout << "Requesting adapter..." << std::endl;
+	m_surface = glfwGetWGPUSurface(m_instance, m_window);
+	RequestAdapterOptions adapterOpts{};
+	adapterOpts.compatibleSurface = m_surface;
+	Adapter adapter = m_instance.requestAdapter(adapterOpts);
+	std::cout << "Got adapter: " << adapter << std::endl;
+
+	SupportedLimits supportedLimits;
+	adapter.getLimits(&supportedLimits);
+
+	std::cout << "Requesting device..." << std::endl;
+	RequiredLimits requiredLimits = Default;
+	requiredLimits.limits.maxVertexAttributes = 4;
+	requiredLimits.limits.maxVertexBuffers = 1;
+	requiredLimits.limits.maxBufferSize = 150000 * sizeof(VertexAttributes);
+	requiredLimits.limits.maxVertexBufferArrayStride = sizeof(VertexAttributes);
+	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
+	requiredLimits.limits.maxInterStageShaderComponents = 8;
+	requiredLimits.limits.maxBindGroups = 1;
+	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4 * sizeof(float);
+	// Allow textures up to 2K
+	requiredLimits.limits.maxTextureDimension1D = 2048;
+	requiredLimits.limits.maxTextureDimension2D = 2048;
+	requiredLimits.limits.maxTextureArrayLayers = 1;
+	requiredLimits.limits.maxSampledTexturesPerShaderStage = 1;
+	requiredLimits.limits.maxSamplersPerShaderStage = 1;
+
+	DeviceDescriptor deviceDesc;
+	deviceDesc.label = "My Device";
+	deviceDesc.requiredFeaturesCount = 0;
+	deviceDesc.requiredLimits = &requiredLimits;
+	deviceDesc.defaultQueue.label = "The default queue";
+	m_device = adapter.requestDevice(deviceDesc);
+	std::cout << "Got device: " << m_device << std::endl;
+
+	// Add an error callback for more debug info
+	m_errorCallbackHandle = m_device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
+		std::cout << "Device error: type " << type;
+		if (message) std::cout << " (message: " << message << ")";
+		std::cout << std::endl;
+	});
+
+	m_queue = m_device.getQueue();
+
+#ifdef WEBGPU_BACKEND_WGPU
+	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
+#else
+	m_swapChainFormat = TextureFormat::BGRA8Unorm;
+#endif
+
+	// Set the user pointer to be "this"
+	glfwSetWindowUserPointer(m_window, this);
+	// Use a non-capturing lambda as resize callback
+	glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* window, int, int) {
+		auto that = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+		if (that != nullptr) that->onResize();
+	});
+
+	adapter.release();
+	return m_device != nullptr;
+>>>>>>> 008c331 (Add missing releases)
 }
 
 void Application::initGui() {
