@@ -338,13 +338,9 @@ int main (int, char**) {
 		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
-<<<<<<< HEAD
-		queue.submit(command);
-=======
 		encoder.release();
 		queue.submit(command);
 		command.release();
->>>>>>> 206baac (Add missing releases)
 
 		swapChain.present();
 #ifdef WEBGPU_BACKEND_DAWN
