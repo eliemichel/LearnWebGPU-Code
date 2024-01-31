@@ -131,6 +131,7 @@ private:
 	GLFWwindow* m_window = nullptr;
 	wgpu::Instance m_instance = nullptr;
 	wgpu::Surface m_surface = nullptr;
+	wgpu::Adapter m_adapter = nullptr;
 	wgpu::Device m_device = nullptr;
 	wgpu::Queue m_queue = nullptr;
 	wgpu::SwapChain m_swapChain = nullptr;
