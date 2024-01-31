@@ -116,11 +116,13 @@ int main (int, char**) {
 	// Finally submit the command queue
 	std::cout << "Submitting command..." << std::endl;
 	wgpuQueueSubmit(queue, 1, &command);
+	wgpuCommandBufferRelease(command);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 	}
 
+	wgpuQueueRelease(queue);
 	wgpuDeviceRelease(device);
 	wgpuAdapterRelease(adapter);
 	wgpuInstanceRelease(instance);
