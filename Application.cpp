@@ -145,11 +145,16 @@ void Application::onFrame() {
 	updateGui(renderPass);
 
 	renderPass.end();
+	renderPass.release();
+	
+	nextTexture.release();
 
 	CommandBufferDescriptor cmdBufferDescriptor{};
 	cmdBufferDescriptor.label = "Command buffer";
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+	encoder.release();
 	m_queue.submit(command);
+	command.release();
 
 	m_swapChain.present();
 
@@ -157,11 +162,6 @@ void Application::onFrame() {
 	// Check for pending error callbacks
 	m_device.tick();
 #endif
-
-	command.release();
-	renderPass.release();
-	encoder.release();
-	nextTexture.release();
 }
 
 void Application::onFinish() {
@@ -338,6 +338,7 @@ bool Application::initWindowAndDevice() {
 		if (that != nullptr) that->onScroll(xoffset, yoffset);
 	});
 
+	adapter.release();
 	return m_device != nullptr;
 }
 
