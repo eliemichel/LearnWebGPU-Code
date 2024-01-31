@@ -122,13 +122,16 @@ void Application::onFrame() {
 	renderPass.draw(m_vertexCount, 1, 0, 0);
 
 	renderPass.end();
+	renderPass.release();
 	
 	nextTexture.release();
 
 	CommandBufferDescriptor cmdBufferDescriptor{};
 	cmdBufferDescriptor.label = "Command buffer";
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+	encoder.release();
 	m_queue.submit(command);
+	command.release();
 
 	m_swapChain.present();
 
@@ -224,7 +227,6 @@ bool Application::initWindowAndDevice() {
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = adapter.requestDevice(deviceDesc);
-	adapter.release();
 	std::cout << "Got device: " << m_device << std::endl;
 
 	// Add an error callback for more debug info
@@ -250,6 +252,7 @@ bool Application::initWindowAndDevice() {
 		if (that != nullptr) that->onResize();
 	});
 
+	adapter.release();
 	return m_device != nullptr;
 }
 
