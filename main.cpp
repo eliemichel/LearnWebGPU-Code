@@ -455,8 +455,6 @@ int main (int, char**) {
 		command.release();
 
 		swapChain.present();
->>>>>>> c21c10a (Fix render pass release)
->>>>>>> fc12322 (Fix render pass release)
 	}
 
 	vertexBuffer.destroy();
@@ -464,25 +462,18 @@ int main (int, char**) {
 	indexBuffer.destroy();
 	indexBuffer.release();
 
-<<<<<<< HEAD
 	// Destroy the depth texture and its view
 	depthTextureView.release();
 	depthTexture.destroy();
 	depthTexture.release();
 
-=======
 	pipeline.release();
 	shaderModule.release();
->>>>>>> 4c0cd0e (Add missing releases)
 	swapChain.release();
 	device.release();
 	adapter.release();
 	instance.release();
-<<<<<<< HEAD
-
-=======
 	surface.release();
->>>>>>> 4c0cd0e (Add missing releases)
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
