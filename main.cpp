@@ -400,8 +400,6 @@ int main (int, char**) {
 		command.release();
 
 		swapChain.present();
->>>>>>> c21c10a (Fix render pass release)
->>>>>>> fc12322 (Fix render pass release)
 	}
 
 	vertexBuffer.destroy();
