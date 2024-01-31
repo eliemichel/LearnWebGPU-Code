@@ -445,7 +445,9 @@ int main (int, char**) {
 		CommandBufferDescriptor cmdBufferDescriptor{};
 		cmdBufferDescriptor.label = "Command buffer";
 		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+		encoder.release();
 		queue.submit(command);
+		command.release();
 
 		swapChain.present();
 
@@ -458,15 +460,18 @@ int main (int, char**) {
 	vertexBuffer.destroy();
 	vertexBuffer.release();
 
+	// Destroy the depth texture and its view
 	depthTextureView.release();
 	depthTexture.destroy();
 	depthTexture.release();
 
+	pipeline.release();
+	shaderModule.release();
 	swapChain.release();
 	device.release();
 	adapter.release();
 	instance.release();
-
+	surface.release();
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
