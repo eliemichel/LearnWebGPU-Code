@@ -177,6 +177,7 @@ int main (int, char**) {
 	wgpuDeviceRelease(device);
 	wgpuAdapterRelease(adapter);
 	wgpuInstanceRelease(instance);
+	wgpuSurfaceRelease(surface);
 	glfwDestroyWindow(window);
 	glfwTerminate();
 
