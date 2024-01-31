@@ -439,6 +439,7 @@ int main (int, char**) {
 		renderPass.draw(indexCount, 1, 0, 0); // changed
 
 		renderPass.end();
+		renderPass.release();
 		
 		nextTexture.release();
 
@@ -455,55 +456,6 @@ int main (int, char**) {
 		// Check for pending error callbacks
 		device.tick();
 #endif
-
-		// (This is the same idea, for the GLFW library callbacks)
-		glfwPollEvents();
-
-		TextureView nextTexture = swapChain.getCurrentTextureView();
-		if (!nextTexture) {
-			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
-			return 1;
-		}
-
-		CommandEncoderDescriptor commandEncoderDesc;
-		commandEncoderDesc.label = "Command Encoder";
-		CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
-		
-		RenderPassDescriptor renderPassDesc;
-
-		RenderPassColorAttachment renderPassColorAttachment;
-		renderPassColorAttachment.view = nextTexture;
-		renderPassColorAttachment.resolveTarget = nullptr;
-		renderPassColorAttachment.loadOp = LoadOp::Clear;
-		renderPassColorAttachment.storeOp = StoreOp::Store;
-		renderPassColorAttachment.clearValue = Color{ 0.9, 0.1, 0.2, 1.0 };
-		renderPassDesc.colorAttachmentCount = 1;
-		renderPassDesc.colorAttachments = &renderPassColorAttachment;
-
-		renderPassDesc.depthStencilAttachment = nullptr;
-		renderPassDesc.timestampWriteCount = 0;
-		renderPassDesc.timestampWrites = nullptr;
-		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
-
-		// In its overall outline, drawing a triangle is as simple as this:
-		// Select which render pipeline to use
-		renderPass.setPipeline(pipeline);
-		// Draw 1 instance of a 3-vertices shape
-		renderPass.draw(3, 1, 0, 0);
-
-		renderPass.end();
-		renderPass.release();
-		
-		nextTexture.release();
-
-		CommandBufferDescriptor cmdBufferDescriptor;
-		cmdBufferDescriptor.label = "Command buffer";
-		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
-		encoder.release();
-		queue.submit(command);
-		command.release();
-
-		swapChain.present();
 	}
 
 	vertexBuffer.destroy();
