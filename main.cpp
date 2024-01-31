@@ -167,12 +167,15 @@ int main (int, char**) {
 		cmdBufferDescriptor.nextInChain = nullptr;
 		cmdBufferDescriptor.label = "Command buffer";
 		WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+		wgpuCommandEncoderRelease(encoder);
 		wgpuQueueSubmit(queue, 1, &command);
+		wgpuCommandBufferRelease(command);
 
 		// We can tell the swap chain to present the next texture.
 		wgpuSwapChainPresent(swapChain);
 	}
 
+	wgpuSwapChainRelease(queue);
 	wgpuSwapChainRelease(swapChain);
 	wgpuDeviceRelease(device);
 	wgpuAdapterRelease(adapter);
