@@ -281,7 +281,7 @@ bool Application::initWindowAndDevice() {
 	});
 
 #ifdef WEBGPU_BACKEND_WGPU
-	m_swapChainFormat = m_surface.getPreferredFormat(m_adapter);
+	m_swapChainFormat = m_surface.getPreferredFormat(adapter);
 #else
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #endif
