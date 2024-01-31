@@ -160,6 +160,7 @@ int main (int, char**) {
 		// mechanism for clearing the screen when it begins (see descriptor).
 		WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
 		wgpuRenderPassEncoderEnd(renderPass);
+		wgpuRenderPassEncoderRelease(renderPass);
 
 		wgpuTextureViewRelease(nextTexture);
 
