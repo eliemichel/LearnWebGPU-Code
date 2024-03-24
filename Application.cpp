@@ -3,7 +3,7 @@
  *   https://github.com/eliemichel/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022-2023 Elie Michel
+ * Copyright (c) 2022-2024 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -67,7 +67,7 @@ bool DragDirection(const char* label, glm::vec4& direction) {
 
 bool Application::onInit() {
 	if (!initWindowAndDevice()) return false;
-	if (!initSwapChain()) return false;
+	if (!initSurface()) return false;
 	if (!initDepthBuffer()) return false;
 	if (!initBindGroupLayout()) return false;
 	if (!initRenderPipeline()) return false;
@@ -89,9 +89,13 @@ void Application::onFrame() {
 	m_uniforms.time = static_cast<float>(glfwGetTime());
 	m_queue.writeBuffer(m_uniformBuffer, offsetof(MyUniforms, time), &m_uniforms.time, sizeof(MyUniforms::time));
 	
+#ifdef WEBGPU_BACKEND_DAWN
+	TextureView nextTexture = m_swapChain.getCurrentTextureView();
+#else // WEBGPU_BACKEND_DAWN
 	SurfaceTexture surfaceTexture;
 	m_surface.getCurrentTexture(&surfaceTexture);
 	TextureView nextTexture = Texture(surfaceTexture.texture).createView();
+#endif // WEBGPU_BACKEND_DAWN
 	if (!nextTexture) {
 		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
 		return;
@@ -109,6 +113,9 @@ void Application::onFrame() {
 	renderPassColorAttachment.loadOp = LoadOp::Clear;
 	renderPassColorAttachment.storeOp = StoreOp::Store;
 	renderPassColorAttachment.clearValue = Color{ 0.05, 0.05, 0.05, 1.0 };
+#ifdef WEBGPU_BACKEND_DAWN
+	renderPassColorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+#endif
 	renderPassDesc.colorAttachmentCount = 1;
 	renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
@@ -157,7 +164,11 @@ void Application::onFrame() {
 	m_queue.submit(command);
 	command.release();
 
+#ifdef WEBGPU_BACKEND_DAWN
+	m_swapChain.present();
+#else
 	m_surface.present();
+#endif
 
 #ifdef WEBGPU_BACKEND_DAWN
 	// Check for pending error callbacks
@@ -175,7 +186,7 @@ void Application::onFinish() {
 	terminateRenderPipeline();
 	terminateBindGroupLayout();
 	terminateDepthBuffer();
-	terminateSwapChain();
+	terminateSurface();
 	terminateWindowAndDevice();
 }
 
@@ -186,10 +197,10 @@ bool Application::isRunning() {
 void Application::onResize() {
 	// Terminate in reverse order
 	terminateDepthBuffer();
-	terminateSwapChain();
+	terminateSurface();
 
 	// Re-init
-	initSwapChain();
+	initSurface();
 	initDepthBuffer();
 
 	updateProjectionMatrix();
@@ -355,11 +366,20 @@ void Application::terminateWindowAndDevice() {
 }
 
 
-bool Application::initSwapChain() {
+bool Application::initSurface() {
 	// Get the current size of the window's framebuffer:
 	int width, height;
 	glfwGetFramebufferSize(m_window, &width, &height);
 
+#ifdef WEBGPU_BACKEND_DAWN
+	SwapChainDescriptor desc;
+	desc.width = static_cast<uint32_t>(width);
+	desc.height = static_cast<uint32_t>(height);
+	desc.usage = TextureUsage::RenderAttachment;
+	desc.format = m_swapChainFormat;
+	desc.presentMode = PresentMode::Fifo;
+	m_swapChain = m_device.createSwapChain(m_surface, desc);
+#else // WEBGPU_BACKEND_DAWN
 	SurfaceConfiguration config;
 	config.width = static_cast<uint32_t>(width);
 	config.height = static_cast<uint32_t>(height);
@@ -369,12 +389,19 @@ bool Application::initSwapChain() {
 	config.alphaMode = CompositeAlphaMode::Auto;
 	config.device = m_device;
 	m_surface.configure(config);
+#endif // WEBGPU_BACKEND_DAWN
 
 	return true;
 }
 
-void Application::terminateSwapChain() {
+void Application::terminateSurface() {
+#ifdef WEBGPU_BACKEND_DAWN
+	m_swapChain.release();
+	m_surface.release();
+#else
 	m_surface.unconfigure();
+	m_surface.release();
+#endif
 }
 
 
@@ -507,6 +534,14 @@ bool Application::initRenderPipeline() {
 	depthStencilState.format = m_depthTextureFormat;
 	depthStencilState.stencilReadMask = 0;
 	depthStencilState.stencilWriteMask = 0;
+	depthStencilState.stencilFront.compare = CompareFunction::Always;
+	depthStencilState.stencilFront.depthFailOp = StencilOperation::Keep;
+	depthStencilState.stencilFront.failOp = StencilOperation::Keep;
+	depthStencilState.stencilFront.passOp = StencilOperation::Keep;
+	depthStencilState.stencilBack.compare = CompareFunction::Always;
+	depthStencilState.stencilBack.depthFailOp = StencilOperation::Keep;
+	depthStencilState.stencilBack.failOp = StencilOperation::Keep;
+	depthStencilState.stencilBack.passOp = StencilOperation::Keep;
 
 	pipelineDesc.depthStencil = &depthStencilState;
 
@@ -821,7 +856,11 @@ bool Application::initGui() {
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOther(m_window, true);
-	ImGui_ImplWGPU_Init(m_device, 3, m_swapChainFormat, m_depthTextureFormat);
+	ImGui_ImplWGPU_InitInfo init_info;
+	init_info.Device = m_device;
+	init_info.DepthStencilFormat = m_depthTextureFormat;
+	init_info.RenderTargetFormat = m_swapChainFormat;
+	ImGui_ImplWGPU_Init(&init_info);
 	return true;
 }
 

@@ -3,7 +3,7 @@
  *   https://github.com/eliemichel/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022-2023 Elie Michel
+ * Copyright (c) 2022-2024 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -60,8 +60,8 @@ private:
 	bool initWindowAndDevice();
 	void terminateWindowAndDevice();
 
-	bool initSwapChain();
-	void terminateSwapChain();
+	bool initSurface();
+	void terminateSurface();
 
 	bool initDepthBuffer();
 	void terminateDepthBuffer();
@@ -159,43 +159,47 @@ private:
 
 	// Window and Device
 	GLFWwindow* m_window = nullptr;
-	wgpu::Instance m_instance = nullptr;
-	wgpu::Surface m_surface = nullptr;
-	wgpu::Device m_device = nullptr;
-	wgpu::Queue m_queue = nullptr;
+	wgpu::Instance m_instance;
+	wgpu::Surface m_surface;
+#ifdef WEBGPU_BACKEND_DAWN
+	// To this date, Dawn still needs a SwapChain
+	wgpu::SwapChain m_swapChain;
+#endif // WEBGPU_BACKEND_DAWN
+	wgpu::Device m_device;
+	wgpu::Queue m_queue;
 	wgpu::TextureFormat m_swapChainFormat = wgpu::TextureFormat::Undefined;
 	// Keep the error callback alive
 	std::unique_ptr<wgpu::ErrorCallback> m_errorCallbackHandle;
 
 	// Depth Buffer
 	wgpu::TextureFormat m_depthTextureFormat = wgpu::TextureFormat::Depth24Plus;
-	wgpu::Texture m_depthTexture = nullptr;
-	wgpu::TextureView m_depthTextureView = nullptr;
+	wgpu::Texture m_depthTexture;
+	wgpu::TextureView m_depthTextureView;
 
 	// Render Pipeline
-	wgpu::ShaderModule m_shaderModule = nullptr;
-	wgpu::RenderPipeline m_pipeline = nullptr;
+	wgpu::ShaderModule m_shaderModule;
+	wgpu::RenderPipeline m_pipeline;
 
 	// Texture
-	wgpu::Sampler m_sampler = nullptr;
-	wgpu::Texture m_baseColorTexture = nullptr;
-	wgpu::TextureView m_baseColorTextureView = nullptr;
-	wgpu::Texture m_normalTexture = nullptr;
-	wgpu::TextureView m_normalTextureView = nullptr;
+	wgpu::Sampler m_sampler;
+	wgpu::Texture m_baseColorTexture;
+	wgpu::TextureView m_baseColorTextureView;
+	wgpu::Texture m_normalTexture;
+	wgpu::TextureView m_normalTextureView;
 	
 	// Geometry
-	wgpu::Buffer m_vertexBuffer = nullptr;
+	wgpu::Buffer m_vertexBuffer;
 	int m_vertexCount = 0;
 
 	// Uniforms
-	wgpu::Buffer m_uniformBuffer = nullptr;
+	wgpu::Buffer m_uniformBuffer;
 	MyUniforms m_uniforms;
-	wgpu::Buffer m_lightingUniformBuffer = nullptr;
+	wgpu::Buffer m_lightingUniformBuffer;
 	LightingUniforms m_lightingUniforms;
 	bool m_lightingUniformsChanged = true;
 
 	// Bind Group Layout
-	wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
+	wgpu::BindGroupLayout m_bindGroupLayout;
 
 	// Bind Group
 	wgpu::BindGroup m_bindGroup = nullptr;
