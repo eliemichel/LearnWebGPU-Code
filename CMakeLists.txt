@@ -7,7 +7,12 @@ project(
 
 include(utils.cmake)
 
-add_subdirectory(glfw)
+if(NOT EMSCRIPTEN)
+	add_subdirectory(glfw)
+else()
+	add_library(glfw INTERFACE)
+	target_link_options(glfw INTERFACE -sUSE_GLFW=3)
+endif()
 add_subdirectory(webgpu)
 add_subdirectory(glfw3webgpu)
 
@@ -23,3 +28,8 @@ set_target_properties(App PROPERTIES
 )
 target_treat_all_warnings_as_errors(App)
 target_copy_webgpu_binaries(App)
+
+if(EMSCRIPTEN)
+	target_link_options(App PRIVATE -sUSE_WEBGPU)
+	set_target_properties(App PROPERTIES SUFFIX ".html")
+endif()

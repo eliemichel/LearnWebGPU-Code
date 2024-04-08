@@ -3,7 +3,7 @@
  *   https://eliemichel.github.io/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022-2023 Elie Michel
+ * Copyright (c) 2022-2024 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,8 @@
  * SOFTWARE.
  */
 
+#include "coroutine-hack.h"
+
 #include <glfw3webgpu.h>
 #include <GLFW/glfw3.h>
 
@@ -32,35 +34,94 @@
 
 #include <iostream>
 #include <cassert>
+#include <functional>
+
+#include <emscripten.h>
 
 using namespace wgpu;
 
-int main (int, char**) {
-	Instance instance = createInstance(InstanceDescriptor{});
+class Application {
+public:
+	bool Resume();
+	bool MainLoop();
+	void Terminate();
+	void SetFailure();
+
+private:
+	GLFWwindow* window = nullptr;
+	Surface surface = nullptr;
+	Instance instance = nullptr;
+	Adapter adapter = nullptr;
+	Device device = nullptr;
+	SwapChain swapChain = nullptr;
+	RenderPipeline pipeline = nullptr;
+	Queue queue = nullptr;
+
+	enum class CoroutineState {
+		InitBegin,
+		InitWaitingForAdapter,
+		InitGotAdapter,
+		InitWaitingForDevice,
+		InitGotDevice,
+		MainLoop,
+
+		Failure, // Special sink state
+	};
+	CoroutineState co = CoroutineState::InitBegin;
+};
+
+void Application::SetFailure() {
+	co = CoroutineState::Failure;
+}
+
+bool Application::Resume() {
+	START_COROUTINE(InitBegin)
+
+	instance = createInstance(InstanceDescriptor{});
 	if (!instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
-		return 1;
+		return false;
 	}
 
 	if (!glfwInit()) {
 		std::cerr << "Could not initialize GLFW!" << std::endl;
-		return 1;
+		return false;
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+	window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
 	if (!window) {
 		std::cerr << "Could not open window!" << std::endl;
-		return 1;
+		return false;
 	}
 
 	std::cout << "Requesting adapter..." << std::endl;
-	Surface surface = glfwGetWGPUSurface(instance, window);
+	surface = glfwGetWGPUSurface(instance, window);
 	RequestAdapterOptions adapterOpts;
 	adapterOpts.compatibleSurface = surface;
-	Adapter adapter = instance.requestAdapter(adapterOpts);
+	wgpuInstanceRequestAdapter(
+		instance,
+		&adapterOpts,
+		[](
+			WGPURequestAdapterStatus status,
+			WGPUAdapter adapter,
+			[[maybe_unused]] const char* message,
+			void* userdata
+		) {
+			auto& app = *static_cast<Application*>(userdata);
+			// [...] Error handling
+			assert(status == WGPURequestAdapterStatus_Success);
+			app.adapter = adapter;
+			app.co = CoroutineState::InitGotAdapter;
+		},
+		this
+	);
+
+	YIELD_UNTIL(InitWaitingForAdapter, InitGotAdapter);
+
 	std::cout << "Got adapter: " << adapter << std::endl;
+	instance.release();
 
 	std::cout << "Requesting device..." << std::endl;
 	DeviceDescriptor deviceDesc;
@@ -68,8 +129,28 @@ int main (int, char**) {
 	deviceDesc.requiredFeaturesCount = 0;
 	deviceDesc.requiredLimits = nullptr;
 	deviceDesc.defaultQueue.label = "The default queue";
-	Device device = adapter.requestDevice(deviceDesc);
+	wgpuAdapterRequestDevice(
+		adapter,
+		&deviceDesc,
+		[](
+			WGPURequestDeviceStatus status,
+			WGPUDevice device,
+			[[maybe_unused]] const char* message,
+			void* userdata
+		) {
+			auto& app = *static_cast<Application*>(userdata);
+			// [...] Error handling
+			assert(status == WGPURequestDeviceStatus_Success);
+			app.device = device;
+			app.co = CoroutineState::InitGotDevice;
+		},
+		this
+	);
+
+	YIELD_UNTIL(InitWaitingForDevice, InitGotDevice);
+
 	std::cout << "Got device: " << device << std::endl;
+	adapter.release();
 
 	// Add an error callback for more debug info
 	auto h = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
@@ -78,7 +159,7 @@ int main (int, char**) {
 		std::cout << std::endl;
 	});
 
-	Queue queue = device.getQueue();
+	queue = device.getQueue();
 
 	std::cout << "Creating swapchain..." << std::endl;
 #ifdef WEBGPU_BACKEND_WGPU
@@ -92,7 +173,7 @@ int main (int, char**) {
 	swapChainDesc.usage = TextureUsage::RenderAttachment;
 	swapChainDesc.format = swapChainFormat;
 	swapChainDesc.presentMode = PresentMode::Fifo;
-	SwapChain swapChain = device.createSwapChain(surface, swapChainDesc);
+	swapChain = device.createSwapChain(surface, swapChainDesc);
 	std::cout << "Swapchain: " << swapChain << std::endl;
 
 	std::cout << "Creating shader module..." << std::endl;
@@ -208,68 +289,92 @@ fn fs_main() -> @location(0) vec4f {
 	// Pipeline layout
 	pipelineDesc.layout = nullptr;
 
-	RenderPipeline pipeline = device.createRenderPipeline(pipelineDesc);
+	pipeline = device.createRenderPipeline(pipelineDesc);
 	std::cout << "Render pipeline: " << pipeline << std::endl;
 
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
+	shaderModule.release();
 
-		TextureView nextTexture = swapChain.getCurrentTextureView();
-		if (!nextTexture) {
-			std::cerr << "Cannot acquire next swap chain texture" << std::endl;
-			return 1;
-		}
+	YIELD(MainLoop);
 
-		CommandEncoderDescriptor commandEncoderDesc;
-		commandEncoderDesc.label = "Command Encoder";
-		CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
-		
-		RenderPassDescriptor renderPassDesc;
+	return MainLoop();
 
-		RenderPassColorAttachment renderPassColorAttachment;
-		renderPassColorAttachment.view = nextTexture;
-		renderPassColorAttachment.resolveTarget = nullptr;
-		renderPassColorAttachment.loadOp = LoadOp::Clear;
-		renderPassColorAttachment.storeOp = StoreOp::Store;
-		renderPassColorAttachment.clearValue = Color{ 0.9, 0.1, 0.2, 1.0 };
-		renderPassDesc.colorAttachmentCount = 1;
-		renderPassDesc.colorAttachments = &renderPassColorAttachment;
+	END_COROUTINE()
+}
 
-		renderPassDesc.depthStencilAttachment = nullptr;
-		renderPassDesc.timestampWriteCount = 0;
-		renderPassDesc.timestampWrites = nullptr;
-		RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+bool Application::MainLoop() {
+	glfwPollEvents();
 
-		// In its overall outline, drawing a triangle is as simple as this:
-		// Select which render pipeline to use
-		renderPass.setPipeline(pipeline);
-		// Draw 1 instance of a 3-vertices shape
-		renderPass.draw(3, 1, 0, 0);
-
-		renderPass.end();
-		renderPass.release();
-		
-		nextTexture.release();
-
-		CommandBufferDescriptor cmdBufferDescriptor;
-		cmdBufferDescriptor.label = "Command buffer";
-		CommandBuffer command = encoder.finish(cmdBufferDescriptor);
-		encoder.release();
-		queue.submit(command);
-		command.release();
-
-		swapChain.present();
+	TextureView nextTexture = swapChain.getCurrentTextureView();
+	if (!nextTexture) {
+		std::cerr << "Cannot acquire next swap chain texture" << std::endl;
+		return false;
 	}
 
+	CommandEncoderDescriptor commandEncoderDesc;
+	commandEncoderDesc.label = "Command Encoder";
+	CommandEncoder encoder = device.createCommandEncoder(commandEncoderDesc);
+	
+	RenderPassDescriptor renderPassDesc;
+
+	RenderPassColorAttachment renderPassColorAttachment;
+	renderPassColorAttachment.view = nextTexture;
+	renderPassColorAttachment.resolveTarget = nullptr;
+	renderPassColorAttachment.loadOp = LoadOp::Clear;
+	renderPassColorAttachment.storeOp = StoreOp::Store;
+	renderPassColorAttachment.clearValue = Color{ 0.9, 0.1, 0.2, 1.0 };
+	renderPassDesc.colorAttachmentCount = 1;
+	renderPassDesc.colorAttachments = &renderPassColorAttachment;
+
+	renderPassDesc.depthStencilAttachment = nullptr;
+	renderPassDesc.timestampWriteCount = 0;
+	renderPassDesc.timestampWrites = nullptr;
+	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc);
+
+	// In its overall outline, drawing a triangle is as simple as this:
+	// Select which render pipeline to use
+	renderPass.setPipeline(pipeline);
+	// Draw 1 instance of a 3-vertices shape
+	renderPass.draw(3, 1, 0, 0);
+
+	renderPass.end();
+	renderPass.release();
+	
+	nextTexture.release();
+
+	CommandBufferDescriptor cmdBufferDescriptor;
+	cmdBufferDescriptor.label = "Command buffer";
+	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
+	encoder.release();
+	queue.submit(command);
+	command.release();
+
+#ifndef __EMSCRIPTEN__
+	swapChain.present();
+#endif
+	return true;
+}
+
+void Application::Terminate() {
+	queue.release();
 	pipeline.release();
-	shaderModule.release();
 	swapChain.release();
 	device.release();
-	adapter.release();
-	instance.release();
 	surface.release();
 	glfwDestroyWindow(window);
 	glfwTerminate();
+}
+
+int main (int, char**) {
+	Application app;
+
+	emscripten_set_main_loop_arg([](void *arg){
+		auto& app = *static_cast<Application*>(arg);
+		if (!app.Resume()) {
+			app.SetFailure();
+		}
+	}, &app, 0, true);
+
+	app.Terminate();
 
 	return 0;
 }
