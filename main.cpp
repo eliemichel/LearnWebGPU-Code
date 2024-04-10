@@ -176,7 +176,7 @@ int main (int, char**) {
 		wgpuSwapChainPresent(swapChain);
 	}
 
-	wgpuSwapChainRelease(queue);
+	wgpuQueueRelease(queue);
 	wgpuSwapChainRelease(swapChain);
 	wgpuDeviceRelease(device);
 	wgpuAdapterRelease(adapter);
