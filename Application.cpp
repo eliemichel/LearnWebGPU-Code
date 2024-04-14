@@ -316,7 +316,6 @@ bool Application::initWindowAndDevice() {
 #else
 	m_swapChainFormat = TextureFormat::BGRA8Unorm;
 #endif
-	adapter.release();
 
 	// Add window callbacks
 	// Set the user pointer to be "this"
