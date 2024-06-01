@@ -32,13 +32,13 @@ else()
 endif()
 
 if(XCODE)
-    set_target_properties(App PROPERTIES
-        XCODE_GENERATE_SCHEME ON
-        XCODE_SCHEME_ENABLE_GPU_FRAME_CAPTURE_MODE "Metal")
+	set_target_properties(App PROPERTIES
+		XCODE_GENERATE_SCHEME ON
+		XCODE_SCHEME_ENABLE_GPU_FRAME_CAPTURE_MODE "Metal")
 endif()
 
 # Options that are specific to Emscripten
 if (EMSCRIPTEN)
-    # Generate a full web page rather than a simple WebAssembly module
-    set_target_properties(App PROPERTIES SUFFIX ".html")
+	# Generate a full web page rather than a simple WebAssembly module
+	set_target_properties(App PROPERTIES SUFFIX ".html")
 endif()
