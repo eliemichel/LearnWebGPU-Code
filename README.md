@@ -3,7 +3,7 @@ LearnWebGPU - Code
 
 This repository contains the reference code base accompanying the [Learn WebGPU](https://eliemichel.github.io/LearnWebGPU) web book.
 
-Branch `step020`: This corresponds to the code at the end of the page [First Color](https://eliemichel.github.io/LearnWebGPU/getting-started/first-color.html).
+Branch `step020`: This corresponds to the code at the end of the page [Opening a window](https://eliemichel.github.io/LearnWebGPU/getting-started/opening-a-window.html).
 
 Building
 --------
