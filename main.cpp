@@ -1,20 +1,20 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
  *   https://github.com/eliemichel/LearnWebGPU
- * 
+ *
  * MIT License
- * Copyright (c) 2022-2023 Elie Michel
- * 
+ * Copyright (c) 2022-2024 Elie Michel
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -24,30 +24,35 @@
  * SOFTWARE.
  */
 
-#include <GLFW/glfw3.h>
+// Include WebGPU header
+#include <webgpu/webgpu.h>
 
 #include <iostream>
 
 int main (int, char**) {
-	if (!glfwInit()) {
-		std::cerr << "Could not initialize GLFW!" << std::endl;
+	// We create a descriptor
+	WGPUInstanceDescriptor desc = {};
+	desc.nextInChain = nullptr;
+	
+	// We create the instance using this descriptor
+#ifdef WEBGPU_BACKEND_EMSCRIPTEN
+	WGPUInstance instance = wgpuCreateInstance(nullptr);
+#else //  WEBGPU_BACKEND_EMSCRIPTEN
+	WGPUInstance instance = wgpuCreateInstance(&desc);
+#endif //  WEBGPU_BACKEND_EMSCRIPTEN
+
+	// We can check whether there is actually an instance created
+	if (!instance) {
+		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return 1;
 	}
+	
+	// Display the object (WGPUInstance is a simple pointer, it may be
+	// copied around without worrying about its size).
+	std::cout << "WGPU instance: " << instance << std::endl;
 
-	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
-	if (!window) {
-		std::cerr << "Could not open window!" << std::endl;
-		glfwTerminate();
-		return 1;
-	}
-
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
-	}
-
-	glfwDestroyWindow(window);
-	glfwTerminate();
+	// We clean up the WebGPU instance
+	wgpuInstanceRelease(instance);
 
 	return 0;
 }
-
