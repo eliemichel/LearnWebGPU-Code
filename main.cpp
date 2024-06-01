@@ -42,29 +42,30 @@
 int main() {
 	WGPUInstanceDescriptor desc = {};
 	desc.nextInChain = nullptr;
-	
+
 #ifdef WEBGPU_BACKEND_EMSCRIPTEN
 	WGPUInstance instance = wgpuCreateInstance(nullptr);
 #else //  WEBGPU_BACKEND_EMSCRIPTEN
 	WGPUInstance instance = wgpuCreateInstance(&desc);
 #endif //  WEBGPU_BACKEND_EMSCRIPTEN
+
 	if (!instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return 1;
 	}
-	
+
 	std::cout << "WGPU instance: " << instance << std::endl;
-	
+
 	std::cout << "Requesting adapter..." << std::endl;
 	WGPURequestAdapterOptions adapterOpts = {};
 	adapterOpts.nextInChain = nullptr;
 	WGPUAdapter adapter = requestAdapterSync(instance, &adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
-	
+
 	inspectAdapter(adapter);
 
 	wgpuInstanceRelease(instance);
-	
+
 	std::cout << "Requesting device..." << std::endl;
 	WGPUDeviceDescriptor deviceDesc = {};
 	deviceDesc.nextInChain = nullptr;
@@ -80,18 +81,18 @@ int main() {
 	};
 	WGPUDevice device = requestDeviceSync(adapter, &deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
-	
+
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
 	};
 	wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
-	
+
 	wgpuAdapterRelease(adapter);
-	
+
 	inspectDevice(device);
-	
+
 	WGPUQueue queue = wgpuDeviceGetQueue(device);
 	// Add a callback to monitor the moment queued work finished
 	auto onQueueWorkDone = [](WGPUQueueWorkDoneStatus status, void* /* pUserData */) {
@@ -112,7 +113,7 @@ int main() {
 	cmdBufferDescriptor.label = "Command buffer";
 	WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
 	wgpuCommandEncoderRelease(encoder); // release encoder after it's finished
-	
+
 	// Finally submit the command queue
 	std::cout << "Submitting command..." << std::endl;
 	wgpuQueueSubmit(queue, 1, &command);

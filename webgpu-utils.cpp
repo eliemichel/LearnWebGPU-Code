@@ -95,17 +95,17 @@ void inspectAdapter(WGPUAdapter adapter) {
 	}
 #endif // NOT __EMSCRIPTEN__
 	std::vector<WGPUFeatureName> features;
-	
+
 	// Call the function a first time with a null return address, just to get
 	// the entry count.
 	size_t featureCount = wgpuAdapterEnumerateFeatures(adapter, nullptr);
-	
+
 	// Allocate memory (could be a new, or a malloc() if this were a C program)
 	features.resize(featureCount);
-	
+
 	// Call the function a second time, with a non-null return address
 	wgpuAdapterEnumerateFeatures(adapter, features.data());
-	
+
 	std::cout << "Adapter features:" << std::endl;
 	std::cout << std::hex; // Write integers as hexadecimal to ease comparison with webgpu.h literals
 	for (auto f : features) {
