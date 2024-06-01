@@ -1,15 +1,11 @@
-cmake_minimum_required(VERSION 3.1...3.25)
+cmake_minimum_required(VERSION 3.0...3.25)
 project(
-	LearnWebGPU
-	VERSION 0.1.0
-	LANGUAGES CXX C
+	LearnWebGPU # name of the project, which will also be the name of the visual studio solution if you use it
+	VERSION 0.1.0 # any version number
+	LANGUAGES CXX C # programming languages used by the project
 )
-
-include(utils.cmake)
-
-add_subdirectory(glfw)
+# Include webgpu directory, to define the 'webgpu' target
 add_subdirectory(webgpu)
-add_subdirectory(glfw3webgpu)
 
 add_executable(App
 	main.cpp
@@ -17,11 +13,32 @@ add_executable(App
 	webgpu-utils.cpp
 )
 
-target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
-
+# Add the 'webgpu' target as a dependency of our App
+target_link_libraries(App PRIVATE webgpu)
+# The application's binary must find wgpu.dll or libwgpu.so at runtime,
+# so we automatically copy it (it's called WGPU_RUNTIME_LIB in general)
+# next to the binary.
+target_copy_webgpu_binaries(App)
 set_target_properties(App PROPERTIES
 	CXX_STANDARD 17
-	VS_DEBUGGER_ENVIRONMENT "DAWN_DEBUG_BREAK_ON_ERROR=1"
+	CXX_STANDARD_REQUIRED ON
+	CXX_EXTENSIONS OFF
+	COMPILE_WARNING_AS_ERROR ON
 )
-target_treat_all_warnings_as_errors(App)
-target_copy_webgpu_binaries(App)
+if (MSVC)
+	target_compile_options(App PRIVATE /W4)
+else()
+	target_compile_options(App PRIVATE -Wall -Wextra -pedantic)
+endif()
+if(XCODE)
+    set_target_properties(App PROPERTIES
+        XCODE_GENERATE_SCHEME ON
+        XCODE_SCHEME_ENABLE_GPU_FRAME_CAPTURE_MODE "Metal")
+endif()
+# Options that are specific to Emscripten
+if (EMSCRIPTEN)
+    # Generate a full web page rather than a simple WebAssembly module
+    set_target_properties(App PROPERTIES SUFFIX ".html")
+    # Enable the use of emscripten_sleep()
+    target_link_options(App PRIVATE -sASYNCIFY)
+endif()

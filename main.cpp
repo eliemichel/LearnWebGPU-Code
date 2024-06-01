@@ -1,20 +1,20 @@
 /**
  * This file is part of the "Learn WebGPU for C++" book.
- *   https://eliemichel.github.io/LearnWebGPU
- * 
+ *   https://github.com/eliemichel/LearnWebGPU
+ *
  * MIT License
- * Copyright (c) 2022-2023 Elie Michel
- * 
+ * Copyright (c) 2022-2024 Elie Michel
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -26,78 +26,111 @@
 
 #include "webgpu-utils.h"
 
-#include <glfw3webgpu.h>
-#include <GLFW/glfw3.h>
-
 #include <webgpu/webgpu.h>
+#ifdef WEBGPU_BACKEND_WGPU
+#  include <webgpu/wgpu.h>
+#endif // WEBGPU_BACKEND_WGPU
+
+#ifdef __EMSCRIPTEN__
+#  include <emscripten.h>
+#endif // __EMSCRIPTEN__
 
 #include <iostream>
 #include <cassert>
+#include <vector>
 
-#define UNUSED(x) (void)x;
-
-int main (int, char**) {
+int main() {
 	WGPUInstanceDescriptor desc = {};
 	desc.nextInChain = nullptr;
+	
+#ifdef WEBGPU_BACKEND_EMSCRIPTEN
+	WGPUInstance instance = wgpuCreateInstance(nullptr);
+#else //  WEBGPU_BACKEND_EMSCRIPTEN
 	WGPUInstance instance = wgpuCreateInstance(&desc);
+#endif //  WEBGPU_BACKEND_EMSCRIPTEN
 	if (!instance) {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return 1;
 	}
-
-	if (!glfwInit()) {
-		std::cerr << "Could not initialize GLFW!" << std::endl;
-		return 1;
-	}
-
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
-	if (!window) {
-		std::cerr << "Could not open window!" << std::endl;
-		return 1;
-	}
-
+	
+	std::cout << "WGPU instance: " << instance << std::endl;
+	
 	std::cout << "Requesting adapter..." << std::endl;
 	WGPURequestAdapterOptions adapterOpts = {};
 	adapterOpts.nextInChain = nullptr;
-	adapterOpts.compatibleSurface = glfwGetWGPUSurface(instance, window);
-	WGPUAdapter adapter = requestAdapter(instance, &adapterOpts);
+	WGPUAdapter adapter = requestAdapterSync(instance, &adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
+	
+	inspectAdapter(adapter);
 
+	wgpuInstanceRelease(instance);
+	
 	std::cout << "Requesting device..." << std::endl;
-
-    WGPUDeviceDescriptor deviceDesc = {};
+	WGPUDeviceDescriptor deviceDesc = {};
 	deviceDesc.nextInChain = nullptr;
-	deviceDesc.label = "My Device"; // anything works here, that's your call
-	deviceDesc.requiredFeaturesCount = 0; // we do not require any specific feature
-	deviceDesc.requiredLimits = nullptr; // we do not require any specific limit
+	deviceDesc.label = "My Device";
+	deviceDesc.requiredFeatureCount = 0;
+	deviceDesc.requiredLimits = nullptr;
 	deviceDesc.defaultQueue.nextInChain = nullptr;
 	deviceDesc.defaultQueue.label = "The default queue";
-	WGPUDevice device = requestDevice(adapter, &deviceDesc);
-
+	deviceDesc.deviceLostCallback = [](WGPUDeviceLostReason reason, char const* message, void* /* pUserData */) {
+		std::cout << "Device lost: reason " << reason;
+		if (message) std::cout << " (" << message << ")";
+		std::cout << std::endl;
+	};
+	WGPUDevice device = requestDeviceSync(adapter, &deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
-
-	// Add a callback that gets executed upon errors in our use of the device
+	
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
 	};
 	wgpuDeviceSetUncapturedErrorCallback(device, onDeviceError, nullptr /* pUserData */);
-
+	
+	wgpuAdapterRelease(adapter);
+	
 	inspectDevice(device);
+	
+	WGPUQueue queue = wgpuDeviceGetQueue(device);
+	// Add a callback to monitor the moment queued work finished
+	auto onQueueWorkDone = [](WGPUQueueWorkDoneStatus status, void* /* pUserData */) {
+		std::cout << "Queued work finished with status: " << status << std::endl;
+	};
+	wgpuQueueOnSubmittedWorkDone(queue, onQueueWorkDone, nullptr /* pUserData */);
 
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
+	WGPUCommandEncoderDescriptor encoderDesc = {};
+	encoderDesc.nextInChain = nullptr;
+	encoderDesc.label = "My command encoder";
+	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, &encoderDesc);
+
+	wgpuCommandEncoderInsertDebugMarker(encoder, "Do one thing");
+	wgpuCommandEncoderInsertDebugMarker(encoder, "Do another thing");
+
+	WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+	cmdBufferDescriptor.nextInChain = nullptr;
+	cmdBufferDescriptor.label = "Command buffer";
+	WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+	wgpuCommandEncoderRelease(encoder); // release encoder after it's finished
+	
+	// Finally submit the command queue
+	std::cout << "Submitting command..." << std::endl;
+	wgpuQueueSubmit(queue, 1, &command);
+	wgpuCommandBufferRelease(command);
+	std::cout << "Command submitted." << std::endl;
+	for (int i = 0 ; i < 5 ; ++i) {
+		std::cout << "Tick/Poll device..." << std::endl;
+#if defined(WEBGPU_BACKEND_DAWN)
+		wgpuDeviceTick(device);
+#elif defined(WEBGPU_BACKEND_WGPU)
+		wgpuDevicePoll(device, false, nullptr);
+#elif defined(WEBGPU_BACKEND_EMSCRIPTEN)
+		emscripten_sleep(100);
+#endif
 	}
 
+	wgpuQueueRelease(queue);
 	wgpuDeviceRelease(device);
-	wgpuAdapterRelease(adapter);
-	wgpuInstanceRelease(instance);
-	wgpuSurfaceRelease(surface);
-	glfwDestroyWindow(window);
-	glfwTerminate();
 
 	return 0;
 }
-
