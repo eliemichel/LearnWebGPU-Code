@@ -24,8 +24,9 @@ else()
 endif()
 
 # Generate "schemes" for XCode (macOS) and enable shader debugging (will become handy later on)
-if(XCODE)
-    set_target_properties(App PROPERTIES
-        XCODE_GENERATE_SCHEME ON
-        XCODE_SCHEME_ENABLE_GPU_FRAME_CAPTURE_MODE "Metal")
+if (XCODE)
+	set_target_properties(App PROPERTIES
+		XCODE_GENERATE_SCHEME ON
+		XCODE_SCHEME_ENABLE_GPU_FRAME_CAPTURE_MODE "Metal"
+	)
 endif()
