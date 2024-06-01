@@ -39,7 +39,7 @@
 int main() {
 	WGPUInstanceDescriptor desc = {};
 	desc.nextInChain = nullptr;
-	
+
 #ifdef WEBGPU_BACKEND_EMSCRIPTEN
 	WGPUInstance instance = wgpuCreateInstance(nullptr);
 #else //  WEBGPU_BACKEND_EMSCRIPTEN
@@ -50,21 +50,21 @@ int main() {
 		std::cerr << "Could not initialize WebGPU!" << std::endl;
 		return 1;
 	}
-	
+
 	std::cout << "WGPU instance: " << instance << std::endl;
-	
+
 	std::cout << "Requesting adapter..." << std::endl;
 	WGPURequestAdapterOptions adapterOpts = {};
 	adapterOpts.nextInChain = nullptr;
 	WGPUAdapter adapter = requestAdapterSync(instance, &adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
-	
+
 	inspectAdapter(adapter);
 
 	// We no longer need to use the instance once we have the adapter
 	wgpuInstanceRelease(instance);
 
-	std::cout << "Requesting device..." << std::endl;	
+	std::cout << "Requesting device..." << std::endl;
 	WGPUDeviceDescriptor deviceDesc = {};
 	deviceDesc.nextInChain = nullptr;
 	deviceDesc.label = "My Device"; // anything works here, that's your call
@@ -80,7 +80,7 @@ int main() {
 	};
 	WGPUDevice device = requestDeviceSync(adapter, &deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
-	
+
 	// A function that is invoked whenever there is an error in the use of the device
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
