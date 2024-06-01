@@ -1,23 +1,20 @@
 /**
- * This is an extension of GLFW for WebGPU, abstracting away the details of
- * OS-specific operations.
- * 
  * This file is part of the "Learn WebGPU for C++" book.
- *   https://eliemichel.github.io/LearnWebGPU
- * 
+ *   https://github.com/eliemichel/LearnWebGPU
+ *
  * MIT License
- * Copyright (c) 2022-2023 Elie Michel and the wgpu-native authors
- * 
+ * Copyright (c) 2022-2024 Elie Michel
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in all
  * copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -27,23 +24,34 @@
  * SOFTWARE.
  */
 
-#ifndef _glfw3_webgpu_h_
-#define _glfw3_webgpu_h_
+#pragma once
 
 #include <webgpu/webgpu.h>
-#include <GLFW/glfw3.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
- * Get a WGPUSurface from a GLFW window.
+ * Utility function to get a WebGPU adapter, so that
+ *     WGPUAdapter adapter = requestAdapter(options);
+ * is roughly equivalent to
+ *     const adapter = await navigator.gpu.requestAdapter(options);
  */
-WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window);
+WGPUAdapter requestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions const * options);
 
-#ifdef __cplusplus
-}
-#endif
+/**
+ * Utility function to get a WebGPU device, so that
+ *     WGPUAdapter device = requestDevice(adapter, options);
+ * is roughly equivalent to
+ *     const device = await adapter.requestDevice(descriptor);
+ * It is very similar to requestAdapter
+ */
+WGPUDevice requestDeviceSync(WGPUAdapter adapter, WGPUDeviceDescriptor const * descriptor);
 
-#endif // _glfw3_webgpu_h_
+/**
+ * An example of how we can inspect the capabilities of the hardware through
+ * the adapter object.
+ */
+void inspectAdapter(WGPUAdapter adapter);
+
+/**
+ * Display information about a device
+ */
+void inspectDevice(WGPUDevice device);
