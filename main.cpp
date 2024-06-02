@@ -76,9 +76,6 @@ bool Application::Initialize() {
 	// Create instance
 	WGPUInstance instance = wgpuCreateInstance(nullptr);
 	
-	// Get surface
-	surface = glfwGetWGPUSurface(instance, window);
-	
 	// Get adapter
 	std::cout << "Requesting adapter..." << std::endl;
 	surface = glfwGetWGPUSurface(instance, window);
