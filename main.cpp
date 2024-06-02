@@ -209,7 +209,7 @@ void Application::MainLoop() {
 #if defined(WEBGPU_BACKEND_DAWN)
 	device.tick();
 #elif defined(WEBGPU_BACKEND_WGPU)
-	wgpuDevicePoll(device, false, nullptr);
+	device.poll(false);
 #endif
 }
 
