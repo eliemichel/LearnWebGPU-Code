@@ -1,5 +1,3 @@
-#include "webgpu-utils.h"
-
 // Include the C++ wrapper instead of the raw header(s)
 #define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
@@ -31,6 +29,9 @@ public:
 
 	// Return true as long as the main loop should keep on running
 	bool IsRunning();
+
+private:
+	TextureView GetNextSurfaceTextureView();
 
 private:
 	// We put here all the variables that are shared between init and main loop
@@ -142,25 +143,9 @@ void Application::Terminate() {
 void Application::MainLoop() {
 	glfwPollEvents();
 
-	// Get the surface texture
-	SurfaceTexture surfaceTexture;
-	surface.getCurrentTexture(&surfaceTexture);
-	if (surfaceTexture.status != SurfaceGetCurrentTextureStatus::Success) {
-		return;
-	}
-	Texture texture = surfaceTexture.texture;
-
-	// Create a view for this surface texture
-	TextureViewDescriptor viewDescriptor;
-	viewDescriptor.label = "Surface texture view";
-	viewDescriptor.format = texture.getFormat();
-	viewDescriptor.dimension = TextureViewDimension::_2D;
-	viewDescriptor.baseMipLevel = 0;
-	viewDescriptor.mipLevelCount = 1;
-	viewDescriptor.baseArrayLayer = 0;
-	viewDescriptor.arrayLayerCount = 1;
-	viewDescriptor.aspect = TextureAspect::All;
-	TextureView targetView = texture.createView(viewDescriptor);
+	// Get the next target texture view
+	TextureView targetView = GetNextSurfaceTextureView();
+	if (!targetView) return;
 
 	// Create a command encoder for the draw call
 	CommandEncoderDescriptor encoderDesc = {};
@@ -215,4 +200,28 @@ void Application::MainLoop() {
 
 bool Application::IsRunning() {
 	return !glfwWindowShouldClose(window);
+}
+
+TextureView Application::GetNextSurfaceTextureView() {
+	// Get the surface texture
+	SurfaceTexture surfaceTexture;
+	surface.getCurrentTexture(&surfaceTexture);
+	if (surfaceTexture.status != SurfaceGetCurrentTextureStatus::Success) {
+		return nullptr;
+	}
+	Texture texture = surfaceTexture.texture;
+
+	// Create a view for this surface texture
+	TextureViewDescriptor viewDescriptor;
+	viewDescriptor.label = "Surface texture view";
+	viewDescriptor.format = texture.getFormat();
+	viewDescriptor.dimension = TextureViewDimension::_2D;
+	viewDescriptor.baseMipLevel = 0;
+	viewDescriptor.mipLevelCount = 1;
+	viewDescriptor.baseArrayLayer = 0;
+	viewDescriptor.arrayLayerCount = 1;
+	viewDescriptor.aspect = TextureAspect::All;
+	TextureView targetView = texture.createView(viewDescriptor);
+
+	return targetView;
 }
