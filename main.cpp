@@ -189,7 +189,9 @@ void Application::MainLoop() {
 
 	// At the enc of the frame
 	targetView.release();
+#ifndef __EMSCRIPTEN__
 	surface.present();
+#endif
 
 #if defined(WEBGPU_BACKEND_DAWN)
 	device.tick();
