@@ -37,6 +37,19 @@ fn fs_main() -> @location(0) vec4f {
 }
 )";
 
+// We define a function that hides implementation-specific variants of device polling:
+void wgpuPollEvents([[maybe_unused]] WGPUDevice device, [[maybe_unused]] bool yieldToWebBrowser) {
+#if defined(WEBGPU_BACKEND_DAWN)
+	wgpuDeviceTick(device);
+#elif defined(WEBGPU_BACKEND_WGPU)
+	wgpuDevicePoll(device, false, nullptr);
+#elif defined(WEBGPU_BACKEND_EMSCRIPTEN)
+	if (yieldToWebBrowser) {
+		emscripten_sleep(100);
+	}
+#endif
+}
+
 class Application {
 public:
 	// Initialize everything and return true if it went all right
@@ -56,6 +69,8 @@ private:
 
 	// Substep of Initialize() that creates the render pipeline
 	void InitializePipeline();
+
+	void PlayingWithBuffers();
 
 private:
 	// We put here all the variables that are shared between init and main loop
@@ -157,6 +172,8 @@ bool Application::Initialize() {
 	wgpuSurfaceConfigure(surface, &config);
 
 	InitializePipeline();
+
+	PlayingWithBuffers();
 
 	return true;
 }
@@ -364,4 +381,77 @@ void Application::InitializePipeline() {
 
 	// We no longer need to access the shader module
 	wgpuShaderModuleRelease(shaderModule);
+}
+
+void Application::PlayingWithBuffers() {
+	// Experimentation for the "Playing with buffer" chapter
+	WGPUBufferDescriptor bufferDesc = {};
+	bufferDesc.nextInChain = nullptr;
+	bufferDesc.label = "Some GPU-side data buffer";
+	bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
+	bufferDesc.size = 16;
+	bufferDesc.mappedAtCreation = false;
+	WGPUBuffer buffer1 = wgpuDeviceCreateBuffer(device, &bufferDesc);
+	bufferDesc.label = "Output buffer";
+	bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_MapRead;
+	WGPUBuffer buffer2 = wgpuDeviceCreateBuffer(device, &bufferDesc);
+	
+	// Create some CPU-side data buffer (of size 16 bytes)
+	std::vector<uint8_t> numbers(16);
+	for (uint8_t i = 0; i < 16; ++i) numbers[i] = i;
+	// `numbers` now contains [ 0, 1, 2, ... ]
+	
+	// Copy this from `numbers` (RAM) to `buffer1` (VRAM)
+	wgpuQueueWriteBuffer(queue, buffer1, 0, numbers.data(), numbers.size());
+	
+	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
+	
+	// After creating the command encoder
+	wgpuCommandEncoderCopyBufferToBuffer(encoder, buffer1, 0, buffer2, 0, 16);
+	
+	WGPUCommandBuffer command = wgpuCommandEncoderFinish(encoder, nullptr);
+	wgpuCommandEncoderRelease(encoder);
+	wgpuQueueSubmit(queue, 1, &command);
+	wgpuCommandBufferRelease(command);
+	
+	// The context shared between this main function and the callback.
+	struct Context {
+		bool ready;
+		WGPUBuffer buffer;
+	};
+	
+	auto onBuffer2Mapped = [](WGPUBufferMapAsyncStatus status, void* pUserData) {
+		Context* context = reinterpret_cast<Context*>(pUserData);
+		context->ready = true;
+		std::cout << "Buffer 2 mapped with status " << status << std::endl;
+		if (status != WGPUBufferMapAsyncStatus_Success) return;
+	
+		// Get a pointer to wherever the driver mapped the GPU memory to the RAM
+		uint8_t* bufferData = (uint8_t*)wgpuBufferGetConstMappedRange(context->buffer, 0, 16);
+		
+		std::cout << "bufferData = [";
+		for (int i = 0; i < 16; ++i) {
+			if (i > 0) std::cout << ", ";
+			std::cout << (int)bufferData[i];
+		}
+		std::cout << "]" << std::endl;
+		
+		// Then do not forget to unmap the memory
+		wgpuBufferUnmap(context->buffer);
+	};
+	
+	// Create the Context instance
+	Context context = { false, buffer2 };
+	
+	wgpuBufferMapAsync(buffer2, WGPUMapMode_Read, 0, 16, onBuffer2Mapped, (void*)&context);
+	//                      Pass the address of the Context instance here: ^^^^^^^^^^^^^^
+	
+	while (!context.ready) {
+		//  ^^^^^^^^^^^^^ Use context.ready here instead of ready
+		wgpuPollEvents(device, true /* yieldToBrowser */);
+	}
+	
+	// In Terminate()
+	wgpuBufferRelease(buffer1);
+	wgpuBufferRelease(buffer2);
 }
