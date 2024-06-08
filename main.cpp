@@ -18,16 +18,8 @@ using namespace wgpu;
 // We embbed the source of the shader module here
 const char* shaderSource = R"(
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> @builtin(position) vec4f {
-	var p = vec2f(0.0, 0.0);
-	if (in_vertex_index == 0u) {
-		p = vec2f(-0.5, -0.5);
-	} else if (in_vertex_index == 1u) {
-		p = vec2f(0.5, -0.5);
-	} else {
-		p = vec2f(0.0, 0.5);
-	}
-	return vec4f(p, 0.0, 1.0);
+fn vs_main(@location(0) in_vertex_position: vec2f) -> @builtin(position) vec4f {
+	return vec4f(in_vertex_position, 0.0, 1.0);
 }
 
 @fragment
@@ -55,6 +47,8 @@ private:
 
 	// Substep of Initialize() that creates the render pipeline
 	void InitializePipeline();
+	RequiredLimits GetRequiredLimits(Adapter adapter) const;
+	void InitializeBuffers();
 
 private:
 	// We put here all the variables that are shared between init and main loop
@@ -62,8 +56,11 @@ private:
 	Device device;
 	Queue queue;
 	Surface surface;
+	std::unique_ptr<ErrorCallback> uncapturedErrorCallbackHandle;
 	TextureFormat surfaceFormat = TextureFormat::Undefined;
 	RenderPipeline pipeline;
+	Buffer vertexBuffer;
+	uint32_t vertexCount;
 };
 
 int main() {
@@ -98,8 +95,7 @@ bool Application::Initialize() {
 	
 	Instance instance = wgpuCreateInstance(nullptr);
 	
-	surface = glfwGetWGPUSurface(instance, window);
-	
+	// Get adapter
 	std::cout << "Requesting adapter..." << std::endl;
 	surface = glfwGetWGPUSurface(instance, window);
 	RequestAdapterOptions adapterOpts = {};
@@ -121,12 +117,16 @@ bool Application::Initialize() {
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
 	};
+	// Before adapter.requestDevice(deviceDesc)
+	RequiredLimits requiredLimits = GetRequiredLimits(adapter);
+	deviceDesc.requiredLimits = &requiredLimits;
 	device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 	
 	adapter.release();
 	
-	auto h = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
+	// Device error callback
+	uncapturedErrorCallbackHandle = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
@@ -154,11 +154,12 @@ bool Application::Initialize() {
 	surface.configure(config);
 
 	InitializePipeline();
-
+	InitializeBuffers();
 	return true;
 }
 
 void Application::Terminate() {
+	vertexBuffer.release();
 	pipeline.release();
 	surface.unconfigure();
 	queue.release();
@@ -203,8 +204,12 @@ void Application::MainLoop() {
 
 	// Select which render pipeline to use
 	renderPass.setPipeline(pipeline);
-	// Draw 1 instance of a 3-vertices shape
-	renderPass.draw(3, 1, 0, 0);
+
+	// Set vertex buffer while encoding the render pass
+	renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexBuffer.getSize());
+	
+	// We use the `vertexCount` variable instead of hard-coding the vertex count
+	renderPass.draw(vertexCount, 1, 0, 0);
 
 	renderPass.end();
 	renderPass.release();
@@ -220,7 +225,7 @@ void Application::MainLoop() {
 	command.release();
 	std::cout << "Command submitted." << std::endl;
 
-	// At the enc of the frame
+	// At the end of the frame
 	targetView.release();
 #ifndef __EMSCRIPTEN__
 	surface.present();
@@ -282,9 +287,27 @@ void Application::InitializePipeline() {
 	// Create the render pipeline
 	RenderPipelineDescriptor pipelineDesc;
 
-	// We do not use any vertex buffer for this first simplistic example
-	pipelineDesc.vertex.bufferCount = 0;
-	pipelineDesc.vertex.buffers = nullptr;
+	// Configure the vertex pipeline
+	// We use one vertex buffer
+	VertexBufferLayout vertexBufferLayout;
+	VertexAttribute positionAttrib;
+	// == For each attribute, describe its layout, i.e., how to interpret the raw data ==
+	// Corresponds to @location(...)
+	positionAttrib.shaderLocation = 0;
+	// Means vec2f in the shader
+	positionAttrib.format = VertexFormat::Float32x2;
+	// Index of the first element
+	positionAttrib.offset = 0;
+	
+	vertexBufferLayout.attributeCount = 1;
+	vertexBufferLayout.attributes = &positionAttrib;
+	
+	// == Common to attributes from the same buffer ==
+	vertexBufferLayout.arrayStride = 2 * sizeof(float);
+	vertexBufferLayout.stepMode = VertexStepMode::Vertex;
+	
+	pipelineDesc.vertex.bufferCount = 1;
+	pipelineDesc.vertex.buffers = &vertexBufferLayout;
 
 	// NB: We define the 'shaderModule' in the second part of this chapter.
 	// Here we tell that the programmable vertex shader stage is described
@@ -356,3 +379,53 @@ void Application::InitializePipeline() {
 	// We no longer need to access the shader module
 	shaderModule.release();
 }
+
+RequiredLimits Application::GetRequiredLimits(Adapter adapter) const {
+	// Get adapter supported limits, in case we need them
+	SupportedLimits supportedLimits;
+	adapter.getLimits(&supportedLimits);
+
+	// Don't forget to = Default
+	RequiredLimits requiredLimits = Default;
+
+	// We use at most 1 vertex attribute for now
+	requiredLimits.limits.maxVertexAttributes = 1;
+	// We should also tell that we use 1 vertex buffers
+	requiredLimits.limits.maxVertexBuffers = 1;
+	// Maximum size of a buffer is 6 vertices of 2 float each
+	requiredLimits.limits.maxBufferSize = 6 * 2 * sizeof(float);
+	// Maximum stride between 2 consecutive vertices in the vertex buffer
+	requiredLimits.limits.maxVertexBufferArrayStride = 2 * sizeof(float);
+	// This must be set even if we do not use storage buffers for now
+	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+
+	return requiredLimits;
+}
+
+void Application::InitializeBuffers() {
+	// Vertex buffer data
+	// There are 2 floats per vertex, one for x and one for y.
+	std::vector<float> vertexData = {
+		// Define a first triangle:
+		-0.5, -0.5,
+		+0.5, -0.5,
+		+0.0, +0.5,
+	
+		// Add a second triangle:
+		-0.55f, -0.5,
+		-0.05f, +0.5,
+		-0.55f, +0.5
+	};
+	vertexCount = static_cast<uint32_t>(vertexData.size() / 2);
+	
+	// Create vertex buffer
+	BufferDescriptor bufferDesc;
+	bufferDesc.size = vertexData.size() * sizeof(float);
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex; // Vertex usage here!
+	bufferDesc.mappedAtCreation = false;
+	vertexBuffer = device.createBuffer(bufferDesc);
+	
+	// Upload geometry data to the buffer
+	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+}
+
