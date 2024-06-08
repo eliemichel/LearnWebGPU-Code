@@ -77,6 +77,7 @@ private:
 	Device device;
 	Queue queue;
 	Surface surface;
+	std::unique_ptr<ErrorCallback> uncapturedErrorCallbackHandle;
 	TextureFormat surfaceFormat = TextureFormat::Undefined;
 	RenderPipeline pipeline;
 };
@@ -141,7 +142,7 @@ bool Application::Initialize() {
 	
 	adapter.release();
 	
-	auto h = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
+	uncapturedErrorCallbackHandle = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
