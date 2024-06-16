@@ -99,8 +99,6 @@ bool Application::Initialize() {
 	device = requestDeviceSync(adapter, &deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 	
-	wgpuAdapterRelease(adapter);
-	
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
@@ -121,6 +119,9 @@ bool Application::Initialize() {
 	WGPUTextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 	config.format = surfaceFormat;
 
+	// Release the adapter only after it has been fully utilised
+	wgpuAdapterRelease(adapter);
+	
 	// And we do not need any particular view format:
 	config.viewFormatCount = 0;
 	config.viewFormats = nullptr;
