@@ -119,9 +119,6 @@ bool Application::Initialize() {
 	WGPUTextureFormat surfaceFormat = wgpuSurfaceGetPreferredFormat(surface, adapter);
 	config.format = surfaceFormat;
 
-	// Release the adapter only after it has been fully utilised
-	wgpuAdapterRelease(adapter);
-	
 	// And we do not need any particular view format:
 	config.viewFormatCount = 0;
 	config.viewFormats = nullptr;
@@ -130,6 +127,9 @@ bool Application::Initialize() {
 	config.alphaMode = WGPUCompositeAlphaMode_Auto;
 
 	wgpuSurfaceConfigure(surface, &config);
+
+	// Release the adapter only after it has been fully utilized
+	wgpuAdapterRelease(adapter);
 
 	return true;
 }
