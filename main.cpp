@@ -100,8 +100,6 @@ bool Application::Initialize() {
 	device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 	
-	adapter.release();
-	
 	uncapturedErrorCallbackHandle = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
@@ -129,6 +127,9 @@ bool Application::Initialize() {
 
 	surface.configure(config);
 
+	// Release the adapter only after it has been fully utilized
+	adapter.release();
+	
 	return true;
 }
 
