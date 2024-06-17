@@ -19,7 +19,7 @@ jobs:
         - os: ubuntu-latest
           install-deps: |
             sudo apt-get update -y
-            sudo apt-get install -y xorg-dev
+            sudo apt-get install -y libwayland-dev libxkbcommon-dev xorg-dev
         
     runs-on: ${{ matrix.os }}
 
