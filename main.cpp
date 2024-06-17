@@ -120,9 +120,7 @@ bool Application::Initialize() {
 	};
 	device = requestDeviceSync(adapter, &deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
-	
-	wgpuAdapterRelease(adapter);
-	
+
 	auto onDeviceError = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
@@ -151,6 +149,9 @@ bool Application::Initialize() {
 	config.alphaMode = WGPUCompositeAlphaMode_Auto;
 
 	wgpuSurfaceConfigure(surface, &config);
+
+	// Release the adapter only after it has been fully utilized
+	wgpuAdapterRelease(adapter);
 
 	InitializePipeline();
 	InitializeBuffers();
