@@ -122,9 +122,7 @@ bool Application::Initialize() {
 	deviceDesc.requiredLimits = &requiredLimits;
 	device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
-	
-	adapter.release();
-	
+
 	// Device error callback
 	uncapturedErrorCallbackHandle = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
 		std::cout << "Uncaptured device error: type " << type;
@@ -152,6 +150,9 @@ bool Application::Initialize() {
 	config.alphaMode = CompositeAlphaMode::Auto;
 
 	surface.configure(config);
+
+	// Release the adapter only after it has been fully utilized
+	adapter.release();
 
 	InitializePipeline();
 	InitializeBuffers();
