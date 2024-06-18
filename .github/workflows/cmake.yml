@@ -14,7 +14,8 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        backend: [ WGPU, DAWN ]
         include:
         - os: ubuntu-latest
           install-deps: |
@@ -41,8 +42,16 @@ jobs:
 
     - name: Configure CMake
       if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
-      run: cmake -S . -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: >
+        cmake
+        -S .
+        -B ${{github.workspace}}/build
+        -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        -DWEBGPU_BACKEND=${{ matrix.backend }}
 
     - name: Build
       if: ${{ steps.check-cmakelists.outputs.cmakelists-exists }}
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+      run: >
+        cmake
+        --build ${{github.workspace}}/build
+        --config ${{env.BUILD_TYPE}}
