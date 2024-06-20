@@ -18,9 +18,15 @@ jobs:
         backend: [ WGPU, DAWN ]
         include:
         - os: ubuntu-latest
+          backend: WGPU
           install-deps: |
             sudo apt-get update -y
             sudo apt-get install -y libwayland-dev libxkbcommon-dev xorg-dev
+        - os: ubuntu-latest
+          backend: DAWN
+          install-deps: |
+            sudo apt-get update -y
+            sudo apt-get install -y libwayland-dev libxkbcommon-dev xorg-dev libxrandr-dev libxinerama-dev libxcursor-dev mesa-common-dev libx11-xcb-dev libxi-dev pkg-config
         
     runs-on: ${{ matrix.os }}
 
