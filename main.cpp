@@ -397,8 +397,6 @@ RequiredLimits Application::GetRequiredLimits(Adapter adapter) const {
 	requiredLimits.limits.maxBufferSize = 6 * 2 * sizeof(float);
 	// Maximum stride between 2 consecutive vertices in the vertex buffer
 	requiredLimits.limits.maxVertexBufferArrayStride = 2 * sizeof(float);
-	// This must be set even if we do not use storage buffers for now
-	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
 
 	return requiredLimits;
 }
