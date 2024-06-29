@@ -159,6 +159,7 @@ bool Application::Initialize() {
 }
 
 void Application::Terminate() {
+	wgpuBufferRelease(vertexBuffer);
 	wgpuRenderPipelineRelease(pipeline);
 	wgpuSurfaceUnconfigure(surface);
 	wgpuQueueRelease(queue);
