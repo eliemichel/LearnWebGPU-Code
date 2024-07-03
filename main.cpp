@@ -50,6 +50,8 @@ public:
 	// Return true as long as the main loop should keep on running
 	bool IsRunning();
 
+	void OnResize(int width, int height);
+
 private:
 	TextureView GetNextSurfaceTextureView();
 
@@ -94,8 +96,14 @@ bool Application::Initialize() {
 	// Open window
 	glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	window = glfwCreateWindow(640, 480, "Learn WebGPU", nullptr, nullptr);
+
+	glfwSetWindowUserPointer(window, this);
+	glfwSetFramebufferSizeCallback(window, [](GLFWwindow* window, int width, int height) {
+		auto app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+		app->OnResize(width, height);
+	});
 	
 	Instance instance = wgpuCreateInstance(nullptr);
 	
@@ -133,28 +141,12 @@ bool Application::Initialize() {
 	
 	queue = device.getQueue();
 
-	// Configure the surface
-	SurfaceConfiguration config = {};
-	
-	// Configuration of the textures created for the underlying swap chain
-	config.width = 640;
-	config.height = 480;
-	config.usage = TextureUsage::RenderAttachment;
 	surfaceFormat = surface.getPreferredFormat(adapter);
-	config.format = surfaceFormat;
-
-	// And we do not need any particular view format:
-	config.viewFormatCount = 0;
-	config.viewFormats = nullptr;
-	config.device = device;
-	config.presentMode = PresentMode::Fifo;
-	config.alphaMode = CompositeAlphaMode::Auto;
-
-	surface.configure(config);
 
 	// Release the adapter only after it has been fully utilized
 	adapter.release();
 
+	OnResize(640, 480);
 	InitializePipeline();
 
 	return true;
@@ -237,6 +229,26 @@ void Application::MainLoop() {
 
 bool Application::IsRunning() {
 	return !glfwWindowShouldClose(window);
+}
+
+void Application::OnResize(int width, int height) {
+	// Configure the surface
+	SurfaceConfiguration config = {};
+
+	// Configuration of the textures created for the underlying swap chain
+	config.width = width;
+	config.height = height;
+	config.usage = TextureUsage::RenderAttachment;
+	config.format = surfaceFormat;
+
+	// And we do not need any particular view format:
+	config.viewFormatCount = 0;
+	config.viewFormats = nullptr;
+	config.device = device;
+	config.presentMode = PresentMode::Fifo;
+	config.alphaMode = CompositeAlphaMode::Auto;
+
+	surface.configure(config);
 }
 
 TextureView Application::GetNextSurfaceTextureView() {
