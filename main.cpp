@@ -44,7 +44,8 @@ struct VertexOutput {
 fn vs_main(in: VertexInput) -> VertexOutput {
 	//                         ^^^^^^^^^^^^ We return a custom struct
 	var out: VertexOutput; // create the output struct
-	out.position = vec4f(in.position, 0.0, 1.0); // same as what we used to directly return
+	let ratio = 640.0 / 480.0; // The width and height of the target surface
+	out.position = vec4f(in.position.x, in.position.y * ratio, 0.0, 1.0);
 	out.color = in.color; // forward the color attribute to the fragment shader
 	return out;
 }
@@ -87,8 +88,9 @@ private:
 	std::unique_ptr<ErrorCallback> uncapturedErrorCallbackHandle;
 	TextureFormat surfaceFormat = TextureFormat::Undefined;
 	RenderPipeline pipeline;
-	Buffer vertexBuffer;
-	uint32_t vertexCount;
+	Buffer pointBuffer;
+	Buffer indexBuffer;
+	uint32_t indexCount;
 };
 
 int main() {
@@ -188,7 +190,8 @@ bool Application::Initialize() {
 }
 
 void Application::Terminate() {
-	vertexBuffer.release();
+	pointBuffer.release();
+	indexBuffer.release();
 	pipeline.release();
 	surface.unconfigure();
 	queue.release();
@@ -235,10 +238,15 @@ void Application::MainLoop() {
 	renderPass.setPipeline(pipeline);
 
 	// Set vertex buffer while encoding the render pass
-	renderPass.setVertexBuffer(0, vertexBuffer, 0, vertexBuffer.getSize());
+	renderPass.setVertexBuffer(0, pointBuffer, 0, pointBuffer.getSize());
 	
-	// We use the `vertexCount` variable instead of hard-coding the vertex count
-	renderPass.draw(vertexCount, 1, 0, 0);
+	// The second argument must correspond to the choice of uint16_t or uint32_t
+	// we've done when creating the index buffer.
+	renderPass.setIndexBuffer(indexBuffer, IndexFormat::Uint16, 0, indexBuffer.getSize());
+
+	// Replace `draw()` with `drawIndexed()` and `vertexCount` with `indexCount`
+	// The extra argument is an offset within the index buffer.
+	renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
 	renderPass.end();
 	renderPass.release();
@@ -437,32 +445,42 @@ RequiredLimits Application::GetRequiredLimits(Adapter adapter) const {
 }
 
 void Application::InitializeBuffers() {
-	// Vertex buffer data
-	std::vector<float> vertexData = {
-		// x0,  y0,  r0,  g0,  b0
-		-0.5, -0.5, 1.0, 0.0, 0.0,
-	
-		// x1,  y1,  r1,  g1,  b1
-		+0.5, -0.5, 0.0, 1.0, 0.0,
-	
-		// ...
-		+0.0,   +0.5, 0.0, 0.0, 1.0,
-		-0.55f, -0.5, 1.0, 1.0, 0.0,
-		-0.05f, +0.5, 1.0, 0.0, 1.0,
-		-0.55f, +0.5, 0.0, 1.0, 1.0
+	// Define point data
+	// The de-duplicated list of point positions
+	std::vector<float> pointData = {
+		// x,   y,     r,   g,   b
+		-0.5, -0.5,   1.0, 0.0, 0.0, // Point #0
+		+0.5, -0.5,   0.0, 1.0, 0.0, // Point #1
+		+0.5, +0.5,   0.0, 0.0, 1.0, // Point #2
+		-0.5, +0.5,   1.0, 1.0, 0.0  // Point #3
 	};
-	
-	// We now divide the vector size by 5 fields.
-	vertexCount = static_cast<uint32_t>(vertexData.size() / 5);
+
+	// Define index data
+	// This is a list of indices referencing positions in the pointData
+	std::vector<uint16_t> indexData = {
+	    0, 1, 2, // Triangle #0 connects points #0, #1 and #2
+	    0, 2, 3  // Triangle #1 connects points #0, #2 and #3
+	};
+
+	indexCount = static_cast<uint32_t>(indexData.size());
 	
 	// Create vertex buffer
 	BufferDescriptor bufferDesc;
-	bufferDesc.size = vertexData.size() * sizeof(float);
+	bufferDesc.size = pointData.size() * sizeof(float);
 	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Vertex; // Vertex usage here!
 	bufferDesc.mappedAtCreation = false;
-	vertexBuffer = device.createBuffer(bufferDesc);
+	pointBuffer = device.createBuffer(bufferDesc);
 	
 	// Upload geometry data to the buffer
-	queue.writeBuffer(vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+	queue.writeBuffer(pointBuffer, 0, pointData.data(), bufferDesc.size);
+
+	// Create index buffer
+	// (we reuse the bufferDesc initialized for the pointBuffer)
+	bufferDesc.size = indexData.size() * sizeof(uint16_t);
+	bufferDesc.size = (bufferDesc.size + 3) & ~3; // round up to the next multiple of 4
+	bufferDesc.usage = BufferUsage::CopyDst | BufferUsage::Index;
+	indexBuffer = device.createBuffer(bufferDesc);
+
+	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
 }
 
