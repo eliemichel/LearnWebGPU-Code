@@ -45,7 +45,8 @@ struct VertexOutput {
 fn vs_main(in: VertexInput) -> VertexOutput {
 	//                         ^^^^^^^^^^^^ We return a custom struct
 	var out: VertexOutput; // create the output struct
-	out.position = vec4f(in.position, 0.0, 1.0); // same as what we used to directly return
+	let ratio = 640.0 / 480.0; // The width and height of the target surface
+	out.position = vec4f(in.position.x, in.position.y * ratio, 0.0, 1.0);
 	out.color = in.color; // forward the color attribute to the fragment shader
 	return out;
 }
@@ -87,8 +88,9 @@ private:
 	WGPUSurface surface;
 	WGPUTextureFormat surfaceFormat = WGPUTextureFormat_Undefined;
 	WGPURenderPipeline pipeline;
-	WGPUBuffer vertexBuffer;
-	uint32_t vertexCount;
+	WGPUBuffer pointBuffer;
+	WGPUBuffer indexBuffer;
+	uint32_t indexCount;
 };
 
 int main() {
@@ -187,7 +189,8 @@ bool Application::Initialize() {
 }
 
 void Application::Terminate() {
-	wgpuBufferRelease(vertexBuffer);
+	wgpuBufferRelease(pointBuffer);
+	wgpuBufferRelease(indexBuffer);
 	wgpuRenderPipelineRelease(pipeline);
 	wgpuSurfaceUnconfigure(surface);
 	wgpuQueueRelease(queue);
@@ -236,10 +239,15 @@ void Application::MainLoop() {
 	wgpuRenderPassEncoderSetPipeline(renderPass, pipeline);
 
 	// Set vertex buffer while encoding the render pass
-	wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, vertexBuffer, 0, wgpuBufferGetSize(vertexBuffer));
+	wgpuRenderPassEncoderSetVertexBuffer(renderPass, 0, pointBuffer, 0, wgpuBufferGetSize(pointBuffer));
 
-	// We use the `vertexCount` variable instead of hard-coding the vertex count
-	wgpuRenderPassEncoderDraw(renderPass, vertexCount, 1, 0, 0);
+	// The second argument must correspond to the choice of uint16_t or uint32_t
+	// we've done when creating the index buffer.
+	wgpuRenderPassEncoderSetIndexBuffer(renderPass, indexBuffer, WGPUIndexFormat_Uint16, 0, wgpuBufferGetSize(indexBuffer));
+
+	// Replace `draw()` with `drawIndexed()` and `vertexCount` with `indexCount`
+	// The extra argument is an offset within the index buffer.
+	wgpuRenderPassEncoderDrawIndexed(renderPass, indexCount, 1, 0, 0, 0);
 
 	wgpuRenderPassEncoderEnd(renderPass);
 	wgpuRenderPassEncoderRelease(renderPass);
@@ -479,32 +487,43 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const {
 }
 
 void Application::InitializeBuffers() {
-	// Vertex buffer data
-	std::vector<float> vertexData = {
-		// x0,  y0,  r0,  g0,  b0
-		-0.5, -0.5, 1.0, 0.0, 0.0,
-	
-		// x1,  y1,  r1,  g1,  b1
-		+0.5, -0.5, 0.0, 1.0, 0.0,
-	
-		// ...
-		+0.0,   +0.5, 0.0, 0.0, 1.0,
-		-0.55f, -0.5, 1.0, 1.0, 0.0,
-		-0.05f, +0.5, 1.0, 0.0, 1.0,
-		-0.55f, +0.5, 0.0, 1.0, 1.0
+	// Define point data
+	// The de-duplicated list of point positions
+	std::vector<float> pointData = {
+		// x,   y,     r,   g,   b
+		-0.5, -0.5,   1.0, 0.0, 0.0, // Point #0
+		+0.5, -0.5,   0.0, 1.0, 0.0, // Point #1
+		+0.5, +0.5,   0.0, 0.0, 1.0, // Point #2
+		-0.5, +0.5,   1.0, 1.0, 0.0  // Point #3
 	};
+
+	// Define index data
+	// This is a list of indices referencing positions in the pointData
+	std::vector<uint16_t> indexData = {
+		0, 1, 2, // Triangle #0 connects points #0, #1 and #2
+		0, 2, 3  // Triangle #1 connects points #0, #2 and #3
+	};
+
+	// We now store the index count rather than the vertex count
+    indexCount = static_cast<uint32_t>(indexData.size());
 	
-	// We now divide the vector size by 5 fields.
-	vertexCount = static_cast<uint32_t>(vertexData.size() / 5);
-	
-	// Create vertex buffer
+	// Create point buffer
 	WGPUBufferDescriptor bufferDesc{};
 	bufferDesc.nextInChain = nullptr;
-	bufferDesc.size = vertexData.size() * sizeof(float);
+	bufferDesc.size = pointData.size() * sizeof(float);
 	bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Vertex; // Vertex usage here!
 	bufferDesc.mappedAtCreation = false;
-	vertexBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
+	pointBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
 	
 	// Upload geometry data to the buffer
-	wgpuQueueWriteBuffer(queue, vertexBuffer, 0, vertexData.data(), bufferDesc.size);
+	wgpuQueueWriteBuffer(queue, pointBuffer, 0, pointData.data(), bufferDesc.size);
+
+	// Create index buffer
+	// (we reuse the bufferDesc initialized for the pointBuffer)
+	bufferDesc.size = indexData.size() * sizeof(uint16_t);
+	bufferDesc.size = (bufferDesc.size + 3) & ~3; // round up to the next multiple of 4
+	bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Index;;
+	indexBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
+
+	wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
 }
