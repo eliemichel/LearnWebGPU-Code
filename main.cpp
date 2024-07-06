@@ -194,9 +194,11 @@ void Application::MainLoop() {
 	wgpuCommandBufferRelease(command);
 	std::cout << "Command submitted." << std::endl;
 
-	// At the enc of the frame
+	// At the end of the frame
 	wgpuTextureViewRelease(targetView);
+#ifndef __EMSCRIPTEN__
 	wgpuSurfacePresent(surface);
+#endif
 
 #if defined(WEBGPU_BACKEND_DAWN)
 	wgpuDeviceTick(device);
