@@ -439,6 +439,12 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const {
 	// Maximum stride between 2 consecutive vertices in the vertex buffer
 	requiredLimits.limits.maxVertexBufferArrayStride = 2 * sizeof(float);
 
+	// These two limits are different because they are "minimum" limits,
+	// they are the only ones we are may forward from the adapter's supported
+	// limits.
+	requiredLimits.limits.minUniformBufferOffsetAlignment = supportedLimits.limits.minUniformBufferOffsetAlignment;
+	requiredLimits.limits.minStorageBufferOffsetAlignment = supportedLimits.limits.minStorageBufferOffsetAlignment;
+
 	return requiredLimits;
 }
 
