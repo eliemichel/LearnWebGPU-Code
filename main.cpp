@@ -441,6 +441,9 @@ RequiredLimits Application::GetRequiredLimits(Adapter adapter) const {
 	requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
 	//                                                 ^ This was a 2
 
+	// There is a maximum of 3 float forwarded from vertex to fragment shader
+	requiredLimits.limits.maxInterStageShaderComponents = 3;
+
 	// These two limits are different because they are "minimum" limits,
 	// they are the only ones we are may forward from the adapter's supported
 	// limits.
