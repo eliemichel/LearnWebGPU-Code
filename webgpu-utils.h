@@ -38,7 +38,7 @@ WGPUAdapter requestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions 
 
 /**
  * Utility function to get a WebGPU device, so that
- *     WGPUAdapter device = requestDevice(adapter, options);
+ *     WGPUDevice device = requestDevice(adapter, options);
  * is roughly equivalent to
  *     const device = await adapter.requestDevice(descriptor);
  * It is very similar to requestAdapter
