@@ -111,7 +111,7 @@ int main() {
 	}
 #endif // __EMSCRIPTEN__
 
-	Terminate();
+	app.Terminate();
 
 	return 0;
 }
