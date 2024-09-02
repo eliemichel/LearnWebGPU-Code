@@ -83,6 +83,8 @@ int main() {
 	}
 #endif // __EMSCRIPTEN__
 
+	Terminate();
+
 	return 0;
 }
 
