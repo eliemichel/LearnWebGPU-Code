@@ -32,7 +32,7 @@
 #include <glm/glm.hpp>
 
 #include <webgpu/webgpu.hpp>
-#include "webgpu-release.h"
+//#include "webgpu-release.h"
 
 #include <iostream>
 #include <cassert>
@@ -269,9 +269,6 @@ void Application::onCompute() {
 
 	// Create compute pass
 	ComputePassDescriptor computePassDesc;
-	#ifdef WEBGPU_BACKEND_WGPU
-	computePassDesc.timestampWriteCount = 0;
-	#endif
 	computePassDesc.timestampWrites = nullptr;
 	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
