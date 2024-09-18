@@ -32,7 +32,7 @@
 #include <glm/glm.hpp>
 
 #include <webgpu/webgpu.hpp>
-#include "webgpu-release.h"
+//#include "webgpu-release.h"
 
 #include <iostream>
 #include <cassert>
@@ -96,7 +96,7 @@ bool Application::initDevice() {
 	requiredLimits.limits.maxBufferSize = m_bufferSize;
 	requiredLimits.limits.maxTextureDimension1D = 4096;
 	requiredLimits.limits.maxTextureDimension2D = 4096;
-	requiredLimits.limits.maxTextureDimension3D = 4096;
+	requiredLimits.limits.maxTextureDimension3D = 2048; // some Intel integrated GPUs have this limit
 	requiredLimits.limits.maxTextureArrayLayers = 1;
 	requiredLimits.limits.maxSampledTexturesPerShaderStage = 3;
 	requiredLimits.limits.maxSamplersPerShaderStage = 1;
@@ -113,7 +113,7 @@ bool Application::initDevice() {
 	// Create device
 	DeviceDescriptor deviceDesc{};
 	deviceDesc.label = "My Device";
-	deviceDesc.requiredFeaturesCount = 0;
+	deviceDesc.requiredFeatureCount = 0;
 	deviceDesc.requiredLimits = &requiredLimits;
 	deviceDesc.defaultQueue.label = "The default queue";
 	m_device = adapter.requestDevice(deviceDesc);
@@ -126,11 +126,13 @@ bool Application::initDevice() {
 		std::cout << std::endl;
 		});
 
+#ifndef WEBGPU_BACKEND_WGPU
 	m_deviceLostCallback = m_device.setDeviceLostCallback([](DeviceLostReason reason, char const* message) {
 		std::cout << "Device error: reason " << reason;
 		if (message) std::cout << " (message: " << message << ")";
 		std::cout << std::endl;
 		});
+#endif
 
 #ifdef WEBGPU_BACKEND_WGPU
 	m_device.getQueue().submit(0, nullptr);
@@ -267,7 +269,6 @@ void Application::onCompute() {
 
 	// Create compute pass
 	ComputePassDescriptor computePassDesc;
-	computePassDesc.timestampWriteCount = 0;
 	computePassDesc.timestampWrites = nullptr;
 	ComputePassEncoder computePass = encoder.beginComputePass(computePassDesc);
 
