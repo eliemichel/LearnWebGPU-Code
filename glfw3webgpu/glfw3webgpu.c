@@ -132,7 +132,11 @@ WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window) {
 
         WGPUSurfaceDescriptorFromWindowsHWND fromWindowsHWND;
         fromWindowsHWND.chain.next = NULL;
+#ifdef WEBGPU_BACKEND_DAWN
+        fromWindowsHWND.chain.sType = WGPUSType_SurfaceSourceWindowsHWND;
+#else
         fromWindowsHWND.chain.sType = WGPUSType_SurfaceDescriptorFromWindowsHWND;
+#endif
         fromWindowsHWND.hinstance = hinstance;
         fromWindowsHWND.hwnd = hwnd;
 

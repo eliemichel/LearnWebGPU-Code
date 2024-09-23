@@ -149,37 +149,40 @@ bool Application::Initialize() {
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
 	};
+	deviceDesc.uncapturedErrorCallbackInfo.callback = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
+		std::cout << "Uncaptured device error: type " << type;
+		if (message) std::cout << " (" << message << ")";
+		std::cout << std::endl;
+	};
 	// Before adapter.requestDevice(deviceDesc)
 	RequiredLimits requiredLimits = GetRequiredLimits(adapter);
 	deviceDesc.requiredLimits = &requiredLimits;
 	device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
 
-	// Device error callback
-	uncapturedErrorCallbackHandle = device.setUncapturedErrorCallback([](ErrorType type, char const* message) {
-		std::cout << "Uncaptured device error: type " << type;
-		if (message) std::cout << " (" << message << ")";
-		std::cout << std::endl;
-	});
-	
 	queue = device.getQueue();
 
 	// Configure the surface
 	SurfaceConfiguration config = {};
 	
 	// Configuration of the textures created for the underlying swap chain
+	SurfaceCapabilities capabilities;
+	surface.getCapabilities(adapter, &capabilities);
+
 	config.width = 640;
 	config.height = 480;
 	config.usage = TextureUsage::RenderAttachment;
-	surfaceFormat = surface.getPreferredFormat(adapter);
+	surfaceFormat = capabilities.formats[0];
 	config.format = surfaceFormat;
 
 	// And we do not need any particular view format:
 	config.viewFormatCount = 0;
 	config.viewFormats = nullptr;
 	config.device = device;
-	config.presentMode = PresentMode::Fifo;
-	config.alphaMode = CompositeAlphaMode::Auto;
+	config.presentMode = capabilities.presentModes[0];
+	config.alphaMode = capabilities.alphaModes[0];
+
+	capabilities.freeMembers();
 
 	surface.configure(config);
 
@@ -225,9 +228,7 @@ void Application::MainLoop() {
 	renderPassColorAttachment.loadOp = LoadOp::Clear;
 	renderPassColorAttachment.storeOp = StoreOp::Store;
 	renderPassColorAttachment.clearValue = WGPUColor{ 0.05, 0.05, 0.05, 1.0 };
-#ifndef WEBGPU_BACKEND_WGPU
 	renderPassColorAttachment.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-#endif // NOT WEBGPU_BACKEND_WGPU
 
 	renderPassDesc.colorAttachmentCount = 1;
 	renderPassDesc.colorAttachments = &renderPassColorAttachment;
@@ -259,10 +260,8 @@ void Application::MainLoop() {
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 	encoder.release();
 
-	std::cout << "Submitting command..." << std::endl;
 	queue.submit(1, &command);
 	command.release();
-	std::cout << "Command submitted." << std::endl;
 
 	// At the end of the frame
 	targetView.release();
@@ -317,7 +316,11 @@ void Application::InitializePipeline() {
 	ShaderModuleWGSLDescriptor shaderCodeDesc;
 	// Set the chained struct's header
 	shaderCodeDesc.chain.next = nullptr;
+#ifdef WEBGPU_BACKEND_DAWN
+	shaderCodeDesc.chain.sType = SType::ShaderSourceWGSL;
+#else
 	shaderCodeDesc.chain.sType = SType::ShaderModuleWGSLDescriptor;
+#endif
 	// Connect the chain
 	shaderDesc.nextInChain = &shaderCodeDesc.chain;
 	shaderCodeDesc.code = shaderSource;
