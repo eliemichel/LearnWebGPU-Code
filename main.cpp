@@ -85,7 +85,6 @@ private:
 	Device device;
 	Queue queue;
 	Surface surface;
-	std::unique_ptr<ErrorCallback> uncapturedErrorCallbackHandle;
 	TextureFormat surfaceFormat = TextureFormat::Undefined;
 	RenderPipeline pipeline;
 	Buffer pointBuffer;
@@ -129,7 +128,7 @@ bool Application::Initialize() {
 	
 	// Get adapter
 	std::cout << "Requesting adapter..." << std::endl;
-	surface = glfwGetWGPUSurface(instance, window);
+	surface = glfwCreateWindowWGPUSurface(instance, window);
 	RequestAdapterOptions adapterOpts = {};
 	adapterOpts.compatibleSurface = surface;
 	Adapter adapter = instance.requestAdapter(adapterOpts);
@@ -149,16 +148,26 @@ bool Application::Initialize() {
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
 	};
-	deviceDesc.uncapturedErrorCallbackInfo.callback = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
+
+	auto uncapturedErrorCallback = [](WGPUErrorType type, char const* message, void* /* pUserData */) {
 		std::cout << "Uncaptured device error: type " << type;
 		if (message) std::cout << " (" << message << ")";
 		std::cout << std::endl;
 	};
+
+#ifndef __EMSCRIPTEN__
+	deviceDesc.uncapturedErrorCallbackInfo.callback = uncapturedErrorCallback;
+#endif // NOT __EMSCRIPTEN__
+
 	// Before adapter.requestDevice(deviceDesc)
 	RequiredLimits requiredLimits = GetRequiredLimits(adapter);
 	deviceDesc.requiredLimits = &requiredLimits;
 	device = adapter.requestDevice(deviceDesc);
 	std::cout << "Got device: " << device << std::endl;
+	
+#ifdef __EMSCRIPTEN__
+	wgpuDeviceSetUncapturedErrorCallback(device, uncapturedErrorCallback, nullptr);
+#endif // __EMSCRIPTEN__
 
 	queue = device.getQueue();
 
