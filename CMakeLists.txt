@@ -14,6 +14,7 @@ endif()
 
 add_subdirectory(webgpu)
 add_subdirectory(glfw3webgpu)
+add_subdirectory(imgui)
 
 add_executable(App
 	main.cpp
@@ -22,7 +23,7 @@ add_executable(App
     ResourceManager.cpp
 )
 
-target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
+target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu imgui)
 
 # We add an option to enable different settings when developing the app than
 # when distributing it.

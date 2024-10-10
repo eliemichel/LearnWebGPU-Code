@@ -5,6 +5,10 @@
 #include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
 
+#include <imgui.h>
+#include <backends/imgui_impl_wgpu.h>
+#include <backends/imgui_impl_glfw.h>
+
 #ifdef __EMSCRIPTEN__
 #  include <emscripten.h>
 #endif // __EMSCRIPTEN__
@@ -38,6 +42,15 @@ private:
 	void InitializePipeline();
 	RequiredLimits GetRequiredLimits(Adapter adapter) const;
 	void InitializeBuffers();
+
+	// At init, we initialize ImGUI. At the end, we uninitialize it.
+	void InitializeGui();
+	void TerminateGui();
+
+	// At each frame, we describe the UI before issuing the draw command (in MainLoop())
+	void DescribeGui();
+	// Once the Gui is described, we send it to the GPU to draw it
+	void DrawGui(RenderPassEncoder renderPass);
 
 private:
 	// We put here all the variables that are shared between init and main loop
@@ -148,10 +161,12 @@ bool Application::Initialize() {
 
 	InitializePipeline();
 	InitializeBuffers();
+	InitializeGui();
 	return true;
 }
 
 void Application::Terminate() {
+	TerminateGui();
 	pointBuffer.release();
 	indexBuffer.release();
 	pipeline.release();
@@ -165,6 +180,9 @@ void Application::Terminate() {
 
 void Application::MainLoop() {
 	glfwPollEvents();
+
+	// You may add things to the GUI any time before calling DrawGui();
+	DescribeGui();
 
 	// Get the next target texture view
 	TextureView targetView = GetNextSurfaceTextureView();
@@ -210,6 +228,9 @@ void Application::MainLoop() {
 	// The extra argument is an offset within the index buffer.
 	renderPass.drawIndexed(indexCount, 1, 0, 0, 0);
 
+	// Render ImGUI
+	DrawGui(renderPass);
+
 	renderPass.end();
 	renderPass.release();
 
@@ -219,10 +240,8 @@ void Application::MainLoop() {
 	CommandBuffer command = encoder.finish(cmdBufferDescriptor);
 	encoder.release();
 
-	std::cout << "Submitting command..." << std::endl;
 	queue.submit(1, &command);
 	command.release();
-	std::cout << "Command submitted." << std::endl;
 
 	// At the end of the frame
 	targetView.release();
@@ -384,18 +403,17 @@ RequiredLimits Application::GetRequiredLimits(Adapter adapter) const {
 	// Don't forget to = Default
 	RequiredLimits requiredLimits = Default;
 
-	// We use at most 2 vertex attributes
-	requiredLimits.limits.maxVertexAttributes = 2;
+	// ImGui needs 3 attributes
+	requiredLimits.limits.maxVertexAttributes = 3;
 	// We should also tell that we use 1 vertex buffers
 	requiredLimits.limits.maxVertexBuffers = 1;
-	// Maximum size of a buffer is 15 vertices of 5 float each
-	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
-	//                                    ^^ This was a 6
+	// Maximum size of a buffer: leave some room for ImGui buffer
+	requiredLimits.limits.maxBufferSize = 4 * 1024 * 1024;
 	// Maximum stride between 2 consecutive vertices in the vertex buffer
 	requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
 
-	// There is a maximum of 3 float forwarded from vertex to fragment shader
-	requiredLimits.limits.maxInterStageShaderComponents = 3;
+	// ImGui needs 6 attributes
+	requiredLimits.limits.maxInterStageShaderComponents = 6;
 
 	// These two limits are different because they are "minimum" limits,
 	// they are the only ones we are may forward from the adapter's supported
@@ -440,5 +458,55 @@ void Application::InitializeBuffers() {
 	indexBuffer = device.createBuffer(bufferDesc);
 
 	queue.writeBuffer(indexBuffer, 0, indexData.data(), bufferDesc.size);
+}
+
+///////////////////////////////////////////////////////////
+// GUI-related Methods
+
+
+// At init, we initialize ImGUI. At the end, we uninitialize it.
+void Application::InitializeGui() {
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGui::GetIO();
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplGlfw_InitForOther(window, true);
+	ImGui_ImplWGPU_InitInfo init_info;
+	init_info.Device = device;
+	init_info.RenderTargetFormat = surfaceFormat;
+	ImGui_ImplWGPU_Init(&init_info);
+}
+
+void Application::TerminateGui() {
+	ImGui_ImplGlfw_Shutdown();
+	ImGui_ImplWGPU_Shutdown();
+}
+
+void Application::DescribeGui() {
+	// Start the Dear ImGui frame
+	ImGui_ImplWGPU_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	// Build our UI the way we want
+	ImGui::Begin("Hello, world!");
+	ImGui::Text("This is some useful text.");
+	if (ImGui::Button("Click me")) {
+		std::cout << "Button was clicked!" << std::endl;
+		// do something
+	}
+	ImGui::End();
+
+	// End the Dear ImGui frame
+	ImGui::EndFrame();
+}
+
+void Application::DrawGui(RenderPassEncoder renderPass) {
+	// Convert the UI defined above into low-level drawing commands
+	ImGui::Render();
+	// Execute the low-level drawing commands on the WebGPU backend
+	ImGui_ImplWGPU_RenderDrawData(ImGui::GetDrawData(), renderPass);
 }
 
