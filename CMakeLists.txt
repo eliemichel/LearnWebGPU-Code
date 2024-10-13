@@ -68,5 +68,8 @@ endif()
 
 if (EMSCRIPTEN)
 	set_target_properties(App PROPERTIES SUFFIX ".html")
-	target_link_options(App PRIVATE -sASYNCIFY)
+	target_link_options(App PRIVATE
+		-sASYNCIFY
+		--preload-file "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+	)
 endif()
