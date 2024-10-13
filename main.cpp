@@ -499,7 +499,7 @@ void Application::InitializeBuffers() {
 
 	// Upload uniform data
 	float currentTime = 1.0f;
-	queue.writeBuffer(uniformBuffer, 0, &currentTime, 4 * sizeof(float));
+	queue.writeBuffer(uniformBuffer, 0, &currentTime, sizeof(float));
 }
 
 void Application::InitializeBindGroups() {
