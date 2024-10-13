@@ -38,6 +38,7 @@ private:
 	void InitializePipeline();
 	WGPURequiredLimits GetRequiredLimits(WGPUAdapter adapter) const;
 	void InitializeBuffers();
+	void InitializeBindGroups();
 
 private:
 	// We put here all the variables that are shared between init and main loop
@@ -50,6 +51,10 @@ private:
 	WGPUBuffer pointBuffer;
 	WGPUBuffer indexBuffer;
 	uint32_t indexCount;
+	WGPUBuffer uniformBuffer;
+	WGPUPipelineLayout layout;
+	WGPUBindGroupLayout bindGroupLayout;
+	WGPUBindGroup bindGroup;
 };
 
 int main() {
@@ -75,6 +80,62 @@ int main() {
 	app.Terminate();
 
 	return 0;
+}
+
+// If you do not use webgpu.hpp, I suggest you create a function to init the
+// WGPULimits structure:
+void setDefault(WGPULimits& limits) {
+	limits.maxTextureDimension1D = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxTextureDimension2D = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxTextureDimension3D = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxTextureArrayLayers = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxBindGroups = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxBindGroupsPlusVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxBindingsPerBindGroup = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxDynamicUniformBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxDynamicStorageBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxSampledTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxSamplersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxStorageBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxStorageTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxUniformBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxUniformBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
+	limits.maxStorageBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
+	limits.minUniformBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
+	limits.minStorageBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxBufferSize = WGPU_LIMIT_U64_UNDEFINED;
+	limits.maxVertexAttributes = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxVertexBufferArrayStride = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxInterStageShaderComponents = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxInterStageShaderVariables = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxColorAttachments = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxColorAttachmentBytesPerSample = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxComputeWorkgroupStorageSize = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxComputeInvocationsPerWorkgroup = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxComputeWorkgroupSizeX = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxComputeWorkgroupSizeY = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxComputeWorkgroupSizeZ = WGPU_LIMIT_U32_UNDEFINED;
+	limits.maxComputeWorkgroupsPerDimension = WGPU_LIMIT_U32_UNDEFINED;
+}
+
+void setDefault(WGPUBindGroupLayoutEntry& bindingLayout) {
+	bindingLayout.buffer.nextInChain = nullptr;
+	bindingLayout.buffer.type = WGPUBufferBindingType_Undefined;
+	bindingLayout.buffer.hasDynamicOffset = false;
+
+	bindingLayout.sampler.nextInChain = nullptr;
+	bindingLayout.sampler.type = WGPUSamplerBindingType_Undefined;
+
+	bindingLayout.storageTexture.nextInChain = nullptr;
+	bindingLayout.storageTexture.access = WGPUStorageTextureAccess_Undefined;
+	bindingLayout.storageTexture.format = WGPUTextureFormat_Undefined;
+	bindingLayout.storageTexture.viewDimension = WGPUTextureViewDimension_Undefined;
+
+	bindingLayout.texture.nextInChain = nullptr;
+	bindingLayout.texture.multisampled = false;
+	bindingLayout.texture.sampleType = WGPUTextureSampleType_Undefined;
+	bindingLayout.texture.viewDimension = WGPUTextureViewDimension_Undefined;
 }
 
 bool Application::Initialize() {
@@ -146,10 +207,15 @@ bool Application::Initialize() {
 
 	InitializePipeline();
 	InitializeBuffers();
+	InitializeBindGroups();
 	return true;
 }
 
 void Application::Terminate() {
+	wgpuBindGroupRelease(bindGroup);
+	wgpuPipelineLayoutRelease(layout);
+	wgpuBindGroupLayoutRelease(bindGroupLayout);
+	wgpuBufferRelease(uniformBuffer);
 	wgpuBufferRelease(pointBuffer);
 	wgpuBufferRelease(indexBuffer);
 	wgpuRenderPipelineRelease(pipeline);
@@ -163,6 +229,10 @@ void Application::Terminate() {
 
 void Application::MainLoop() {
 	glfwPollEvents();
+
+	// Update uniform buffer
+	float t = static_cast<float>(glfwGetTime()); // glfwGetTime returns a double
+	wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &t, sizeof(float));
 
 	// Get the next target texture view
 	WGPUTextureView targetView = GetNextSurfaceTextureView();
@@ -205,6 +275,9 @@ void Application::MainLoop() {
 	// The second argument must correspond to the choice of uint16_t or uint32_t
 	// we've done when creating the index buffer.
 	wgpuRenderPassEncoderSetIndexBuffer(renderPass, indexBuffer, WGPUIndexFormat_Uint16, 0, wgpuBufferGetSize(indexBuffer));
+
+	// Set binding group here!
+	wgpuRenderPassEncoderSetBindGroup(renderPass, 0, bindGroup, 0, nullptr);
 
 	// Replace `draw()` with `drawIndexed()` and `vertexCount` with `indexCount`
 	// The extra argument is an offset within the index buffer.
@@ -371,49 +444,37 @@ void Application::InitializePipeline() {
 	// Default value as well (irrelevant for count = 1 anyways)
 	pipelineDesc.multisample.alphaToCoverageEnabled = false;
 
-	pipelineDesc.layout = nullptr;
+	// Define binding layout
+	WGPUBindGroupLayoutEntry bindingLayout{};
+	setDefault(bindingLayout);
+	// The binding index as used in the @binding attribute in the shader
+	bindingLayout.binding = 0;
+	// The stage that needs to access this resource
+	bindingLayout.visibility = WGPUShaderStage_Vertex;
+	bindingLayout.buffer.type = WGPUBufferBindingType_Uniform;
+	bindingLayout.buffer.minBindingSize = 4 * sizeof(float);
+
+	// Create a bind group layout
+	WGPUBindGroupLayoutDescriptor bindGroupLayoutDesc{};
+	bindGroupLayoutDesc.nextInChain = nullptr;
+	bindGroupLayoutDesc.entryCount = 1;
+	bindGroupLayoutDesc.entries = &bindingLayout;
+	bindGroupLayout = wgpuDeviceCreateBindGroupLayout(device, &bindGroupLayoutDesc);
+
+	// Create the pipeline layout
+	WGPUPipelineLayoutDescriptor layoutDesc{};
+	layoutDesc.nextInChain = nullptr;
+	layoutDesc.bindGroupLayoutCount = 1;
+	layoutDesc.bindGroupLayouts = &bindGroupLayout;
+	layout = wgpuDeviceCreatePipelineLayout(device, &layoutDesc);
+
+	// Assign the PipelineLayout to the RenderPipelineDescriptor's layout field
+	pipelineDesc.layout = layout;
 
 	pipeline = wgpuDeviceCreateRenderPipeline(device, &pipelineDesc);
 
 	// We no longer need to access the shader module
 	wgpuShaderModuleRelease(shaderModule);
-}
-
-// If you do not use webgpu.hpp, I suggest you create a function to init the
-// WGPULimits structure:
-void setDefault(WGPULimits &limits) {
-	limits.maxTextureDimension1D = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxTextureDimension2D = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxTextureDimension3D = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxTextureArrayLayers = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxBindGroups = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxBindGroupsPlusVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxBindingsPerBindGroup = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxDynamicUniformBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxDynamicStorageBuffersPerPipelineLayout = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxSampledTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxSamplersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxStorageBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxStorageTexturesPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxUniformBuffersPerShaderStage = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxUniformBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
-	limits.maxStorageBufferBindingSize = WGPU_LIMIT_U64_UNDEFINED;
-	limits.minUniformBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
-	limits.minStorageBufferOffsetAlignment = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxVertexBuffers = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxBufferSize = WGPU_LIMIT_U64_UNDEFINED;
-	limits.maxVertexAttributes = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxVertexBufferArrayStride = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxInterStageShaderComponents = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxInterStageShaderVariables = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxColorAttachments = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxColorAttachmentBytesPerSample = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxComputeWorkgroupStorageSize = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxComputeInvocationsPerWorkgroup = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxComputeWorkgroupSizeX = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxComputeWorkgroupSizeY = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxComputeWorkgroupSizeZ = WGPU_LIMIT_U32_UNDEFINED;
-	limits.maxComputeWorkgroupsPerDimension = WGPU_LIMIT_U32_UNDEFINED;
 }
 
 WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const {
@@ -431,12 +492,18 @@ WGPURequiredLimits Application::GetRequiredLimits(WGPUAdapter adapter) const {
 	requiredLimits.limits.maxVertexBuffers = 1;
 	// Maximum size of a buffer is 6 vertices of 5 float each
 	requiredLimits.limits.maxBufferSize = 15 * 5 * sizeof(float);
-	//                                    ^^ This was a 6
 	// Maximum stride between 2 consecutive vertices in the vertex buffer
 	requiredLimits.limits.maxVertexBufferArrayStride = 5 * sizeof(float);
 
 	// There is a maximum of 3 float forwarded from vertex to fragment shader
 	requiredLimits.limits.maxInterStageShaderComponents = 3;
+
+	// We use at most 1 bind group for now
+	requiredLimits.limits.maxBindGroups = 1;
+	// We use at most 1 uniform buffer per stage
+	requiredLimits.limits.maxUniformBuffersPerShaderStage = 1;
+	// Uniform structs have a size of maximum 16 float (more than what we need)
+	requiredLimits.limits.maxUniformBufferBindingSize = 16 * 4;
 
 	// These two limits are different because they are "minimum" limits,
 	// they are the only ones we are may forward from the adapter's supported
@@ -483,4 +550,42 @@ void Application::InitializeBuffers() {
 	indexBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
 
 	wgpuQueueWriteBuffer(queue, indexBuffer, 0, indexData.data(), bufferDesc.size);
+
+	// Create uniform buffer (reusing bufferDesc from other buffer creations)
+	// The buffer will only contain 1 float with the value of uTime
+	// then 3 floats left empty but needed by alignment constraints
+	bufferDesc.size = 4 * sizeof(float);
+
+	// Make sure to flag the buffer as BufferUsage::Uniform
+	bufferDesc.usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_Uniform;
+
+	bufferDesc.mappedAtCreation = false;
+	uniformBuffer = wgpuDeviceCreateBuffer(device, &bufferDesc);
+
+	float currentTime = 1.0f;
+	wgpuQueueWriteBuffer(queue, uniformBuffer, 0, &currentTime, sizeof(float));
+}
+
+void Application::InitializeBindGroups() {
+	// Create a binding
+	WGPUBindGroupEntry binding{};
+	binding.nextInChain = nullptr;
+	// The index of the binding (the entries in bindGroupDesc can be in any order)
+	binding.binding = 0;
+	// The buffer it is actually bound to
+	binding.buffer = uniformBuffer;
+	// We can specify an offset within the buffer, so that a single buffer can hold
+	// multiple uniform blocks.
+	binding.offset = 0;
+	// And we specify again the size of the buffer.
+	binding.size = 4 * sizeof(float);
+
+	// A bind group contains one or multiple bindings
+	WGPUBindGroupDescriptor bindGroupDesc{};
+	bindGroupDesc.nextInChain = nullptr;
+	bindGroupDesc.layout = bindGroupLayout;
+	// There must be as many bindings as declared in the layout!
+	bindGroupDesc.entryCount = 1;
+	bindGroupDesc.entries = &binding;
+	bindGroup = wgpuDeviceCreateBindGroup(device, &bindGroupDesc);
 }
