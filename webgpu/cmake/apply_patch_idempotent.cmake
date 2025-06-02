@@ -22,26 +22,28 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# When using emscripten, we do not download any WebGPU implementation
-# because emscripten will convert all calls to the WebGPU API into their
-# equivalent JavaScript counterpart, and the actual implementation is
-# provided by the client's Web browser (it is not shipped with our WASM
-# module).
+# This is a CMake file meant to be called in script mode. It applies a patch in
+# a way that is robust to re-applying it multiple times.
+#
+# Usage:
+#   cmake -DPATCH_FILE=path/to/patch.diff -P apply_patch_idempotent.cmake
+#
+# Patch is applied in the current working directory.
 
-add_library(webgpu INTERFACE)
+message(STATUS "Applying patch from '${PATCH_FILE}'...")
 
-# This is used to advertise the flavor of WebGPU that this zip provides
-target_compile_definitions(webgpu INTERFACE WEBGPU_BACKEND_EMSCRIPTEN)
+set(PATCH_CMD git apply --ignore-space-change --ignore-whitespace ${PATCH_FILE})
 
-# Add include path to webgpu.hpp
-target_include_directories(webgpu INTERFACE
-	"${CMAKE_CURRENT_SOURCE_DIR}/include"
+# Test reverse patch
+execute_process(
+	RESULT_VARIABLE EXIT_CODE
+	ERROR_VARIABLE STDERR
+	COMMAND git apply --ignore-space-change --ignore-whitespace "${PATCH_FILE}" --reverse --check
 )
 
-target_link_options(webgpu INTERFACE
-	-sUSE_WEBGPU # Handle WebGPU symbols when linking
-)
-
-# There is no dll/so/dylib to copy in this case
-function(target_copy_webgpu_binaries Target)
-endfunction()
+if (EXIT_CODE EQUAL 0)
+	# Reverse patch can be applied, which means the patch has already been applied.
+	message(STATUS "Patch was already applied")
+else()
+	execute_process(COMMAND git apply --ignore-space-change --ignore-whitespace ${PATCH_FILE})
+endif()

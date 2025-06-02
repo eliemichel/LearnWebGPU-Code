@@ -8,7 +8,7 @@
   </picture>
 
   <a href="https://github.com/eliemichel/LearnWebGPU">LearnWebGPU</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-Cpp">WebGPU-C++</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/WebGPU-distribution">WebGPU-distribution</a><br/>
-  <a href="https://github.com/eliemichel/glfw3webgpu">glfw3webgpu</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/sdl2webgpu">sdl2webgpu</a>
+  <a href="https://github.com/eliemichel/glfw3webgpu">glfw3webgpu</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/sdl2webgpu">sdl2webgpu</a> &nbsp;|&nbsp; <a href="https://github.com/eliemichel/sdl3webgpu">sdl3webgpu</a>
   
   <a href="https://discord.gg/2Tar4Kt564"><img src="https://img.shields.io/static/v1?label=Discord&message=Join%20us!&color=blue&logo=discord&logoColor=white" alt="Discord | Join us!"/></a>
 </div>
@@ -33,13 +33,15 @@ Overview
 This extension simply provides the following function:
 
 ```C
-WGPUSurface glfwGetWGPUSurface(WGPUInstance instance, GLFWwindow* window);
+WGPUSurface glfwCreateWindowWGPUSurface(WGPUInstance instance, GLFWwindow* window);
 ```
 
-Given a GLFW window, `glfwGetWGPUSurface` returns a WebGPU *surface* that corresponds to the window's back-end. This is a process that is highly platform-specific, which is why I believe it belongs to GLFW.
+Given a GLFW window, `glfwCreateWindowWGPUSurface` returns a WebGPU *surface* that corresponds to the window's back-end. This is a process that is highly platform-specific, which is why I believe it belongs to GLFW.
 
 Usage
 -----
+
+**NB** The current version of this extension is written for GLFW 3.4. Up to version 1.2.0, it was written for GLFW 3.3.8.
 
 Your project must link to an implementation of WebGPU (providing `webgpu.h`) and of course to GLFW. Then:
 
@@ -72,7 +74,7 @@ int main(int argc, char* argv[]) {
 	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
 
 	// Here we create our WebGPU surface from the window!
-	WGPUSurface surface = glfwGetWGPUSurface(instance, window);
+	WGPUSurface surface = glfwCreateWindowWGPUSurface(instance, window);
 	printf("surface = %p", surface);
 
 	// Terminate GLFW
@@ -89,25 +91,4 @@ int main(int argc, char* argv[]) {
 License
 -------
 
-```
-MIT License
-Copyright (c) 2022-2023 Élie Michel and the wgpu-native authors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+See [LICENSE.txt](LICENSE.txt).
