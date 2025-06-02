@@ -25,16 +25,10 @@
 cmake_minimum_required(VERSION 3.0.0...3.24 FATAL_ERROR)
 project(webgpu VERSION 1.0.0)
 
-if (EMSCRIPTEN)
-	set(WEBGPU_BACKEND_DEFAULT "EMDAWNWEBGPU")
-else()
-	set(WEBGPU_BACKEND_DEFAULT "WGPU")
-endif()
-
-set(WEBGPU_BACKEND ${WEBGPU_BACKEND_DEFAULT} CACHE STRING "\
-	Backend implementation of WebGPU. Possible values are EMSCRIPTEN, EMDAWNWEBGPU, WGPU and DAWN \
+set(WEBGPU_BACKEND "WGPU" CACHE STRING "\
+	Backend implementation of WebGPU. Possible values are EMSCRIPTEN, WGPU and DAWN \
 	(it does not matter when using emcmake)")
-set_property(CACHE WEBGPU_BACKEND PROPERTY STRINGS EMSCRIPTEN EMDAWNWEBGPU WGPU DAWN)
+set_property(CACHE WEBGPU_BACKEND PROPERTY STRINGS EMSCRIPTEN WGPU DAWN)
 
 option(WEBGPU_BUILD_FROM_SOURCE "\
 	When ON, fetch the source code of the backend and build it. \
@@ -59,32 +53,16 @@ include("${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake")
 # Convert to uppercase, so that users can provide value with any case they like
 string(TOUPPER ${WEBGPU_BACKEND} WEBGPU_BACKEND_U)
 
-if (WEBGPU_BACKEND_U STREQUAL "EMSCRIPTEN")
+if (EMSCRIPTEN OR WEBGPU_BACKEND_U STREQUAL "EMSCRIPTEN")
 
-	if (NOT EMSCRIPTEN)
-		message(FATAL_ERROR "Setting WEBGPU_BACKEND to EMSCRIPTEN is only compatible with emscripten compiler. Try WGPU or DAWN instead.")
-	endif()
 	add_subdirectory(emscripten)
-
-elseif (WEBGPU_BACKEND_U STREQUAL "EMDAWNWEBGPU")
-
-	if (NOT EMSCRIPTEN)
-		message(FATAL_ERROR "Setting WEBGPU_BACKEND to EMDAWNWEBGPU is only compatible with emscripten compiler. Try WGPU or DAWN instead.")
-	endif()
-	add_subdirectory(emdawnwebgpu)
 
 elseif (WEBGPU_BACKEND_U STREQUAL "WGPU")
 
-	if (EMSCRIPTEN)
-		message(FATAL_ERROR "Setting WEBGPU_BACKEND to WGPU is not compatible with emscripten compiler. Try EMSCRIPTEN or EMDAWNWEBGPU instead.")
-	endif()
 	add_subdirectory(wgpu-native)
 
 elseif (WEBGPU_BACKEND_U STREQUAL "DAWN")
 
-	if (EMSCRIPTEN)
-		message(FATAL_ERROR "Setting WEBGPU_BACKEND to DAWN is not compatible with emscripten compiler. Try EMSCRIPTEN or EMDAWNWEBGPU instead.")
-	endif()
 	add_subdirectory(dawn)
 
 else()

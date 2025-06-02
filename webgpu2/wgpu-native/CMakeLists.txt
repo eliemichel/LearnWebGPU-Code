@@ -22,26 +22,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# When using emscripten, we do not download any WebGPU implementation
-# because emscripten will convert all calls to the WebGPU API into their
-# equivalent JavaScript counterpart, and the actual implementation is
-# provided by the client's Web browser (it is not shipped with our WASM
-# module).
+set(WGPU_VERSION "v24.0.0.2" CACHE STRING "\
+	Version of the wgpu-native WebGPU implementation to use. Must correspond \
+	to the tag name of an existing release on https://github.com/gfx-rs/wgpu-native/releases. \
+	Warning: The webgpu.hpp file provided in include/ may not be compatible with other versions.")
 
-add_library(webgpu INTERFACE)
+set(WGPU_BINARY_MIRROR "https://github.com/gfx-rs/wgpu-native" CACHE STRING "\
+	The repository where to find precompiled releases of wgpu-native. \
+	This is ultimately supposed to be https://github.com/gfx-rs/wgpu-native, where official binaries \
+	are auto-released, but we may use a different mirror to get early access to newer versions.")
 
-# This is used to advertise the flavor of WebGPU that this zip provides
-target_compile_definitions(webgpu INTERFACE WEBGPU_BACKEND_EMSCRIPTEN)
-
-# Add include path to webgpu.hpp
-target_include_directories(webgpu INTERFACE
-	"${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
-target_link_options(webgpu INTERFACE
-	-sUSE_WEBGPU # Handle WebGPU symbols when linking
-)
-
-# There is no dll/so/dylib to copy in this case
-function(target_copy_webgpu_binaries Target)
-endfunction()
+if (WEBGPU_BUILD_FROM_SOURCE)
+	message(FATAL_ERROR "Building wgpu-native from source is not available. Either switch to Dawn (WEBGPU_BACKEND=DAWN) or use precompiled binaries (WEBGPU_BUILD_FROM_SOURCE=OFF).")
+else()
+	include(FetchWgpuNativePrecompiled.cmake)
+endif()

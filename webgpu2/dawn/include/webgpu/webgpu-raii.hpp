@@ -5,7 +5,7 @@
  *   https://eliemichel.github.io/LearnWebGPU
  * 
  * MIT License
- * Copyright (c) 2022-2025 Elie Michel
+ * Copyright (c) 2022-2024 Elie Michel
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,10 +31,6 @@
 #include <webgpu/webgpu.hpp>
 
 #include <type_traits>
-
-#ifdef __EMSCRIPTEN__
-#  define addRef reference
-#endif
 
 namespace wgpu {
 namespace raii {
@@ -64,18 +60,14 @@ public:
 		Destruct();
 		assert(m_raw == nullptr);
 		m_raw = other.m_raw;
-		if (m_raw != nullptr) {
-			m_raw.addRef();
-		}
+		m_raw.addRef();
 		return *this;
 	}
 
 	Wrapper(const Wrapper& other)
 		: m_raw(other.m_raw)
 	{
-		if (m_raw != nullptr) {
-			m_raw.addRef();
-		}
+		m_raw.addRef();
 	}
 
 	// Move semantics

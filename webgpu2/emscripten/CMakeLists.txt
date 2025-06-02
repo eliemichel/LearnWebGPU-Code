@@ -2,7 +2,7 @@
 #   https://eliemichel.github.io/LearnWebGPU
 # 
 # MIT License
-# Copyright (c) 2022-2025 Elie Michel and the wgpu-native authors
+# Copyright (c) 2022-2024 Elie Michel and the wgpu-native authors
 # 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+message(STATUS "Using emscripten backend for WebGPU")
+
 # When using emscripten, we do not download any WebGPU implementation
 # because emscripten will convert all calls to the WebGPU API into their
 # equivalent JavaScript counterpart, and the actual implementation is
@@ -30,16 +32,16 @@
 
 add_library(webgpu INTERFACE)
 
-# This is used to advertise the flavor of WebGPU that this zip provides
-target_compile_definitions(webgpu INTERFACE WEBGPU_BACKEND_EMSCRIPTEN)
-
 # Add include path to webgpu.hpp
 target_include_directories(webgpu INTERFACE
 	"${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+# This is used to advertise the flavor of WebGPU that this zip provides
+target_compile_definitions(webgpu INTERFACE WEBGPU_BACKEND_EMSCRIPTEN)
+
 target_link_options(webgpu INTERFACE
-	-sUSE_WEBGPU # Handle WebGPU symbols when linking
+    -sUSE_WEBGPU # Handle WebGPU symbols when linking
 )
 
 # There is no dll/so/dylib to copy in this case

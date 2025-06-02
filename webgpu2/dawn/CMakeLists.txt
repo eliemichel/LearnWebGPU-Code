@@ -22,26 +22,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# When using emscripten, we do not download any WebGPU implementation
-# because emscripten will convert all calls to the WebGPU API into their
-# equivalent JavaScript counterpart, and the actual implementation is
-# provided by the client's Web browser (it is not shipped with our WASM
-# module).
+set(DAWN_VERSION "7069" CACHE STRING "\
+	Version of the Dawn release to use. Must correspond to the number after 'chromium/' \
+	in the tag name of an existing release on DAWN_MIRROR. \
+	Warning: The webgpu.hpp file provided in include/ may not be compatible with other \
+	versions than the default.")
 
-add_library(webgpu INTERFACE)
+set(DAWN_SOURCE_MIRROR "https://dawn.googlesource.com/dawn" CACHE STRING "\
+	The repository where to find Dawn source code.")
 
-# This is used to advertise the flavor of WebGPU that this zip provides
-target_compile_definitions(webgpu INTERFACE WEBGPU_BACKEND_EMSCRIPTEN)
+set(DAWN_BINARY_MIRROR "https://github.com/eliemichel/dawn-prebuilt" CACHE STRING "\
+	The repository where to find Dawn precompiled releases. This is ultimately supposed \
+	to be https://github.com/google/dawn, where official binaries will be auto-released, \
+	but in the meantime we use a different mirror.")
 
-# Add include path to webgpu.hpp
-target_include_directories(webgpu INTERFACE
-	"${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
-target_link_options(webgpu INTERFACE
-	-sUSE_WEBGPU # Handle WebGPU symbols when linking
-)
-
-# There is no dll/so/dylib to copy in this case
-function(target_copy_webgpu_binaries Target)
-endfunction()
+if (WEBGPU_BUILD_FROM_SOURCE)
+	include(FetchDawnSource.cmake)
+else()
+	include(FetchDawnPrecompiled.cmake)
+endif()
