@@ -177,13 +177,13 @@ void Application::MainLoop() {
 	encoderDesc.label = StringView("My command encoder"); // NEW
 	CommandEncoder encoder = m_device.createCommandEncoder(encoderDesc); // NEW
 	RenderPassDescriptor renderPassDesc = Default; // NEW
-	RenderPassColorAttachment renderPassColorAttachment = Default; // NEW
-	renderPassColorAttachment.view = targetView;
-	renderPassColorAttachment.loadOp = LoadOp::Clear; // NEW
-	renderPassColorAttachment.storeOp = StoreOp::Store; // NEW
-	renderPassColorAttachment.clearValue = Color{ 1.0, 0.8, 0.55, 1.0 }; // NEW
+	RenderPassColorAttachment colorAttachment = Default; // NEW
+	colorAttachment.view = targetView;
+	colorAttachment.loadOp = LoadOp::Clear; // NEW
+	colorAttachment.storeOp = StoreOp::Store; // NEW
+	colorAttachment.clearValue = Color{ 1.0, 0.8, 0.55, 1.0 }; // NEW
 	renderPassDesc.colorAttachmentCount = 1;
-	renderPassDesc.colorAttachments = &renderPassColorAttachment;
+	renderPassDesc.colorAttachments = &colorAttachment;
 	
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc); // NEW
 	// [...] Begin render pass
