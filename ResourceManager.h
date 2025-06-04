@@ -11,6 +11,7 @@
 class ResourceManager {
 public:
 	// {Begin block 'Public ResourceManager members' (in root '037 - Loading from file - Next')}
+	// {Begin block 'Declaration of ResourceManager::loadGeometry' (in root '037 - Loading from file - Next')}
 	/**
 	 * Load a file from `path` using our ad-hoc format and populate the `pointData`
 	 * and `indexData` vectors.
@@ -20,6 +21,8 @@ public:
 		std::vector<float>& pointData,
 		std::vector<uint16_t>& indexData
 	);
+	// {End block 'Declaration of ResourceManager::loadGeometry' (in root '037 - Loading from file - Next')}
+	// {Begin block 'Declaration of ResourceManager::loadShaderModule' (in root '037 - Loading from file - Next')}
 	/**
 	 * Create a shader module for a given WebGPU `device` from a WGSL shader source
 	 * loaded from file `path`.
@@ -28,6 +31,7 @@ public:
 		const std::filesystem::path& path,
 		wgpu::Device device
 	);
+	// {End block 'Declaration of ResourceManager::loadShaderModule' (in root '037 - Loading from file - Next')}
 	// {End block 'Public ResourceManager members' (in root '037 - Loading from file - Next')}
 
 private:

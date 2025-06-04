@@ -57,21 +57,21 @@ private:
 	private: // In Application.h
 		wgpu::TextureFormat m_surfaceFormat = wgpu::TextureFormat::Undefined;
 	private: // Application attributes
-		wgpu::Buffer m_vertexBuffer;
-		uint32_t m_vertexCount;
+		wgpu::Buffer m_vertexBuffer = nullptr;
+		uint32_t m_vertexCount = 0;
 	private: // Application attributes
-		wgpu::Buffer m_pointBuffer;
-		wgpu::Buffer m_indexBuffer;
-		uint32_t m_indexCount;
+		wgpu::Buffer m_pointBuffer = nullptr;
+		wgpu::Buffer m_indexBuffer = nullptr;
+		uint32_t m_indexCount = 0;
 	private: // Application attributes
-		wgpu::Buffer m_uniformBuffer;
+		wgpu::Buffer m_uniformBuffer = nullptr;
 	private: // Application attributes
-		wgpu::PipelineLayout m_layout;
-		wgpu::BindGroupLayout m_bindGroupLayout;
+		wgpu::PipelineLayout m_layout = nullptr;
+		wgpu::BindGroupLayout m_bindGroupLayout = nullptr;
 	private: // Application attributes
-		wgpu::BindGroup m_bindGroup;
+		wgpu::BindGroup m_bindGroup = nullptr;
 	private: // In Application.h
-		uint32_t m_uniformStride;
+		uint32_t m_uniformStride = 0;
 	// {End block 'Application attributes' (in root '044 - Dynamic uniforms - Next')}
 };
 // {End block 'Application class' (in root '043 - More uniforms - Next')}

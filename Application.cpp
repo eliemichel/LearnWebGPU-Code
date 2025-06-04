@@ -306,15 +306,15 @@ void Application::MainLoop() {
 	// {Begin block 'Encode Render Pass' (in root '028 - C++ Wrapper - Next')}
 	RenderPassDescriptor renderPassDesc = Default; // NEW
 	// {Begin block 'Describe Render Pass' (in root '028 - C++ Wrapper - Next')}
-	RenderPassColorAttachment renderPassColorAttachment = Default; // NEW
+	RenderPassColorAttachment colorAttachment = Default; // NEW
 	// {Begin block 'Describe the attachment' (in root '033 - Multiple Attributes - Option A - Next')}
-	renderPassColorAttachment.view = targetView;
-	renderPassColorAttachment.loadOp = LoadOp::Clear; // NEW
-	renderPassColorAttachment.storeOp = StoreOp::Store; // NEW
-	renderPassColorAttachment.clearValue = Color{ 0.25, 0.25, 0.25, 1.0 }; // NEW
+	colorAttachment.view = targetView;
+	colorAttachment.loadOp = LoadOp::Clear; // NEW
+	colorAttachment.storeOp = StoreOp::Store; // NEW
+	colorAttachment.clearValue = Color{ 0.25, 0.25, 0.25, 1.0 }; // NEW
 	// {End block 'Describe the attachment' (in root '033 - Multiple Attributes - Option A - Next')}
 	renderPassDesc.colorAttachmentCount = 1;
-	renderPassDesc.colorAttachments = &renderPassColorAttachment;
+	renderPassDesc.colorAttachments = &colorAttachment;
 	// {End block 'Describe Render Pass' (in root '028 - C++ Wrapper - Next')}
 	
 	RenderPassEncoder renderPass = encoder.beginRenderPass(renderPassDesc); // NEW
