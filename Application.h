@@ -42,8 +42,8 @@ private:
 	private: // In Application.h
 		wgpu::TextureFormat m_surfaceFormat = wgpu::TextureFormat::Undefined;
 	private: // Application attributes
-		wgpu::Buffer m_vertexBuffer;
-		uint32_t m_vertexCount;
+		wgpu::Buffer m_vertexBuffer = nullptr;
+		uint32_t m_vertexCount = 0;
 	// {End block 'Application attributes' (in root '032 - A first Vertex Attribute - Next')}
 };
 // {End block 'Application class' (in root '025 - First Color - Next')}
