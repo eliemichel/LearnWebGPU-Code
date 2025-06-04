@@ -10,7 +10,8 @@
 using namespace wgpu;
 // {End block 'Other ResourceManager.cpp includes' (in root '037 - Loading from file - Next')}
 
-// {Begin block 'ResourceManager member definitions' (in root '037 - Loading from file - Next')}
+// {Begin block 'ResourceManager member implementations' (in root '037 - Loading from file - Next')}
+// {Begin block 'Implementation of ResourceManager::loadGeometry' (in root '037 - Loading from file - Next')}
 bool ResourceManager::loadGeometry(
 	const std::filesystem::path& path,
 	std::vector<float>& pointData,
@@ -71,6 +72,8 @@ bool ResourceManager::loadGeometry(
 	}
 	return true;
 }
+// {End block 'Implementation of ResourceManager::loadGeometry' (in root '037 - Loading from file - Next')}
+// {Begin block 'Implementation of ResourceManager::loadShaderModule' (in root '037 - Loading from file - Next')}
 ShaderModule ResourceManager::loadShaderModule(const std::filesystem::path& path, Device device) {
 	std::ifstream file(path);
 	if (!file.is_open()) {
@@ -90,5 +93,6 @@ ShaderModule ResourceManager::loadShaderModule(const std::filesystem::path& path
     shaderDesc.label = StringView(path.string());
     return device.createShaderModule(shaderDesc);
 }
-// {End block 'ResourceManager member definitions' (in root '037 - Loading from file - Next')}
+// {End block 'Implementation of ResourceManager::loadShaderModule' (in root '037 - Loading from file - Next')}
+// {End block 'ResourceManager member implementations' (in root '037 - Loading from file - Next')}
 // {End block 'file: ResourceManager.cpp' (in root '037 - Loading from file - Next')}
