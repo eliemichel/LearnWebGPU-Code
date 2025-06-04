@@ -39,6 +39,6 @@ private:
 	private: // In Application.h
 		WGPUTextureFormat m_surfaceFormat = WGPUTextureFormat_Undefined;
 	private: // Application attributes
-		WGPUBuffer m_vertexBuffer;
-		uint32_t m_vertexCount;
+		WGPUBuffer m_vertexBuffer = nullptr;
+		uint32_t m_vertexCount = 0;
 };

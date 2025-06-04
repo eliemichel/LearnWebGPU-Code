@@ -199,15 +199,15 @@ void Application::MainLoop() {
 	encoderDesc.label = toWgpuStringView("My command encoder");
 	WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(m_device, &encoderDesc);
 	WGPURenderPassDescriptor renderPassDesc = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
-	WGPURenderPassColorAttachment renderPassColorAttachment = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
+	WGPURenderPassColorAttachment colorAttachment = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
 	
-	renderPassColorAttachment.view = targetView;
-	renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
-	renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
-	renderPassColorAttachment.clearValue = WGPUColor{ 1.0, 0.8, 0.55, 1.0 };
+	colorAttachment.view = targetView;
+	colorAttachment.loadOp = WGPULoadOp_Clear;
+	colorAttachment.storeOp = WGPUStoreOp_Store;
+	colorAttachment.clearValue = WGPUColor{ 1.0, 0.8, 0.55, 1.0 };
 	
 	renderPassDesc.colorAttachmentCount = 1;
-	renderPassDesc.colorAttachments = &renderPassColorAttachment;
+	renderPassDesc.colorAttachments = &colorAttachment;
 	
 	WGPURenderPassEncoder renderPass = wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
 	wgpuRenderPassEncoderSetPipeline(renderPass, m_pipeline);
