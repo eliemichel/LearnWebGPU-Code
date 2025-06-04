@@ -52,17 +52,17 @@ private:
 	private: // In Application.h
 		WGPUTextureFormat m_surfaceFormat = WGPUTextureFormat_Undefined;
 	private: // Application attributes
-		WGPUBuffer m_vertexBuffer;
-		uint32_t m_vertexCount;
+		WGPUBuffer m_vertexBuffer = nullptr;
+		uint32_t m_vertexCount = 0;
 	private: // Application attributes
-		WGPUBuffer m_pointBuffer;
-		WGPUBuffer m_indexBuffer;
-		uint32_t m_indexCount;
+		WGPUBuffer m_pointBuffer = nullptr;
+		WGPUBuffer m_indexBuffer = nullptr;
+		uint32_t m_indexCount = 0;
 	private: // Application attributes
-		WGPUBuffer m_uniformBuffer;
+		WGPUBuffer m_uniformBuffer = nullptr;
 	private: // Application attributes
-		WGPUPipelineLayout m_layout;
-		WGPUBindGroupLayout m_bindGroupLayout;
+		WGPUPipelineLayout m_layout = nullptr;
+		WGPUBindGroupLayout m_bindGroupLayout = nullptr;
 	private: // Application attributes
-		WGPUBindGroup m_bindGroup;
+		WGPUBindGroup m_bindGroup = nullptr;
 };
