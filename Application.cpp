@@ -307,7 +307,7 @@ bool Application::initWindowAndDevice() {
 	std::cout << "Requesting adapter..." << std::endl;
 	RequestAdapterOptions adapterOpts{};
 	adapterOpts.compatibleSurface = m_surface;
-	Adapter adapter = m_instance.requestAdapter(adapterOpts);
+	Adapter adapter = m_instance.requestAdapterSync(adapterOpts);
 	std::cout << "Got adapter: " << adapter << std::endl;
 
 #ifdef WEBGPU_BACKEND_DAWN
@@ -379,7 +379,7 @@ bool Application::initWindowAndDevice() {
 		std::cout << std::endl;
 	};
 
-	m_device = adapter.requestDevice(m_instance, deviceDesc);
+	m_device = adapter.requestDeviceSync(m_instance, deviceDesc);
 	std::cout << "Got device: " << m_device << std::endl;
 
 	m_queue = m_device.getQueue();

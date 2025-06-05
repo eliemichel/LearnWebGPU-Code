@@ -28,9 +28,11 @@ Outline
   * [CMake target](#cmake-target)
   * [Options](#options)
     + [Choice of implementation](#choice-of-implementation)
-    + [Building from source](building-from-source)
-    + [Link type](link-type)
+    + [Building from source](#building-from-source)
+    + [Link type](#link-type)
     + [Implementation version](#implementation-version)
+- [Troubleshooting](#troubleshooting)
+  * [Path size limit on Windows](#path-size-limit-on-windows)
 
 Overview
 --------
@@ -41,9 +43,9 @@ This repository provides a **distribution** of these implementations that is:
 
  - **Easy to integrate.** This is a standard [CMake](https://cmake.org) project, that can be included either with a simple `add_subdirectory` (potentially using git submodules) or using [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html). No esoteric build tool is needed.
 
- - **Interchangeable.** Switching from one backend to another one does not require any change to the build system. A preprocessor variable `WEBGPU_BACKEND_WGPU` or `WEBGPU_BACKEND_DAWN` is defined to handle discrepancies in the source code (if any).
+ - **Interchangeable.** Switching from one backend to another one does not require any change to the build system. A preprocessor variable is defined to handle discrepancies in the source code (if any): `WEBGPU_BACKEND_EMSCRIPTEN` `WEBGPU_BACKEND_EMDAWNWEBGPU`, `WEBGPU_BACKEND_WGPU` or `WEBGPU_BACKEND_DAWN`
 
- - **emscripten-ready** When calling `emcmake`, these distributions switch to emscripten's WebGPU header (which is mapped to JavaScript WebGPU API).
+ - **emscripten-ready** When calling `emcmake`, these distributions switch to emscripten's WebGPU header (which is mapped to JavaScript WebGPU API). They either use emscripten's built-in WebGPU, or fetch a more recent port from emdawnwebgpu.
 
  - **Built from source** or **precompiled** depending on the value of `WEBGPU_BUILD_FROM_SOURCE` specified when invoking `cmake`.
 
@@ -132,9 +134,10 @@ The first thing to decide on is the value of `WEBGPU_BACKEND`, which can be:
 - `WGPU` to use [wgpu-native](https://github.com/gfx-rs/wgpu-native), that is based on the Rust library [`wgpu`](https://github.com/gfx-rs/wgpu), which not only fuels Firefox but also a large portion of Rust graphics applications.
 - `DAWN` to use [Dawn](https://dawn.googlesource.com/dawn), the implementation of WebGPU used by Chromium and its derivatives (Google Chrome, MS Edge, etc.).
 - `EMSCRIPTEN` to prevent fetching any implementation, because a Web app cross-compiled with emscripten uses the implementation of the client's web browser.
+- `EMDAWNWEBGPU` uses a different *port* than what emscripten provides by default to convert calls to the C API into calls of the Web API. This port -- called **[emdawnwebgpu](https://dawn.googlesource.com/dawn/+/refs/heads/main/src/emdawnwebgpu/)** -- is more up to date but may break more often compatibility.
 
 > [!TIP]
-> When using `emcmake` (the CMake wrapper provided by emscripten), there is **no need** to explicitly set `WEBGPU_BACKEND` to `EMSCRIPTEN`. It will be automatically detected and no implementation will be fetched.
+> When using `emcmake` (the CMake wrapper provided by emscripten), the default backend is `EMDAWNWEBGPU`.
 
 > [!NOTE]
 > A notable implementation of WebGPU that is not supported here is the one from [WebKit](https://webkit.org/). It might be added in the future, although it is not a priority since it is not as cross-platform (it does not support Windows).
@@ -187,6 +190,9 @@ The WebGPU implementation may be linked either dynamically (`WEBGPU_LINK_TYPE=SH
 > [!WARNING]
 > Not all combinations of options allow static linking. Feel free to request further investigation through an [Issue](https://github.com/eliemichel/WebGPU-distribution/issues) or propose changes through a [Pull Request](https://github.com/eliemichel/WebGPU-distribution/pulls) to help tackle this limitation.
 
+> [!NOTE]
+> Link type is **ignored when building with emscripten** (be it the EMSCRIPTEN or the EMDAWNWEBGPU backend), since in all cases the final WASM module calls the browser's implementation.
+
 #### ☑️ Implementation version <a name="implementation-version"></a>
 
 By default, this distribution points to a specific version of Dawn or wgpu-native. It is possible to change this version, but it **requires care**:
@@ -198,3 +204,13 @@ By default, this distribution points to a specific version of Dawn or wgpu-nativ
 **Dawn.** The version of Dawn is specified through the variable `DAWN_VERSION`, and is a simple revision number (the one found after "chromium/" in the tag name used to mark releases in their git repository). When building from source, the variable `DAWN_SOURCE_MIRROR` is used as the repository to pull from. When using precompiled binaries, the variable `DAWN_BINARY_MIRROR` is the GitHub repository in which to look for a binary release that matches the target version.
 
 **wgpu-native.** The version of wgpu-native is specified through the variable `WGPU_VERSION`, and must be a valid release of the repository passed as `WGPU_BINARY_MIRROR`. The official repository is `https://github.com/gfx-rs/wgpu-native` and I sometimes release early versions on `https://github.com/eliemichel/wgpu-native`.
+
+Troubleshooting
+---------------
+
+### Path size limit on Windows
+
+By default, Windows limits path size to 260 characters, which may be reached due to how CMake organizes its internal directories like `my_project/build/_deps/wgpu-windows-x86_64...`. If you run into such an issue, look for `FetchContent_Declare(${FC_NAME} ...` and **right before** this re-define the name of the fetched content with `set(FC_NAME shortname)`, where "shortname" can be anything.
+
+> [!NOTE]
+> The `FC_NAME` is longer by default to help readability when browsing the `build/_deps` directory.
