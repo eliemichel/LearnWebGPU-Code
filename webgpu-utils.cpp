@@ -1,4 +1,3 @@
-// {Begin block 'file: webgpu-utils.cpp' (in root '019 - Our first shader - Next')}
 #include "webgpu-utils.h"
 
 #include <iostream>
@@ -12,8 +11,6 @@
 #  include <chrono>
 #endif // __EMSCRIPTEN__
 
-// {Begin block 'Utility functions' (in root '010 - The Device - Next')}
-// {Begin block 'Define toStdStringView' (in root '005 - The Adapter - Next')}
 std::string_view toStdStringView(WGPUStringView wgpuStringView) {
 	return
 		wgpuStringView.data == nullptr
@@ -22,16 +19,12 @@ std::string_view toStdStringView(WGPUStringView wgpuStringView) {
 		? std::string_view(wgpuStringView.data)
 		: std::string_view(wgpuStringView.data, wgpuStringView.length);
 }
-// {End block 'Define toStdStringView' (in root '005 - The Adapter - Next')}
-// {Begin block 'Define toWgpuStringView' (in root '005 - The Adapter - Next')}
 WGPUStringView toWgpuStringView(std::string_view stdStringView) {
 	return { stdStringView.data(), stdStringView.size() };
 }
 WGPUStringView toWgpuStringView(const char* cString) {
 	return { cString, WGPU_STRLEN };
 }
-// {End block 'Define toWgpuStringView' (in root '005 - The Adapter - Next')}
-// {Begin block 'Define sleepForMilliseconds' (in root '005 - The Adapter - Next')}
 void sleepForMilliseconds(unsigned int milliseconds) {
 #ifdef __EMSCRIPTEN__
 	emscripten_sleep(milliseconds);
@@ -39,9 +32,7 @@ void sleepForMilliseconds(unsigned int milliseconds) {
 	std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
 #endif
 }
-// {End block 'Define sleepForMilliseconds' (in root '005 - The Adapter - Next')}
 // All utility functions are regrouped here
-// {Begin block 'Request adapter function' (in root '005 - The Adapter - Next')}
 /**
  * Utility function to get a WebGPU adapter, so that
  *     WGPUAdapter adapter = requestAdapterSync(options);
@@ -76,9 +67,7 @@ WGPUAdapter requestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions 
 		if (status == WGPURequestAdapterStatus_Success) {
 			userData.adapter = adapter;
 		} else {
-			// {Begin block 'Display error message' (in root '005 - The Adapter - Next')}
 			std::cerr << "Error while requesting adapter: " << toStdStringView(message) << std::endl;
-			// {End block 'Display error message' (in root '005 - The Adapter - Next')}
 		}
 		userData.requestEnded = true;
 	};
@@ -112,9 +101,7 @@ WGPUAdapter requestAdapterSync(WGPUInstance instance, WGPURequestAdapterOptions 
 
 	return userData.adapter;
 }
-// {End block 'Request adapter function' (in root '005 - The Adapter - Next')}
 void inspectAdapter(WGPUAdapter adapter) {
-	// {Begin block 'Inspect adapter' (in root '005 - The Adapter - Next')}
 	WGPULimits supportedLimits = {};
 	supportedLimits.nextInChain = nullptr;
 	
@@ -158,9 +145,7 @@ void inspectAdapter(WGPUAdapter adapter) {
 	std::cout << " - backendType: 0x" << properties.backendType << std::endl;
 	std::cout << std::dec; // Restore decimal numbers
 	wgpuAdapterInfoFreeMembers(properties);
-	// {End block 'Inspect adapter' (in root '005 - The Adapter - Next')}
 }
-// {Begin block 'Request device function' (in root '010 - The Device - Next')}
 /**
  * Utility function to get a WebGPU device, so that
  *     WGPUDevice device = requestDeviceSync(adapter, options);
@@ -213,7 +198,6 @@ WGPUDevice requestDeviceSync(WGPUInstance instance, WGPUAdapter adapter, WGPUDev
 
 	return userData.device;
 }
-// {End block 'Request device function' (in root '010 - The Device - Next')}
 // We create a utility function to inspect the device:
 void inspectDevice(WGPUDevice device) {
 	
@@ -236,7 +220,6 @@ void inspectDevice(WGPUDevice device) {
 		std::cout << " - maxTextureDimension2D: " << limits.maxTextureDimension2D << std::endl;
 		std::cout << " - maxTextureDimension3D: " << limits.maxTextureDimension3D << std::endl;
 		std::cout << " - maxTextureArrayLayers: " << limits.maxTextureArrayLayers << std::endl;
-		// {Begin block 'Extra device limits' (in root '010 - The Device - Next')}
 		std::cout << " - maxBindGroups: " << limits.maxBindGroups << std::endl;
 		std::cout << " - maxBindGroupsPlusVertexBuffers: " << limits.maxBindGroupsPlusVertexBuffers << std::endl;
 		std::cout << " - maxBindingsPerBindGroup: " << limits.maxBindingsPerBindGroup << std::endl;
@@ -268,19 +251,14 @@ void inspectDevice(WGPUDevice device) {
 		std::cout << " - maxStorageTexturesInVertexStage: " << limits.maxStorageTexturesInVertexStage << std::endl;
 		std::cout << " - maxStorageBuffersInFragmentStage: " << limits.maxStorageBuffersInFragmentStage << std::endl;
 		std::cout << " - maxStorageTexturesInFragmentStage: " << limits.maxStorageTexturesInFragmentStage << std::endl;
-		// {End block 'Extra device limits' (in root '010 - The Device - Next')}
 	}
 }
-// {End block 'Utility functions' (in root '010 - The Device - Next')}
 void fetchBufferDataSync(
 	WGPUInstance instance,
 	WGPUBuffer bufferB,
 	std::function<void(const void*)> processBufferData
 ) {
 	// We copy here what used to be in main():
-	// {Begin block 'Map and display buffer B' (in root '017 - Playing with buffers - Next')}
-	// {Begin block 'Map buffer B' (in root '017 - Playing with buffers - Next')}
-	// {Begin block 'Define callback handling the mapped buffer B' (in root '017 - Playing with buffers - Next')}
 	// Context passed to `onBufferBMapped` through theuserdata pointer:
 	struct OnBufferBMappedContext {
 		bool operationEnded = false; // Turned true as soon as the callback is invoked
@@ -302,9 +280,7 @@ void fetchBufferDataSync(
 			std::cout << "Could not map buffer B! Status: " << status << ", message: " << toStdStringView(message) << std::endl;
 		}
 	};
-	// {End block 'Define callback handling the mapped buffer B' (in root '017 - Playing with buffers - Next')}
 	
-	// {Begin block 'Build callback info for mapping buffer B' (in root '017 - Playing with buffers - Next')}
 	// We create an instance of the context shared with `onBufferBMapped`
 	OnBufferBMappedContext context;
 	
@@ -313,7 +289,6 @@ void fetchBufferDataSync(
 	callbackInfo.mode = WGPUCallbackMode_AllowProcessEvents;
 	callbackInfo.callback = onBufferBMapped;
 	callbackInfo.userdata1 = &context;
-	// {End block 'Build callback info for mapping buffer B' (in root '017 - Playing with buffers - Next')}
 	
 	// And finally we launch the asynchronous operation
 	wgpuBufferMapAsync(
@@ -323,26 +298,19 @@ void fetchBufferDataSync(
 		WGPU_WHOLE_MAP_SIZE,
 		callbackInfo
 	);
-	// {End block 'Map buffer B' (in root '017 - Playing with buffers - Next')}
 	
-	// {Begin block 'Wait for mapping of buffer B' (in root '017 - Playing with buffers - Next')}
 	// Process events until the map operation ended
 	wgpuInstanceProcessEvents(instance);
 	while (!context.operationEnded) {
 		sleepForMilliseconds(200);
 		wgpuInstanceProcessEvents(instance);
 	}
-	// {End block 'Wait for mapping of buffer B' (in root '017 - Playing with buffers - Next')}
 	
 	if (context.mappingIsSuccessful) {
-		// {Begin block 'Display buffer B' (in root '017 - Playing with buffers - Next')}
 		const void* bufferData = wgpuBufferGetConstMappedRange(bufferB, 0, WGPU_WHOLE_MAP_SIZE);
 		processBufferData(bufferData);
-		// {End block 'Display buffer B' (in root '017 - Playing with buffers - Next')}
 	}
-	// {End block 'Map and display buffer B' (in root '017 - Playing with buffers - Next')}
 }
 uint32_t divideAndCeil(uint32_t p, uint32_t q) {
 	return (p + q - 1) / q;
 }
-// {End block 'file: webgpu-utils.cpp' (in root '019 - Our first shader - Next')}

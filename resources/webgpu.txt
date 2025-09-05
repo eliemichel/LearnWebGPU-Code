@@ -1,4 +1,3 @@
-// {Begin block 'file: resources/webgpu.txt' (in root '037 - Loading from file - Next - vanilla')}
 # in resources/webgpu.txt
 [points]
 # x   y      r   g   b
@@ -29,4 +28,3 @@
  6  7  8
  9 10 11
 12 13 14
-// {End block 'file: resources/webgpu.txt' (in root '037 - Loading from file - Next - vanilla')}

@@ -1,4 +1,3 @@
-// {Begin block 'file: webgpu-utils.h' (in root '019 - Our first shader - Next')}
 #pragma once
 
 #include <webgpu/webgpu.h>
@@ -69,4 +68,3 @@ void fetchBufferDataSync(
  * Divides p / q and ceil up to the next integer value
  */
 uint32_t divideAndCeil(uint32_t p, uint32_t q);
-// {End block 'file: webgpu-utils.h' (in root '019 - Our first shader - Next')}

@@ -1,13 +1,10 @@
-# {Begin block 'file: CMakeLists.txt' (in root '000 - Project setup - Next')}
-cmake_minimum_required(VERSION 3.21...3.30)
+cmake_minimum_required(VERSION 3.16...3.30)
 project(
 	LearnWebGPU # name of the project, which will also be the name of the visual studio solution if you use it
 	VERSION 0.1.0 # any version number
 	LANGUAGES CXX C # programming languages used by the project
 )
 
-# {Begin block 'Define app target' (in root '037 - Loading from file - Next - vanilla')}
-# {Begin block 'Dependency subdirectories' (in root '020 - Opening a window - Next')}
 if (NOT EMSCRIPTEN)
 	# Add the 'glfw' directory, which contains the definition of a 'glfw' target
 	add_subdirectory(glfw)
@@ -21,10 +18,8 @@ endif()
 add_subdirectory(webgpu)
 # After adding glfw and webgpu directories:
 add_subdirectory(glfw3webgpu)
-# {End block 'Dependency subdirectories' (in root '020 - Opening a window - Next')}
 
 add_executable(App
-	# {Begin block 'App source files' (in root '037 - Loading from file - Next - vanilla')}
 	main.cpp
 	webgpu-utils.h
 	webgpu-utils.cpp
@@ -33,16 +28,12 @@ add_executable(App
 	# In the list of files of add_executable(App ...):
 	ResourceManager.h
 	ResourceManager.cpp
-	# {End block 'App source files' (in root '037 - Loading from file - Next - vanilla')}
 )
 
-# {Begin block 'Link libraries' (in root '020 - Opening a window - Next')}
 # After defining the App target:
 target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
 target_copy_webgpu_binaries(App)
-# {End block 'Link libraries' (in root '020 - Opening a window - Next')}
 
-# {Begin block 'Set the RESOURCE_DIR define' (in root '037 - Loading from file - Next - vanilla')}
 # We add an option to enable different settings when developing the app than
 # when distributing it.
 option(DEV_MODE "Set up development helper settings" ON)
@@ -61,10 +52,7 @@ else()
 		RESOURCE_DIR="./resources"
 	)
 endif()
-# {End block 'Set the RESOURCE_DIR define' (in root '037 - Loading from file - Next - vanilla')}
-# {End block 'Define app target' (in root '037 - Loading from file - Next - vanilla')}
 
-# {Begin block 'Recommended extras' (in root '000 - Project setup - Next')}
 set_target_properties(App PROPERTIES
 	CXX_STANDARD 17
 	CXX_STANDARD_REQUIRED ON
@@ -86,10 +74,8 @@ endif()
 set_directory_properties(PROPERTIES
 	VS_STARTUP_PROJECT App
 )
-# {End block 'Recommended extras' (in root '000 - Project setup - Next')}
 # Options that are specific to Emscripten
 if (EMSCRIPTEN)
-    # {Begin block 'Emscripten-specific options' (in root '037 - Loading from file - Next - vanilla')}
     # Generate a full web page rather than a simple WebAssembly module
     set_target_properties(App PROPERTIES SUFFIX ".html")
     # Enable the use of emscripten_sleep()
@@ -97,6 +83,4 @@ if (EMSCRIPTEN)
     target_link_options(App PRIVATE
     	--preload-file "${CMAKE_CURRENT_SOURCE_DIR}/resources"
     )
-    # {End block 'Emscripten-specific options' (in root '037 - Loading from file - Next - vanilla')}
 endif()
-# {End block 'file: CMakeLists.txt' (in root '000 - Project setup - Next')}

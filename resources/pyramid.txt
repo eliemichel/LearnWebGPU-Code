@@ -1,4 +1,3 @@
-// {Begin block 'file: resources/pyramid.txt' (in root '050 - A simple example - Next - vanilla')}
 # In file resources/pyramid.txt
 [points]
 # We add a Z coordinate
@@ -22,4 +21,3 @@
  1  2  4
  2  3  4
  3  0  4
-// {End block 'file: resources/pyramid.txt' (in root '050 - A simple example - Next - vanilla')}
